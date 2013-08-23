@@ -91,7 +91,10 @@ public:
     TryScope = 0x2000,
 
     /// \brief This is the scope for a function-level C++ try or catch scope.
-    FnTryCatchScope = 0x4000
+    FnTryCatchScope = 0x4000,
+
+    /// \brief This is the scope of OpenMP executable directive
+    OpenMPDirectiveScope = 0x8000
   };
 private:
   /// The parent scope for this scope.  This is null for the translation-unit
@@ -304,6 +307,11 @@ public:
   
   /// \brief Determine whether this scope is a C++ 'try' block.
   bool isTryScope() const { return getFlags() & Scope::TryScope; }
+
+  /// \brief Determines whether this scope is the OpenMP directive scope
+  bool isOpenMPDirectiveScope() const {
+    return (getFlags() & Scope::OpenMPDirectiveScope);
+  }
 
   /// containedInPrototypeScope - Return true if this or a parent scope
   /// is a FunctionPrototypeScope.

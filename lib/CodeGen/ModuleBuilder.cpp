@@ -84,11 +84,13 @@ namespace {
         for (DeclContext::decl_iterator M = D->decls_begin(), 
                                      MEnd = D->decls_end();
              M != MEnd; ++M)
-          if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(*M))
+          if (CXXMethodDecl *Method = dyn_cast<CXXMethodDecl>(*M)) {
             if (Method->doesThisDeclarationHaveABody() &&
                 (Method->hasAttr<UsedAttr>() || 
                  Method->hasAttr<ConstructorAttr>()))
               Builder->EmitTopLevelDecl(Method);
+          } else if (OMPThreadPrivateDecl *TD = dyn_cast<OMPThreadPrivateDecl>(*M))
+            Builder->EmitTopLevelDecl(TD);
       }
     }
 

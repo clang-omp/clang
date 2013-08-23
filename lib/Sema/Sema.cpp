@@ -90,7 +90,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
     AccessCheckingSFINAE(false), InNonInstantiationSFINAEContext(false),
     NonInstantiationEntries(0), ArgumentPackSubstitutionIndex(-1),
     CurrentInstantiationScope(0), TyposCorrected(0),
-    AnalysisWarnings(*this), CurScope(0), Ident_super(0)
+    AnalysisWarnings(*this), VarDataSharingAttributesStack(0), CurScope(0), Ident_super(0)
 {
   TUScope = 0;
 
@@ -113,6 +113,9 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
                                           false, 0, false));
 
   FunctionScopes.push_back(new FunctionScopeInfo(Diags));
+
+  // Initilization of data sharing attributes stack for OpenMP
+  InitDataSharingAttributesStack();
 }
 
 void Sema::Initialize() {
@@ -175,6 +178,9 @@ void Sema::Initialize() {
 Sema::~Sema() {
   if (PackContext) FreePackedContext();
   if (VisContext) FreeVisContext();
+  // Destroys data sharing attributes stack for OpenMP
+  DestroyDataSharingAttributesStack();
+
   delete TheTargetAttributesSema;
   MSStructPragmaOn = false;
   // Kill all the active scopes.

@@ -85,7 +85,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const CodeGenOptions &CGO,
     LifetimeStartFn(0), LifetimeEndFn(0),
     SanitizerBlacklist(CGO.SanitizerBlacklistFile),
     SanOpts(SanitizerBlacklist.isIn(M) ?
-            SanitizerOptions::Disabled : LangOpts.Sanitize) {
+            SanitizerOptions::Disabled : LangOpts.Sanitize),
+    OpenMPSupport(*this) {
 
   // Initialize the type cache.
   llvm::LLVMContext &LLVMContext = M.getContext();
@@ -1249,9 +1250,21 @@ void CodeGenModule::EmitGlobalDefinition(GlobalDecl GD) {
     return EmitGlobalFunctionDefinition(GD);
   }
   
-  if (const VarDecl *VD = dyn_cast<VarDecl>(D))
-    return EmitGlobalVarDefinition(VD);
-  
+  if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
+    EmitGlobalVarDefinition(VD);
+    for (VarDecl::redecl_iterator I = VD->redecls_begin(),
+                                  E = VD->redecls_end();
+         I != E; ++I) {
+      if (*I)
+        if (const Expr * TPE = OpenMPSupport.hasThreadPrivateVar(*I)) {
+          OpenMPSupport.addThreadPrivateVar(VD, TPE);
+          EmitOMPThreadPrivate(VD, TPE);
+          break;
+        }
+    }
+    return;
+  }
+
   llvm_unreachable("Invalid argument to EmitGlobalDefinition()");
 }
 
@@ -2935,7 +2948,10 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
 
     ImportedModules.insert(Import->getImportedModule());
     break;
- }
+  }
+  case Decl::OMPThreadPrivate:
+    EmitOMPThreadPrivate(cast<OMPThreadPrivateDecl>(D));
+    break;
 
   default:
     // Make sure we handled everything we should, every other kind is a
@@ -3076,4 +3092,337 @@ llvm::Constant *CodeGenModule::EmitUuidofInitializer(StringRef Uuid,
           llvm::APInt(8, StringRef(Uuidstr + Field3ValueOffsets[t], 2), 16)));
 
   return EmitConstantValue(InitStruct, GuidType);
+}
+
+CodeGenModule::OpenMPSupportStackTy::OMPStackElemTy::OMPStackElemTy(CodeGenModule &CGM)
+  : PrivateVars(), IfEnd(0), ReductionFunc(0), CGM(CGM), RedCGF(0), ReductionTypes(),
+    ReductionMap(), ReductionRec(0), ReductionRecVar(0), RedArg1(0), RedArg2(0),
+    ReduceSwitch(0), BB1(0), BB1IP(0), BB2(0), BB2IP(0), LockVar(0),
+    LastprivateBB(0), LastprivateIP(0), LastprivateEndBB(0), LastIterVar(0), TaskFlags(0),
+    PTaskTValue(0), PTask(0), UntiedPartIdAddr(0), UntiedCounter(0), UntiedSwitch(0),
+    NoWait(true), Mergeable(false), Schedule(0), ChunkSize(0), NewTask(false),
+    Untied(false), HasFirstPrivate(false), HasLastPrivate(false), TaskPrivateTy(0),
+    TaskPrivateQTy(), TaskPrivateBase(0) { }
+
+CodeGenFunction &CodeGenModule::OpenMPSupportStackTy::getCGFForReductionFunction() {
+  if (!OpenMPStack.back().RedCGF) {
+    OpenMPStack.back().RedCGF = new CodeGenFunction(CGM, true);
+    OpenMPStack.back().RedCGF->CurFn = 0;
+  }
+  return *OpenMPStack.back().RedCGF;
+}
+
+CodeGenModule::OpenMPSupportStackTy::OMPStackElemTy::~OMPStackElemTy() {
+  if (RedCGF) delete RedCGF;
+  RedCGF = 0;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::endOpenMPRegion() {
+  assert(!OpenMPStack.empty() &&
+         "OpenMP private variables region is not started.");
+  assert(!OpenMPStack.back().IfEnd && "If not closed.");
+  OpenMPStack.pop_back();
+}
+
+void CodeGenModule::OpenMPSupportStackTy::registerReductionVar(
+                                                  const VarDecl *VD,
+                                                  llvm::Type *Type) {
+  OpenMPStack.back().ReductionMap[VD] =
+                           OpenMPStack.back().ReductionTypes.size();
+  OpenMPStack.back().ReductionTypes.push_back(Type);
+}
+
+llvm::Value *
+CodeGenModule::OpenMPSupportStackTy::getReductionRecVar(CodeGenFunction &CGF) {
+  if (!OpenMPStack.back().ReductionRecVar) {
+    OpenMPStack.back().ReductionRec =
+                 llvm::StructType::get(CGM.getLLVMContext(),
+                                       OpenMPStack.back().ReductionTypes);
+    llvm::AllocaInst *AI = CGF.CreateTempAlloca(OpenMPStack.back().ReductionRec,
+                                                "reduction.rec.var");
+    AI->setAlignment(CGF.CGM.PointerAlignInBytes);
+    OpenMPStack.back().ReductionRecVar = AI;
+  }
+  return OpenMPStack.back().ReductionRecVar;
+}
+
+llvm::Type *
+CodeGenModule::OpenMPSupportStackTy::getReductionRec() {
+  assert(OpenMPStack.back().ReductionRec &&
+         "Type is not defined.");
+  return OpenMPStack.back().ReductionRec;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::getReductionFunctionArgs(
+                                      llvm::Value *&Arg1, llvm::Value *&Arg2) {
+  assert(OpenMPStack.back().RedCGF && OpenMPStack.back().RedCGF->CurFn &&
+         "Reduction function is closed.");
+  if (!OpenMPStack.back().RedArg1 && !OpenMPStack.back().RedArg2) {
+    CodeGenFunction &CGF = *OpenMPStack.back().RedCGF;
+    llvm::Value *Arg1 = &CGF.CurFn->getArgumentList().front();
+    llvm::Value *Arg2 = &CGF.CurFn->getArgumentList().back();
+    llvm::Type *PtrTy = OpenMPStack.back().ReductionRec->getPointerTo();
+    OpenMPStack.back().RedArg1 = CGF.Builder.CreateBitCast(Arg1, PtrTy,
+                                                           "reduction.lhs");
+    OpenMPStack.back().RedArg2 = CGF.Builder.CreateBitCast(Arg2, PtrTy,
+                                                           "reduction.rhs");
+  }
+  Arg1 = OpenMPStack.back().RedArg1;
+  Arg2 = OpenMPStack.back().RedArg2;
+}
+
+unsigned
+CodeGenModule::OpenMPSupportStackTy::getReductionVarIdx(const VarDecl *VD) {
+  assert (OpenMPStack.back().ReductionMap.count(VD) > 0 && "No reduction var.");
+  return OpenMPStack.back().ReductionMap[VD];
+}
+
+llvm::Value *CodeGenModule::OpenMPSupportStackTy::getReductionSwitch() {
+  return OpenMPStack.back().ReduceSwitch;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setReductionSwitch(
+                                                llvm::Value *Switch) {
+  OpenMPStack.back().ReduceSwitch = Switch;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setReductionIPs(
+                                                 llvm::BasicBlock *BB1,
+                                                 llvm::Instruction *IP1,
+                                                 llvm::BasicBlock *BB2,
+                                                 llvm::Instruction *IP2) {
+  OpenMPStack.back().BB1IP = IP1;
+  OpenMPStack.back().BB2IP = IP2;
+  OpenMPStack.back().BB1 = BB1;
+  OpenMPStack.back().BB2 = BB2;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::getReductionIPs(
+                                                 llvm::BasicBlock *&BB1,
+                                                 llvm::Instruction *&IP1,
+                                                 llvm::BasicBlock *&BB2,
+                                                 llvm::Instruction *&IP2) {
+  IP1 = OpenMPStack.back().BB1IP;
+  IP2 = OpenMPStack.back().BB2IP;
+  BB1 = OpenMPStack.back().BB1;
+  BB2 = OpenMPStack.back().BB2;
+}
+
+unsigned
+CodeGenModule::OpenMPSupportStackTy::getNumberOfReductionVars() {
+  return OpenMPStack.back().ReductionTypes.size();
+}
+
+llvm::Value *CodeGenModule::OpenMPSupportStackTy::getReductionLockVar() {
+  return OpenMPStack.back().LockVar;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setReductionLockVar(llvm::Value *Var) {
+  OpenMPStack.back().LockVar = Var;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setNoWait(bool Flag) {
+  OpenMPStack.back().NoWait = Flag;
+}
+
+bool CodeGenModule::OpenMPSupportStackTy::getNoWait() {
+  return OpenMPStack.back().NoWait;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setScheduleChunkSize(
+                                               int Sched,
+                                               const Expr *Size) {
+  OpenMPStack.back().Schedule = Sched;
+  OpenMPStack.back().ChunkSize = Size;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::getScheduleChunkSize(
+                                               int &Sched,
+                                               const Expr *&Size) {
+  Sched = OpenMPStack.back().Schedule;
+  Size = OpenMPStack.back().ChunkSize;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setMergeable(bool Flag) {
+  OpenMPStack.back().Mergeable = Flag;
+}
+
+bool CodeGenModule::OpenMPSupportStackTy::getMergeable() {
+  return OpenMPStack.back().Mergeable;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setOrdered(bool Flag) {
+  OpenMPStack.back().Ordered = Flag;
+}
+
+bool CodeGenModule::OpenMPSupportStackTy::getOrdered() {
+  return OpenMPStack.back().Ordered;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setHasFirstPrivate(bool Flag) {
+  OpenMPStack.back().HasFirstPrivate = Flag;
+//  for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
+//                                    E = OpenMPStack.rend();
+//       I != E; ++I) {
+//    I->HasFirstPrivate = I->HasFirstPrivate || Flag;
+//    if (I->NewTask) return;
+//  }
+}
+
+bool CodeGenModule::OpenMPSupportStackTy::hasFirstPrivate() {
+  return OpenMPStack.back().HasFirstPrivate;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setHasLastPrivate(bool Flag) {
+  OpenMPStack.back().HasLastPrivate = true;
+}
+
+bool CodeGenModule::OpenMPSupportStackTy::hasLastPrivate() {
+  return OpenMPStack.back().HasLastPrivate;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setLastprivateIP(
+                                                 llvm::BasicBlock *BB,
+                                                 llvm::Instruction *IP,
+                                                 llvm::BasicBlock *EndBB) {
+  OpenMPStack.back().LastprivateIP = IP;
+  OpenMPStack.back().LastprivateBB = BB;
+  OpenMPStack.back().LastprivateEndBB = EndBB;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::getLastprivateIP(
+                                                 llvm::BasicBlock *&BB,
+                                                 llvm::Instruction *&IP,
+                                                 llvm::BasicBlock *&EndBB) {
+  IP = OpenMPStack.back().LastprivateIP;
+  BB = OpenMPStack.back().LastprivateBB;
+  EndBB = OpenMPStack.back().LastprivateEndBB;
+}
+
+llvm::Value *CodeGenModule::OpenMPSupportStackTy::getLastIterVar() {
+  return OpenMPStack.back().LastIterVar;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setLastIterVar(llvm::Value *Var) {
+  OpenMPStack.back().LastIterVar = Var;
+}
+
+bool CodeGenModule::OpenMPSupportStackTy::getUntied() {
+  for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
+                                    E = OpenMPStack.rend();
+       I != E; ++I) {
+    if (I->NewTask) {
+      return I->Untied;
+    }
+  }
+  return false;
+}
+
+bool CodeGenModule::OpenMPSupportStackTy::getParentUntied() {
+  bool FirstTaskFound = false;
+  for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
+                                    E = OpenMPStack.rend();
+       I != E; ++I) {
+    if (FirstTaskFound && I->NewTask) {
+      return I->Untied;
+    }
+    FirstTaskFound = FirstTaskFound || I->NewTask;
+  }
+  return false;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setUntied(bool Flag) {
+  OpenMPStack.back().Untied = Flag;
+}
+
+llvm::Value *CodeGenModule::OpenMPSupportStackTy::getTaskFlags() {
+  return OpenMPStack.back().TaskFlags;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setTaskFlags(llvm::Value *Flags) {
+  OpenMPStack.back().TaskFlags = Flags;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setPTask(llvm::Value *Task, llvm::Value *TaskT, llvm::Type *PTy, QualType PQTy, llvm::Value *PB) {
+  OpenMPStack.back().PTask = Task;
+  OpenMPStack.back().PTaskTValue = TaskT;
+  OpenMPStack.back().TaskPrivateTy = PTy;
+  OpenMPStack.back().TaskPrivateQTy = PQTy;
+  OpenMPStack.back().TaskPrivateBase = PB;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::getPTask(llvm::Value *&Task, llvm::Value *&TaskT, llvm::Type *&PTy, QualType &PQTy, llvm::Value *&PB) {
+  Task = OpenMPStack.back().PTask;
+  TaskT = OpenMPStack.back().PTaskTValue;
+  PTy = OpenMPStack.back().TaskPrivateTy;
+  PQTy = OpenMPStack.back().TaskPrivateQTy;
+  PB = OpenMPStack.back().TaskPrivateBase;
+}
+
+llvm::DenseMap<const ValueDecl *, FieldDecl *> &CodeGenModule::OpenMPSupportStackTy::getTaskFields() {
+  return OpenMPStack.back().TaskFields;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch,
+                                                        llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter) {
+  for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
+                                    E = OpenMPStack.rend();
+       I != E; ++I) {
+    if (I->NewTask) {
+      I->UntiedPartIdAddr = UntiedPartIdAddr;
+      I->UntiedSwitch = UntiedSwitch;
+      I->UntiedEnd = UntiedEnd;
+      I->UntiedCounter = UntiedCounter;
+      return;
+    }
+  }
+}
+
+void CodeGenModule::OpenMPSupportStackTy::getUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch,
+                                                        llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter) {
+  for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
+                                    E = OpenMPStack.rend();
+       I != E; ++I) {
+    if (I->NewTask) {
+      UntiedPartIdAddr = I->UntiedPartIdAddr;
+      UntiedSwitch = I->UntiedSwitch;
+      UntiedEnd = I->UntiedEnd;
+      UntiedCounter = I->UntiedCounter;
+      return;
+    }
+  }
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setParentUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch,
+                                                              llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter) {
+  bool FirstTaskFound = false;
+  for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
+                                    E = OpenMPStack.rend();
+       I != E; ++I) {
+    if (FirstTaskFound && I->NewTask) {
+      I->UntiedPartIdAddr = UntiedPartIdAddr;
+      I->UntiedSwitch = UntiedSwitch;
+      I->UntiedEnd = UntiedEnd;
+      I->UntiedCounter = UntiedCounter;
+      return;
+    }
+    FirstTaskFound = FirstTaskFound || I->NewTask;
+  }
+}
+
+void CodeGenModule::OpenMPSupportStackTy::getParentUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch,
+                                                              llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter) {
+  bool FirstTaskFound = false;
+  for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
+                                    E = OpenMPStack.rend();
+       I != E; ++I) {
+    if (FirstTaskFound && I->NewTask) {
+      UntiedPartIdAddr = I->UntiedPartIdAddr;
+      UntiedSwitch = I->UntiedSwitch;
+      UntiedEnd = I->UntiedEnd;
+      UntiedCounter = I->UntiedCounter;
+      return;
+    }
+    FirstTaskFound = FirstTaskFound || I->NewTask;
+  }
 }

@@ -244,6 +244,7 @@ namespace  {
     void VisitAttributedStmt(const AttributedStmt *Node);
     void VisitLabelStmt(const LabelStmt *Node);
     void VisitGotoStmt(const GotoStmt *Node);
+    void VisitCapturedStmt(const CapturedStmt *Node);
 
     // Exprs
     void VisitExpr(const Expr *Node);
@@ -1383,6 +1384,25 @@ void ASTDumper::VisitGotoStmt(const GotoStmt *Node) {
   VisitStmt(Node);
   OS << " '" << Node->getLabel()->getName() << "'";
   dumpPointer(Node->getLabel());
+}
+
+void ASTDumper::VisitCapturedStmt(const CapturedStmt *Node) {
+  VisitStmt(Node);
+  for (CapturedStmt::const_capture_iterator I = Node->capture_begin(),
+                                            E = Node->capture_end();
+                                            I != E; ++I) {
+    IndentScope Indent(*this);
+    OS << "Capture ";
+    switch (I->getCaptureKind()) {
+    case CapturedStmt::VCK_This:
+      OS << "this";
+      break;
+    case CapturedStmt::VCK_ByRef:
+      OS << "byref ";
+      dumpBareDeclRef(I->getCapturedVar());
+      break;
+    }
+  }
 }
 
 //===----------------------------------------------------------------------===//

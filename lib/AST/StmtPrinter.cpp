@@ -102,6 +102,7 @@ namespace  {
 #define STMT(CLASS, PARENT) \
     void Visit##CLASS(CLASS *Node);
 #include "clang/AST/StmtNodes.inc"
+    void VisitOMPExecutableDirective(OMPExecutableDirective *Node);
   };
 }
 
@@ -577,6 +578,313 @@ void StmtPrinter::VisitSEHFinallyStmt(SEHFinallyStmt *Node) {
   Indent();
   PrintRawSEHFinallyStmt(Node);
   OS << "\n";
+}
+
+//===----------------------------------------------------------------------===//
+//  OpenMP clauses printing methods
+//===----------------------------------------------------------------------===//
+
+namespace {
+class OMPClausePrinter : public OMPClauseVisitor<OMPClausePrinter> {
+  StmtPrinter *Printer;
+  raw_ostream &OS;
+public:
+  OMPClausePrinter(StmtPrinter *P, raw_ostream &OS) : Printer(P), OS(OS) { }
+#define OPENMP_CLAUSE(Name, Class)                              \
+  void Visit##Class(Class *S);
+#include "clang/Basic/OpenMPKinds.def"
+};
+
+void OMPClausePrinter::VisitOMPIfClause(OMPIfClause *Node) {
+  OS << "if(";
+  Printer->PrintExpr(Node->getCondition());
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPNumThreadsClause(OMPNumThreadsClause *Node) {
+  OS << "num_threads(";
+  Printer->PrintExpr(Node->getNumThreads());
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPFinalClause(OMPFinalClause *Node) {
+  OS << "final(";
+  Printer->PrintExpr(Node->getCondition());
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPCollapseClause(OMPCollapseClause *Node) {
+  OS << "collapse(";
+  Printer->PrintExpr(Node->getNumForLoops());
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPDefaultClause(OMPDefaultClause *Node) {
+  OS << "default("
+     << getOpenMPSimpleClauseTypeName(OMPC_default, Node->getDefaultKind())
+     << ")";
+}
+
+void OMPClausePrinter::VisitOMPPrivateClause(OMPPrivateClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "private";
+    for (OMPVarList<OMPPrivateClause>::varlist_iterator
+                                              I = Node->varlist_begin(),
+                                              E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPFirstPrivateClause(OMPFirstPrivateClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "firstprivate";
+    for (OMPVarList<OMPFirstPrivateClause>::varlist_iterator
+                                                I = Node->varlist_begin(),
+                                                E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPSharedClause(OMPSharedClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "shared";
+    for (OMPVarList<OMPSharedClause>::varlist_iterator
+                                            I = Node->varlist_begin(),
+                                            E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPCopyinClause(OMPCopyinClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "copyin";
+    for (OMPVarList<OMPCopyinClause>::varlist_iterator
+                                           I = Node->varlist_begin(),
+                                           E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPCopyPrivateClause(OMPCopyPrivateClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "copyprivate";
+    for (OMPVarList<OMPCopyinClause>::varlist_iterator
+                                           I = Node->varlist_begin(),
+                                           E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPReductionClause(OMPReductionClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "reduction("
+       << getOpenMPSimpleClauseTypeName(OMPC_reduction, Node->getOperator())
+       << ':';
+    for (OMPVarList<OMPReductionClause>::varlist_iterator
+                                             I = Node->varlist_begin(),
+                                             E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? ' ' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPLastPrivateClause(OMPLastPrivateClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "lastprivate";
+    for (OMPVarList<OMPCopyinClause>::varlist_iterator
+                                           I = Node->varlist_begin(),
+                                           E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPScheduleClause(OMPScheduleClause *Node) {
+  OS << "schedule("
+     << getOpenMPSimpleClauseTypeName(OMPC_schedule, Node->getScheduleKind());
+  if (Node->getChunkSize()) {
+    OS << ", ";
+    Printer->PrintExpr(Node->getChunkSize());
+  }
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPOrderedClause(OMPOrderedClause *Node) {
+  OS << "ordered";
+}
+
+void OMPClausePrinter::VisitOMPNowaitClause(OMPNowaitClause *Node) {
+  OS << "nowait";
+}
+
+void OMPClausePrinter::VisitOMPUntiedClause(OMPUntiedClause *Node) {
+  OS << "untied";
+}
+
+void OMPClausePrinter::VisitOMPMergeableClause(OMPMergeableClause *Node) {
+  OS << "mergeable";
+}
+
+void OMPClausePrinter::VisitOMPReadClause(OMPReadClause *Node) {
+  OS << "read";
+}
+
+void OMPClausePrinter::VisitOMPWriteClause(OMPWriteClause *Node) {
+  OS << "write";
+}
+
+void OMPClausePrinter::VisitOMPUpdateClause(OMPUpdateClause *Node) {
+  OS << "update";
+}
+
+void OMPClausePrinter::VisitOMPCaptureClause(OMPCaptureClause *Node) {
+  OS << "capture";
+}
+
+void OMPClausePrinter::VisitOMPSeqCstClause(OMPSeqCstClause *Node) {
+  OS << "seq_cst";
+}
+
+void OMPClausePrinter::VisitOMPFlushClause(OMPFlushClause *Node) {
+  if (!Node->varlist_empty()) {
+    for (OMPVarList<OMPFlushClause>::varlist_iterator
+                                                I = Node->varlist_begin(),
+                                                E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+}
+
+//===----------------------------------------------------------------------===//
+//  OpenMP directives printing methods
+//===----------------------------------------------------------------------===//
+
+void StmtPrinter::VisitOMPExecutableDirective(OMPExecutableDirective *Node) {
+  OMPClausePrinter Printer(this, OS);
+  ArrayRef<OMPClause *> Clauses = Node->clauses();
+  for (ArrayRef<OMPClause *>::iterator I = Clauses.begin(), E = Clauses.end();
+       I != E; ++I)
+    if (*I && !(*I)->isImplicit()) {
+      Printer.Visit(*I);
+      OS << ' ';
+    }
+  OS << "\n";
+  if (Node->getAssociatedStmt()) {
+    assert(isa<CapturedStmt>(Node->getAssociatedStmt()) &&
+           "Expected captured statement!");
+    Stmt *CS = cast<CapturedStmt>(Node->getAssociatedStmt())->getCapturedStmt();
+    PrintStmt(CS);
+  }
+}
+void StmtPrinter::VisitOMPParallelDirective(OMPParallelDirective *Node) {
+  Indent() << "#pragma omp parallel ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPForDirective(OMPForDirective *Node) {
+  Indent() << "#pragma omp for ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPSectionsDirective(OMPSectionsDirective *Node) {
+  Indent() << "#pragma omp sections ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPSectionDirective(OMPSectionDirective *Node) {
+  Indent() << "#pragma omp section";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPSingleDirective(OMPSingleDirective *Node) {
+  Indent() << "#pragma omp single ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTaskDirective(OMPTaskDirective *Node) {
+  Indent() << "#pragma omp task ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTaskyieldDirective(OMPTaskyieldDirective *Node) {
+  Indent() << "#pragma omp taskyield";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPMasterDirective(OMPMasterDirective *Node) {
+  Indent() << "#pragma omp master";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPCriticalDirective(OMPCriticalDirective *Node) {
+  Indent() << "#pragma omp critical";
+  if (Node->getDirectiveName().getName()) {
+    OS << " (";
+    Node->getDirectiveName().printName(OS);
+    OS << ")";
+  }
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPBarrierDirective(OMPBarrierDirective *Node) {
+  Indent() << "#pragma omp barrier";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTaskwaitDirective(OMPTaskwaitDirective *Node) {
+  Indent() << "#pragma omp taskwait";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTaskgroupDirective(OMPTaskgroupDirective *Node) {
+  Indent() << "#pragma omp taskgroup";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPAtomicDirective(OMPAtomicDirective *Node) {
+  Indent() << "#pragma omp atomic ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPFlushDirective(OMPFlushDirective *Node) {
+  Indent() << "#pragma omp flush";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPOrderedDirective(OMPOrderedDirective *Node) {
+  Indent() << "#pragma omp ordered";
+  VisitOMPExecutableDirective(Node);
 }
 
 //===----------------------------------------------------------------------===//

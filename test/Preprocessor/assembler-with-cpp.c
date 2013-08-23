@@ -77,7 +77,3 @@
 // rdar://8823139
 # ##
 // CHECK-Identifiers-False: # ##
-
-#define X(a) # # # 1
-X(1)
-// CHECK-Identifiers-False: # # # 1

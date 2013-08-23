@@ -174,3 +174,21 @@ def MSDependentExistsStmt : Stmt;
 
 // OpenCL Extensions.
 def AsTypeExpr : DStmt<Expr>;
+
+// OpenMP Directives.
+def OMPExecutableDirective : Stmt<1>;
+def OMPParallelDirective : DStmt<OMPExecutableDirective>;
+def OMPForDirective : DStmt<OMPExecutableDirective>;
+def OMPSectionsDirective : DStmt<OMPExecutableDirective>;
+def OMPSectionDirective : DStmt<OMPExecutableDirective>;
+def OMPSingleDirective : DStmt<OMPExecutableDirective>;
+def OMPTaskDirective : DStmt<OMPExecutableDirective>;
+def OMPTaskyieldDirective : DStmt<OMPExecutableDirective>;
+def OMPMasterDirective : DStmt<OMPExecutableDirective>;
+def OMPCriticalDirective : DStmt<OMPExecutableDirective>;
+def OMPBarrierDirective : DStmt<OMPExecutableDirective>;
+def OMPTaskwaitDirective : DStmt<OMPExecutableDirective>;
+def OMPTaskgroupDirective : DStmt<OMPExecutableDirective>;
+def OMPAtomicDirective : DStmt<OMPExecutableDirective>;
+def OMPFlushDirective : DStmt<OMPExecutableDirective>;
+def OMPOrderedDirective : DStmt<OMPExecutableDirective>;

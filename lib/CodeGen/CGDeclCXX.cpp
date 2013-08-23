@@ -510,3 +510,362 @@ CodeGenFunction::generateDestroyHelper(llvm::Constant *addr,
   
   return fn;
 }
+
+void CodeGenModule::CreateOpenMPCXXInit(const VarDecl *Var,
+                                        CXXRecordDecl *Ty,
+                                        llvm::Function *&InitFunction,
+                                        llvm::Value *&Ctor,
+                                        llvm::Value *&CCtor,
+                                        llvm::Value *&Dtor) {
+  // Find default constructor, copy constructor and destructor.
+  Ctor = 0;
+  CCtor = 0;
+  Dtor = 0;
+  InitFunction = 0;
+//  CXXConstructorDecl *CtorDecl = 0;//, *CCtorDecl = 0;
+//  CXXDestructorDecl *DtorDecl = 0;
+/*  for (CXXRecordDecl::ctor_iterator CI = Ty->ctor_begin(),
+                                    CE = Ty->ctor_end();
+       CI != CE; ++CI) {
+    unsigned Quals;
+    if ((*CI)->isDefaultConstructor())
+      CtorDecl = *CI;
+//    else if ((*CI)->isCopyConstructor(Quals) &&
+//             ((Quals & Qualifiers::Const) == Qualifiers::Const))
+//      CCtorDecl = *CI;
+  }*/
+//  if (CXXDestructorDecl *D = Ty->getDestructor())
+//    DtorDecl = D;
+  // Generate wrapper for default constructor.
+  const Expr *Init = Var->getAnyInitializer();
+  if (Init) {
+    CodeGenFunction CGF(*this);
+    FunctionArgList Args;
+    ImplicitParamDecl Dst(0, SourceLocation(), 0, getContext().VoidPtrTy);
+    Args.push_back(&Dst);
+
+    const CGFunctionInfo &FI =
+          getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                FunctionType::ExtInfo(), false);
+    llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+    llvm::Function *Fn =
+           CreateGlobalInitOrDestructFunction(*this, FTy,
+                                              Twine("__kmpc_ctor_",
+                                                    getMangledName(Var)));
+    CGF.maybeInitializeDebugInfo();
+    CGF.StartFunction(GlobalDecl(), getContext().VoidPtrTy, Fn, FI,
+                      Args, SourceLocation());
+//    CGF.EmitCXXConstructExpr(cast<CXXConstructExpr>(Var->getInit()),
+//                             AggValueSlot::forAddr(Fn->arg_begin(),
+//                                                   CGF.getContext().getTypeAlignInChars(Var->getType()),
+//                                                   Var->getType().getQualifiers(),
+//                                                   AggValueSlot::IsNotDestructed,
+//                                                   AggValueSlot::DoesNotNeedGCBarriers,
+//                                                   AggValueSlot::IsNotAliased));
+//    //CGF.EmitCXXConstructorCall(CtorDecl, Ctor_Complete, false, false,
+//    //                           Fn->arg_begin(), 0, 0);
+    llvm::Value *Arg = CGF.EmitScalarConversion(Fn->arg_begin(), getContext().VoidPtrTy, getContext().getPointerType(Var->getType()));
+    CGF.EmitAnyExprToMem(Init, Arg, Init->getType().getQualifiers(), true);
+    CGF.Builder.CreateStore(Fn->arg_begin(), CGF.ReturnValue);
+    CGF.FinishFunction();
+    Ctor = Fn;
+  }
+/*  if (CCtorDecl) {
+    FunctionArgList Args;
+    if (!OpenMPCCtorHelperDecl) {
+      llvm::SmallVector<QualType, 2> TArgs(2, getContext().VoidPtrTy);
+      FunctionProtoType::ExtProtoInfo EPI;
+      OpenMPCCtorHelperDecl =
+        FunctionDecl::Create(getContext(), Ty->getTranslationUnitDecl(),
+                             SourceLocation(), SourceLocation(),
+                             DeclarationName(),
+                             getContext().getFunctionType(
+                                            getContext().VoidPtrTy,
+                                            TArgs, EPI),
+                             0, SC_None, SC_None, false, false);
+    }
+    ImplicitParamDecl Dst1(OpenMPCCtorHelperDecl, SourceLocation(), 0,
+                           getContext().VoidPtrTy);
+    ImplicitParamDecl Dst2(OpenMPCCtorHelperDecl, SourceLocation(), 0,
+                           getContext().VoidPtrTy);
+    DeclRefExpr E(&Dst2, true, getContext().VoidPtrTy, VK_LValue,
+                  SourceLocation());
+    ImplicitCastExpr ECast(ImplicitCastExpr::OnStack,
+                           CCtorDecl->getThisType(getContext()), CK_BitCast,
+                           &E, VK_LValue);
+    UnaryOperator EUn(&ECast, UO_Deref, getContext().getRecordType(Ty),
+                      VK_LValue, OK_Ordinary, SourceLocation());
+    Stmt *S = &EUn;
+    CallExpr::const_arg_iterator EI(&S);
+    Args.push_back(&Dst1);
+    Args.push_back(&Dst2);
+
+    const CGFunctionInfo &FI =
+          getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                FunctionType::ExtInfo(), false);
+    llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+    llvm::Function *Fn =
+            CreateGlobalInitOrDestructFunction(*this, FTy,
+                                               Twine("__kmpc_cctor_",
+                                                     Var->getName()));
+    CGF.maybeInitializeDebugInfo();
+    CGF.StartFunction(GlobalDecl(), getContext().VoidPtrTy, Fn, FI,
+                      Args, SourceLocation());
+    CGF.EmitCXXConstructorCall(CCtorDecl, Ctor_Complete, false, false,
+                               Fn->arg_begin(), EI, EI + 1);
+    CGF.Builder.CreateStore(&Fn->getArgumentList().back(), CGF.ReturnValue);
+    CGF.FinishFunction();
+    CCtor = Fn;
+  }*/
+  QualType QTy = Var->getType();
+  QualType::DestructionKind DtorKind = QTy.isDestructedType();
+  if (DtorKind != QualType::DK_none && !Ty->hasTrivialDestructor()) {
+    CodeGenFunction CGF(*this);
+    FunctionArgList Args;
+    ImplicitParamDecl Dst(0, SourceLocation(), 0, getContext().VoidPtrTy);
+    Args.push_back(&Dst);
+
+    const CGFunctionInfo &FI =
+          getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                FunctionType::ExtInfo(), false);
+    llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+    llvm::Function *Fn =
+           CreateGlobalInitOrDestructFunction(*this, FTy,
+                                              Twine("__kmpc_dtor_",
+                                                    getMangledName(Var)));
+    CGF.maybeInitializeDebugInfo();
+    CGF.StartFunction(GlobalDecl(), getContext().VoidPtrTy, Fn, FI,
+                      Args, SourceLocation());
+    //CGF.EmitCXXDestructorCall(DtorDecl, Dtor_Complete, false, false,
+    //                          Fn->arg_begin());
+    CGF.emitDestroy(Fn->arg_begin(), QTy, CGF.getDestroyer(DtorKind), CGF.needsEHCleanup(DtorKind));
+    CGF.Builder.CreateStore(Fn->arg_begin(), CGF.ReturnValue);
+    CGF.FinishFunction();
+    Dtor = Fn;
+  }// else {
+    //DtorDecl = 0;
+  //}
+
+  if (Init || (DtorKind != QualType::DK_none && !Ty->hasTrivialDestructor())) {
+    if (!Ctor) {
+      FunctionArgList Args;
+      ImplicitParamDecl Dst(0, SourceLocation(), 0, getContext().VoidPtrTy);
+      Args.push_back(&Dst);
+
+      const CGFunctionInfo &FI =
+            getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                FunctionType::ExtInfo(), false);
+      llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+      Ctor = llvm::Constant::getNullValue(FTy->getPointerTo());
+    }
+    if (!CCtor) {
+      FunctionArgList Args;
+      ImplicitParamDecl Dst1(0, SourceLocation(), 0,
+                             getContext().VoidPtrTy);
+      ImplicitParamDecl Dst2(0, SourceLocation(), 0,
+                             getContext().VoidPtrTy);
+      Args.push_back(&Dst1);
+      Args.push_back(&Dst2);
+      const CGFunctionInfo &FI =
+            getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                  FunctionType::ExtInfo(), false);
+      llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+      CCtor = llvm::Constant::getNullValue(FTy->getPointerTo());
+    }
+    if (DtorKind == QualType::DK_none || Ty->hasTrivialDestructor()) {
+      FunctionArgList Args;
+      ImplicitParamDecl Dst(0, SourceLocation(), 0, getContext().VoidPtrTy);
+      Args.push_back(&Dst);
+
+      const CGFunctionInfo &FI =
+            getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                  FunctionType::ExtInfo(), false);
+      llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+      Dtor = llvm::Constant::getNullValue(FTy->getPointerTo());
+    }
+    llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, false);
+    InitFunction =
+              CreateGlobalInitOrDestructFunction(*this, FTy,
+                                                 Twine("__omp_threadprivate_",
+                                                       getMangledName(Var)));
+  }
+}
+
+void CodeGenModule::CreateOpenMPArrCXXInit(const VarDecl *Var,
+                                           CXXRecordDecl *Ty,
+                                           llvm::Function *&InitFunction,
+                                           llvm::Value *&Ctor,
+                                           llvm::Value *&CCtor,
+                                           llvm::Value *&Dtor) {
+  // Find default constructor, copy constructor and destructor.
+  Ctor = 0;
+  CCtor = 0;
+  Dtor = 0;
+  InitFunction = 0;
+  //CXXConstructorDecl *CtorDecl = 0, *CCtorDecl = 0;
+  CXXDestructorDecl *DtorDecl = 0;
+/*  for (CXXRecordDecl::ctor_iterator CI = Ty->ctor_begin(),
+                                    CE = Ty->ctor_end();
+       CI != CE; ++CI) {
+    unsigned Quals;
+    if ((*CI)->isDefaultConstructor())
+      CtorDecl = *CI;
+    else if ((*CI)->isCopyConstructor(Quals) &&
+             ((Quals & Qualifiers::Const) == Qualifiers::Const))
+      CCtorDecl = *CI;
+  }
+*/
+  if (CXXDestructorDecl *D = Ty->getDestructor())
+    DtorDecl = D;
+  // Generate wrapper for default constructor.
+  const Expr *Init = Var->getAnyInitializer();
+  if (Init) {
+    FunctionArgList Args;
+    ImplicitParamDecl Dst(0, SourceLocation(), 0, getContext().VoidPtrTy);
+    Args.push_back(&Dst);
+
+    const CGFunctionInfo &FI =
+          getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                FunctionType::ExtInfo(), false);
+    llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+    llvm::Function *Fn =
+           CreateGlobalInitOrDestructFunction(*this, FTy,
+                                              Twine("__kmpc_ctor_vec_",
+                                                    getMangledName(Var)));
+    CodeGenFunction CGF(*this);
+    CGF.maybeInitializeDebugInfo();
+    CGF.StartFunction(GlobalDecl(), getContext().VoidPtrTy, Fn, FI,
+                      Args, SourceLocation());
+//    CGF.EmitAggExpr(Var->getInit(),
+//                    AggValueSlot::forAddr(Fn->arg_begin(),
+//                                          CGF.getContext().getTypeAlignInChars(Var->getType()),
+//                                          Var->getType().getQualifiers(),
+//                                          AggValueSlot::IsNotDestructed,
+//                                          AggValueSlot::DoesNotNeedGCBarriers,
+//                                          AggValueSlot::IsNotAliased));
+//    CGF.Builder.CreateStore(Fn->arg_begin(), CGF.ReturnValue);
+    llvm::Value *Arg = CGF.EmitScalarConversion(Fn->arg_begin(), getContext().VoidPtrTy, getContext().getPointerType(Var->getType()));
+    CGF.EmitAnyExprToMem(Init, Arg, Init->getType().getQualifiers(), true);
+    CGF.Builder.CreateStore(Fn->arg_begin(), CGF.ReturnValue);
+    CGF.FinishFunction();
+    Ctor = Fn;
+  }
+/*  if (CCtorDecl) {
+    FunctionArgList Args;
+    if (!OpenMPCCtorHelperDecl) {
+      llvm::SmallVector<QualType, 2> TArgs(2, getContext().VoidPtrTy);
+      FunctionProtoType::ExtProtoInfo EPI;
+      OpenMPCCtorHelperDecl =
+        FunctionDecl::Create(getContext(), Ty->getTranslationUnitDecl(),
+                             SourceLocation(), SourceLocation(),
+                             DeclarationName(),
+                             getContext().getFunctionType(
+                                            getContext().VoidPtrTy,
+                                            TArgs, EPI),
+                             0, SC_None, SC_None, false, false);
+    }
+    ImplicitParamDecl Dst1(OpenMPCCtorHelperDecl, SourceLocation(), 0,
+                           getContext().VoidPtrTy);
+    ImplicitParamDecl Dst2(OpenMPCCtorHelperDecl, SourceLocation(), 0,
+                           getContext().VoidPtrTy);
+    DeclRefExpr E(&Dst2, true, getContext().VoidPtrTy, VK_LValue,
+                  SourceLocation());
+    ImplicitCastExpr ECast(ImplicitCastExpr::OnStack,
+                           CCtorDecl->getThisType(getContext()), CK_BitCast,
+                           &E, VK_LValue);
+    UnaryOperator EUn(&ECast, UO_Deref, getContext().getRecordType(Ty),
+                      VK_LValue, OK_Ordinary, SourceLocation());
+    Stmt *S = &EUn;
+    CallExpr::const_arg_iterator EI(&S);
+    Args.push_back(&Dst1);
+    Args.push_back(&Dst2);
+
+    const CGFunctionInfo &FI =
+          getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                FunctionType::ExtInfo(), false);
+    llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+    llvm::Function *Fn =
+            CreateGlobalInitOrDestructFunction(*this, FTy,
+                                               Twine("__kmpc_cctor_",
+                                                     Var->getName()));
+    CGF.maybeInitializeDebugInfo();
+    CGF.StartFunction(GlobalDecl(), getContext().VoidPtrTy, Fn, FI,
+                      Args, SourceLocation());
+    CGF.EmitCXXConstructorCall(CCtorDecl, Ctor_Complete, false, false,
+                               Fn->arg_begin(), EI, EI + 1);
+    CGF.Builder.CreateStore(&Fn->getArgumentList().back(), CGF.ReturnValue);
+    CGF.FinishFunction();
+    CCtor = Fn;
+  }*/
+  if (DtorDecl && !DtorDecl->isTrivial()) {
+    FunctionArgList Args;
+    ImplicitParamDecl Dst(0, SourceLocation(), 0, getContext().VoidPtrTy);
+    Args.push_back(&Dst);
+
+    const CGFunctionInfo &FI =
+          getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                FunctionType::ExtInfo(), false);
+    llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+    llvm::Function *Fn =
+           CreateGlobalInitOrDestructFunction(*this, FTy,
+                                              Twine("__kmpc_dtor_vec_",
+                                                    getMangledName(Var)));
+    CodeGenFunction CGF(*this);
+    CGF.maybeInitializeDebugInfo();
+    CGF.StartFunction(GlobalDecl(), getContext().VoidPtrTy, Fn, FI,
+                      Args, SourceLocation());
+    CGF.emitDestroy(Fn->arg_begin(), Var->getType(),
+                    CGF.getDestroyer(QualType::DK_cxx_destructor),
+                    false
+                    /*CGF.needsEHCleanup(QualType::DK_cxx_destructor)*/);
+    CGF.Builder.CreateStore(Fn->arg_begin(), CGF.ReturnValue);
+    CGF.FinishFunction();
+    Dtor = Fn;
+  } else {
+    DtorDecl = 0;
+  }
+
+  if (Init || DtorDecl) {
+    if (!Ctor) {
+      FunctionArgList Args;
+      ImplicitParamDecl Dst(0, SourceLocation(), 0, getContext().VoidPtrTy);
+      Args.push_back(&Dst);
+
+      const CGFunctionInfo &FI =
+            getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                FunctionType::ExtInfo(), false);
+      llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+      Ctor = llvm::Constant::getNullValue(FTy->getPointerTo());
+    }
+    if (!CCtor) {
+      FunctionArgList Args;
+      ImplicitParamDecl Dst1(0, SourceLocation(), 0,
+                             getContext().VoidPtrTy);
+      ImplicitParamDecl Dst2(0, SourceLocation(), 0,
+                             getContext().VoidPtrTy);
+      Args.push_back(&Dst1);
+      Args.push_back(&Dst2);
+      const CGFunctionInfo &FI =
+            getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                  FunctionType::ExtInfo(), false);
+      llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+      CCtor = llvm::Constant::getNullValue(FTy->getPointerTo());
+    }
+    if (!Dtor) {
+      FunctionArgList Args;
+      ImplicitParamDecl Dst(0, SourceLocation(), 0, getContext().VoidPtrTy);
+      Args.push_back(&Dst);
+
+      const CGFunctionInfo &FI =
+            getTypes().arrangeFunctionDeclaration(getContext().VoidPtrTy, Args,
+                                                  FunctionType::ExtInfo(), false);
+      llvm::FunctionType *FTy = getTypes().GetFunctionType(FI);
+      Dtor = llvm::Constant::getNullValue(FTy->getPointerTo());
+    }
+    llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, false);
+    InitFunction =
+              CreateGlobalInitOrDestructFunction(*this, FTy,
+                                                 Twine("__omp_threadprivate_vec_",
+                                                       getMangledName(Var)));
+  }
+}

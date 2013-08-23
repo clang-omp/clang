@@ -275,11 +275,12 @@ static EnumDecl *findEnumForBlockReturn(Expr *E) {
   //   - it is an implicit integral conversion applied to an
   //     enumerator-like expression of type T or
   if (ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(E)) {
-    // We can only see integral conversions in valid enumerator-like
-    // expressions.
+    // We can sometimes see integral conversions in valid
+    // enumerator-like expressions.
     if (ICE->getCastKind() == CK_IntegralCast)
       return findEnumForBlockReturn(ICE->getSubExpr());
-    return 0;
+
+    // Otherwise, just rely on the type.
   }
 
   //   - it is an expression of that formal enum type.
@@ -555,6 +556,14 @@ void Sema::ActOnStartOfLambdaDefinition(LambdaIntroducer &Intro,
       }
       
       CheckCXXThisCapture(C->Loc, /*Explicit=*/true);
+      continue;
+    }
+
+    // FIXME: C++1y [expr.prim.lambda]p11
+    if (C->Init.isInvalid())
+      continue;
+    if (C->Init.isUsable()) {
+      Diag(C->Loc, diag::err_lambda_init_capture_unsupported);
       continue;
     }
 

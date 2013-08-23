@@ -4848,8 +4848,6 @@ let CategoryName = "Lambda Issue" in {
     "duration">;
   def err_this_capture : Error<
     "'this' cannot be %select{implicitly |}0captured in this context">;
-  def err_lambda_capture_block : Error<
-    "__block variable %0 cannot be captured in a lambda expression">;
   def err_lambda_capture_anonymous_var : Error<
     "unnamed variable cannot be implicitly captured in a lambda expression">;
   def err_lambda_capture_vm_type : Error<
@@ -4889,10 +4887,15 @@ let CategoryName = "Lambda Issue" in {
   def note_lambda_to_block_conv : Note<
     "implicit capture of lambda object due to conversion to block pointer "
     "here">;
+  def err_lambda_init_capture_unsupported : Error<
+    "sorry, initialized lambda-captures are not supported yet">;
 }
 
 def err_return_in_captured_stmt : Error<
   "cannot return from %0">;
+def err_capture_block_variable : Error<
+  "__block variable %0 cannot be captured in a "
+  "%select{lambda expression|captured statement}1">;
 
 def err_operator_arrow_circular : Error<
   "circular pointer delegation detected">;
@@ -5718,7 +5721,7 @@ def err_defaulted_special_member_return_type : Error<
   "return %1">;
 def err_defaulted_special_member_quals : Error<
   "an explicitly-defaulted %select{copy|move}0 assignment operator may not "
-  "have 'const', 'constexpr' or 'volatile' qualifiers">;
+  "have 'const'%select{, 'constexpr'|}1 or 'volatile' qualifiers">;
 def err_defaulted_special_member_volatile_param : Error<
   "the parameter for an explicitly-defaulted %select{<<ERROR>>|"
   "copy constructor|move constructor|copy assignment operator|"
@@ -5740,7 +5743,8 @@ def err_incorrect_defaulted_exception_spec : Error<
   "calculated one">;
 def err_incorrect_defaulted_constexpr : Error<
   "defaulted definition of %select{default constructor|copy constructor|"
-  "move constructor}0 is not constexpr">;
+  "move constructor|copy assignment operator|move assignment operator}0 "
+  "is not constexpr">;
 def err_out_of_line_default_deletes : Error<
   "defaulting this %select{default constructor|copy constructor|move "
   "constructor|copy assignment operator|move assignment operator|destructor}0 "
@@ -6332,24 +6336,123 @@ def err_wrong_sampler_addressspace: Error<
   "sampler type cannot be used with the __local and __global address space qualifiers">;
 def err_opencl_global_invalid_addr_space : Error<
   "global variables must have a constant address space qualifier">;
-  
+
+} // end of sema category
+
+let CategoryName = "OpenMP Issue" in {
 // OpenMP support.
 def err_omp_expected_var_arg_suggest : Error<
   "%0 is not a global variable, static local variable or static data member%select{|; did you mean %2?}1">;
 def err_omp_global_var_arg : Error<
   "arguments of '#pragma omp %0' must have %select{global storage|static storage duration}1">;
 def err_omp_ref_type_arg : Error<
-  "arguments of '#pragma omp %0' cannot be of reference type %1">;
+  "arguments of '#pragma omp %0' cannot be of reference type">;
 def err_omp_var_scope : Error<
-  "'#pragma omp %0' must appear in the scope of the %1 variable declaration">;
+  "'#pragma omp %0' must appear in the scope of the %q1 variable declaration">;
 def err_omp_var_used : Error<
-  "'#pragma omp %0' must precede all references to variable %1">;
+  "'#pragma omp %0' must precede all references to variable %q1">;
 def err_omp_var_thread_local : Error<
   "variable %0 cannot be threadprivate because it is thread-local">;
-def err_omp_incomplete_type : Error<
-  "a threadprivate variable must not have incomplete type %0">;
-
-} // end of sema category
+def err_omp_threadprivate_incomplete_type : Error<
+  "threadprivate variable with incomplete type %0">;
+def err_omp_private_incomplete_type : Error<
+  "private variable with incomplete type %0">;
+def err_omp_firstprivate_incomplete_type : Error<
+  "firstprivate variable with incomplete type %0">;
+def err_omp_reduction_incomplete_type : Error<
+  "reduction variable with incomplete type %0">;
+def err_omp_lastprivate_incomplete_type : Error<
+  "lastprivate variable with incomplete type %0">;
+def err_omp_directive_nonblock : Error<
+  "directive '#pragma omp %0' bound to nonblock statement">;
+def err_incomplete_class_type : Error<
+  "expression has incomplete type %0">;
+def err_multiple_conversions : Error<
+  "multiple conversions from expression type %0 to an integral "
+  "or enumeration type">;
+def err_explicit_conversion : Error<
+  "expression type %0 requires explicit conversion to %1">;
+def note_conversion : Note<
+  "conversion to %select{integral|enumeration}0 type %1">;
+def err_negative_expression_in_clause : Error<
+  "expression is not a positive integer value">;
+def err_omp_unexpected_clause_value : Error <
+  "expected %0 in OpenMP clause '%1'">;
+def err_omp_expected_var_name : Error <
+  "expected variable name">;
+def err_omp_required_method : Error <
+  "%0 variable must have an accessible, unambiguous %select{default constructor|copy constructor|copy assignment operator|'%2'|destructor}1">;
+def note_omp_marked_here : Note<
+  "marked as %0 here">;
+def err_omp_clause_ref_type_arg : Error<
+  "arguments of OpenMP clause '%0' cannot be of reference type">;
+def err_omp_required_access : Error<
+  "%0 variable must be %1">;
+def err_omp_clause_not_arithmetic_type_arg : Error<
+  "arguments of OpenMP clause '%0'%select{| for 'min' and 'max'}1 must be of %select{scalar|arithmetic}1 type">;
+def err_omp_clause_floating_type_arg : Error<
+  "arguments of OpenMP clause 'reduction' with bitwise operators cannot be of floating type">;
+def err_omp_clause_array_type_arg : Error<
+  "arguments of OpenMP clause '%0' cannot be of array type">;
+def err_omp_reduction_ref_type_arg : Error<
+  "argument of OpenMP clause 'reduction' must reference the same object in all threads">;
+def err_omp_wrong_dsa : Error<
+  "%0 variable cannot be %1">;
+def err_omp_reduction_in_task : Error<
+  "reduction variables may not be accessed in an explicit task">;
+def err_omp_once_referenced : Error<
+  "variable can appear only once in OpenMP '%0' clause">;
+def err_omp_const_variable : Error<
+  "const-qualified variable cannot be %0">;
+def note_omp_explicit_dsa : Note <
+  "defined as %0">;
+def note_omp_predetermined_dsa : Note <
+  "predetermined as %0">;
+def note_omp_referenced : Note <
+  "previously referenced here">;
+def err_omp_dsa_with_directives : Error<
+  "%0 variable in '#pragma omp %1' cannot be %2 in '#pragma omp %3'">;
+def err_omp_not_for : Error <
+  "only for-loops are allowed for '#pragma omp %0'">;
+def err_omp_for_variable : Error <
+  "variable must be of integer or %select{pointer|random access iterator}0 type">;
+def err_omp_not_canonical_for : Error <
+  "%select{initialization|condition|increment}0 of for-loop does not have canonical form">;
+def err_omp_for_incr_not_integer : Error <
+  "increment expression of for-loop must be of an integer type">;
+def err_omp_for_incr_not_compatible : Error <
+  "increment expression must cause %q0 to %select{decrease|increase}1 on each iteration of the loop">;
+def err_omp_for_type_not_compatible : Error <
+  "expression of type %0 is not compatible with variable %1 of type %2">;
+def err_omp_for_wrong_count : Error <
+  "unable to calculate number of iterations of the for-loop">;
+def err_omp_type_not_rai : Error <
+  "iteration variable is not of a random access iterator type">;
+def err_omp_for_loop_var_dsa : Error <
+  "loop iteration variable may not be %0">;
+def err_omp_sections_not_section : Error <
+  "the statement for '#pragma omp %0' must be '#pragma omp section'">;
+def err_omp_section_orphaned : Error <
+  "orphaned '#pragma omp section' is prohibited">;
+def err_omp_sections_not_compound_stmt : Error <
+  "the statement for '#pragma omp %0' must be compound statement">;
+def err_omp_prohibited_region : Error <
+  "region cannot be%select{| closely}0 nested inside %1 region%select{| with name %3}2">;
+def err_omp_prohibited_ordered_region : Error <
+  "region must be closely nested inside loop or parallel loop region with 'ordered' clause">;
+def err_omp_atomic_more_one_clause : Error <
+  "directive '#pragma omp atomic' cannot contain more than one 'read', 'write', 'update' or 'capture' clause">;
+def err_omp_atomic_not_expression : Error <
+  "expected expression statement for '#pragma omp atomic %0'">;
+def err_omp_atomic_wrong_statement : Error <
+  "statement form is not allowed for '#pragma omp atomic %0'">;
+def err_omp_no_dsa_for_variable : Error <
+  "variable %0 must have explicitly specified data sharing attributes">;
+def err_omp_for_cannot_break: Error<
+  "cannot break from a '#pragma omp for' loop">;
+def err_capture_vm_type : Error<
+    "variable %0 with variably modified type cannot be captured">;
+} // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {
 // Objective-C related result type compatibility
@@ -6396,3 +6499,4 @@ def warn_not_a_doxygen_trailing_member_comment : Warning<
 } // end of documentation issue category
 
 } // end of sema component.
+

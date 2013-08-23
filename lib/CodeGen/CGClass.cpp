@@ -600,7 +600,7 @@ static void EmitMemberInitializer(CodeGenFunction &CGF,
   CGF.EmitInitializerForField(Field, LHS, MemberInit->getInit(), ArrayIndexes);
 }
 
-void CodeGenFunction::EmitInitializerForField(FieldDecl *Field,
+void CodeGenFunction::EmitInitializerForField(const FieldDecl *Field,
                                               LValue LHS, Expr *Init,
                                              ArrayRef<VarDecl *> ArrayIndexes) {
   QualType FieldType = Field->getType();

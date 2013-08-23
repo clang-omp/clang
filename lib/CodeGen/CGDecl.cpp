@@ -78,17 +78,19 @@ void CodeGenFunction::EmitDecl(const Decl &D) {
   case Decl::Enum:      // enum X;
   case Decl::EnumConstant: // enum ? { X = ? }
   case Decl::CXXRecord: // struct/union/class X; [C++]
-  case Decl::Using:          // using X; [C++]
-  case Decl::UsingShadow:
   case Decl::NamespaceAlias:
   case Decl::StaticAssert: // static_assert(X, ""); [C++0x]
   case Decl::Label:        // __label__ x;
   case Decl::Import:
-  case Decl::OMPThreadPrivate:
   case Decl::Empty:
+  case Decl::UsingShadow:
+  case Decl::Using:          // using X; [C++]
     // None of these decls require codegen support.
     return;
 
+  case Decl::OMPThreadPrivate:
+    CGM.EmitOMPThreadPrivate(cast<OMPThreadPrivateDecl>(&D));
+    break;
   case Decl::UsingDirective: // using namespace X; [C++]
     if (CGDebugInfo *DI = getDebugInfo())
       DI->EmitUsingDirective(cast<UsingDirectiveDecl>(D));

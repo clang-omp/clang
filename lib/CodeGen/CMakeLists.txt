@@ -24,6 +24,7 @@ add_clang_library(clangCodeGen
   CGDebugInfo.cpp
   CGDecl.cpp
   CGDeclCXX.cpp
+  CGDeclOpenMP.cpp
   CGException.cpp
   CGExpr.cpp
   CGExprAgg.cpp
@@ -39,6 +40,7 @@ add_clang_library(clangCodeGen
   CGRecordLayoutBuilder.cpp
   CGRTTI.cpp
   CGStmt.cpp
+  CGStmtOpenMP.cpp
   CGVTables.cpp
   CGVTT.cpp
   CodeGenAction.cpp

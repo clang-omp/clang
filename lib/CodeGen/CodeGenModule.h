@@ -372,7 +372,7 @@ class CodeGenModule : public CodeGenTypeCache {
   /// \brief The type used to describe the state of a fast enumeration in
   /// Objective-C's for..in loop.
   QualType ObjCFastEnumerationStateType;
-  
+
   /// @}
 
   /// Lazily create the Objective-C runtime
@@ -964,6 +964,192 @@ public:
     DeferredVTables.push_back(RD);
   }
 
+  /// \brief Emit a code for threadprivate variables.
+  ///
+  void EmitOMPThreadPrivate(const OMPThreadPrivateDecl *D);
+  /// \brief Emit a code for threadprivate variable.
+  ///
+  void EmitOMPThreadPrivate(const VarDecl *VD, const Expr *TPE);
+
+  /// \brief Creates a structure with the location info for Intel OpenMP RTL.
+  llvm::Value *CreateIntelOpenMPRTLLoc(SourceLocation Loc,
+                                       CodeGenFunction &CGF,
+                                       unsigned Flags = 0x02);
+  /// \brief Creates call to "__kmpc_global_thread_num(ident_t *loc)" OpenMP
+  /// RTL function.
+  llvm::Value *CreateOpenMPGlobalThreadNum(SourceLocation Loc,
+                                           CodeGenFunction &CGF);
+
+  /// \brief Checks if the variable is OpenMP threadprivate and generates code
+  /// for threadprivate variables.
+  /// \return 0 if the variable is not threadprivate, or new address otherwise.
+  llvm::Value *CreateOpenMPThreadPrivateCached(const VarDecl *VD,
+                                               SourceLocation Loc,
+                                               CodeGenFunction &CGF,
+                                               bool NoCast = false);
+
+  class OpenMPSupportStackTy {
+    /// \brief A set of OpenMP threadprivate variables.
+    llvm::DenseMap<const Decl *, const Expr *> OpenMPThreadPrivate;
+    /// \brief A set of OpenMP private variables.
+    typedef llvm::DenseMap<const Decl *, llvm::Value *> OMPPrivateVarsTy;
+    struct OMPStackElemTy {
+      OMPPrivateVarsTy PrivateVars;
+      llvm::BasicBlock *IfEnd;
+      llvm::Function *ReductionFunc;
+      CodeGenModule &CGM;
+      CodeGenFunction *RedCGF;
+      llvm::SmallVector<llvm::Type *, 16> ReductionTypes;
+      llvm::DenseMap<const VarDecl *, unsigned> ReductionMap;
+      llvm::StructType *ReductionRec;
+      llvm::Value *ReductionRecVar;
+      llvm::Value *RedArg1;
+      llvm::Value *RedArg2;
+      llvm::Value *ReduceSwitch;
+      llvm::BasicBlock *BB1;
+      llvm::Instruction *BB1IP;
+      llvm::BasicBlock *BB2;
+      llvm::Instruction *BB2IP;
+      llvm::Value *LockVar;
+      llvm::BasicBlock *LastprivateBB;
+      llvm::Instruction *LastprivateIP;
+      llvm::BasicBlock *LastprivateEndBB;
+      llvm::Value *LastIterVar;
+      llvm::Value *TaskFlags;
+      llvm::Value *PTaskTValue;
+      llvm::Value *PTask;
+      llvm::Value *UntiedPartIdAddr;
+      unsigned     UntiedCounter;
+      llvm::Value *UntiedSwitch;
+      llvm::BasicBlock *UntiedEnd;
+      bool NoWait;
+      bool Mergeable;
+      bool Ordered;
+      int Schedule;
+      const Expr *ChunkSize;
+      bool NewTask;
+      bool Untied;
+      bool HasFirstPrivate;
+      bool HasLastPrivate;
+      llvm::DenseMap<const ValueDecl *, FieldDecl *> TaskFields;
+      llvm::Type *TaskPrivateTy;
+      QualType TaskPrivateQTy;
+      llvm::Value *TaskPrivateBase;
+      OMPStackElemTy(CodeGenModule &CGM);
+      ~OMPStackElemTy();
+    };
+    typedef llvm::SmallVector<OMPStackElemTy, 16> OMPStackTy;
+    OMPStackTy OpenMPStack;
+    CodeGenModule &CGM;
+  public:
+    OpenMPSupportStackTy(CodeGenModule &CGM)
+      : OpenMPThreadPrivate(), OpenMPStack(), CGM(CGM) { }
+    const Expr *hasThreadPrivateVar(const VarDecl *VD) {
+      llvm::DenseMap<const Decl *, const Expr *>::iterator I =
+                                                  OpenMPThreadPrivate.find(VD);
+      if (I != OpenMPThreadPrivate.end())
+        return I->second;
+      return 0;
+    }
+    void addThreadPrivateVar(const VarDecl *VD, const Expr *TPE) {
+      OpenMPThreadPrivate[VD] = TPE;
+    }
+    /// \brief Checks, if the specified variable is currently marked as
+    /// private.
+    /// \return 0 if the variable is not private, or address of private
+    /// otherwise.
+    llvm::Value *getOpenMPPrivateVar(const VarDecl *VD) {
+      if (OpenMPStack.empty()) return 0;
+      for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
+                                        E = OpenMPStack.rend();
+           I != E; ++I) {
+        if (I->PrivateVars.count(VD) > 0 && I->PrivateVars[VD])
+          return I->PrivateVars[VD];
+        if (I->NewTask) return 0;
+      }
+      return 0;
+    }
+    llvm::Value *getTopOpenMPPrivateVar(const VarDecl *VD) {
+      if (OpenMPStack.empty()) return 0;
+      return OpenMPStack.back().PrivateVars.count(VD) > 0 ? OpenMPStack.back().PrivateVars[VD] : 0;
+    }
+    llvm::Value *getPrevOpenMPPrivateVar(const VarDecl *VD) {
+      if (OpenMPStack.size()< 2) return 0;
+      return OpenMPStack[OpenMPStack.size() - 2].PrivateVars.count(VD) > 0 ? OpenMPStack[OpenMPStack.size() - 2].PrivateVars[VD] : 0;
+    }
+    void startOpenMPRegion(bool NewTask) {
+      OpenMPStack.push_back(OMPStackElemTy(CGM));
+      OpenMPStack.back().NewTask = NewTask;
+    }
+    bool isNewTask() { return OpenMPStack.back().NewTask; };
+    void endOpenMPRegion();
+    void addOpenMPPrivateVar(const VarDecl *VD, llvm::Value *Addr) {
+      assert(!OpenMPStack.empty() &&
+             "OpenMP private variables region is not started.");
+      OpenMPStack.back().PrivateVars[VD] = Addr;
+    }
+    void delOpenMPPrivateVar(const VarDecl *VD) {
+      assert(!OpenMPStack.empty() &&
+             "OpenMP private variables region is not started.");
+      OpenMPStack.back().PrivateVars[VD] = 0;
+    }
+    void delPrevOpenMPPrivateVar(const VarDecl *VD) {
+      assert(OpenMPStack.size() >= 2 &&
+             "OpenMP private variables region is not started.");
+      OpenMPStack[OpenMPStack.size() - 2].PrivateVars[VD] = 0;
+    }
+    void setIfDest(llvm::BasicBlock *EndBB) {OpenMPStack.back().IfEnd = EndBB;}
+    llvm::BasicBlock *takeIfDest() {
+      llvm::BasicBlock *BB = OpenMPStack.back().IfEnd;
+      OpenMPStack.back().IfEnd = 0;
+      return BB;
+    }
+    CodeGenFunction &getCGFForReductionFunction();
+    void getReductionFunctionArgs(llvm::Value *&Arg1, llvm::Value *&Arg2);
+    void registerReductionVar(const VarDecl *VD, llvm::Type *Type);
+    llvm::Value *getReductionRecVar(CodeGenFunction &CGF);
+    llvm::Type *getReductionRec();
+    llvm::Value *getReductionSwitch();
+    void setReductionSwitch(llvm::Value *Switch);
+    void setReductionIPs(llvm::BasicBlock *BB1, llvm::Instruction *IP1,
+                         llvm::BasicBlock *BB2, llvm::Instruction *IP2);
+    void getReductionIPs(llvm::BasicBlock *&BB1, llvm::Instruction *&IP1,
+                         llvm::BasicBlock *&BB2, llvm::Instruction *&IP2);
+    llvm::Value *getReductionLockVar();
+    void setReductionLockVar(llvm::Value *Var);
+    void setLastprivateIP(llvm::BasicBlock *BB, llvm::Instruction *IP, llvm::BasicBlock *EndBB);
+    void getLastprivateIP(llvm::BasicBlock *&BB, llvm::Instruction *&IP, llvm::BasicBlock *&EndBB);
+    llvm::Value *getLastIterVar();
+    void setLastIterVar(llvm::Value *Var);
+    unsigned getReductionVarIdx(const VarDecl *VD);
+    unsigned getNumberOfReductionVars();
+    void setNoWait(bool Flag);
+    bool getNoWait();
+    void setScheduleChunkSize(int Sched, const Expr *Size);
+    void getScheduleChunkSize(int &Sched, const Expr *&Size);
+    void setMergeable(bool Flag);
+    bool getMergeable();
+    void setOrdered(bool Flag);
+    bool getOrdered();
+    void setUntied(bool Flag);
+    bool getUntied();
+    bool getParentUntied();
+    void setHasFirstPrivate(bool Flag);
+    bool hasFirstPrivate();
+    void setHasLastPrivate(bool Flag);
+    bool hasLastPrivate();
+    llvm::Value *getTaskFlags();
+    void setTaskFlags(llvm::Value *Flags);
+    void setPTask(llvm::Value *Task, llvm::Value *TaskT, llvm::Type *PTy, QualType PQTy, llvm::Value *PB);
+    void getPTask(llvm::Value *&Task, llvm::Value *&TaskT, llvm::Type *&PTy, QualType &PQTy, llvm::Value *&PB);
+    llvm::DenseMap<const ValueDecl *, FieldDecl *> &getTaskFields();
+    void setUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch, llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter);
+    void getUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch, llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter);
+    void setParentUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch, llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter);
+    void getParentUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch, llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter);
+  };
+
+  OpenMPSupportStackTy OpenMPSupport;
 private:
   llvm::GlobalValue *GetGlobalValue(StringRef Ref);
 
@@ -978,6 +1164,23 @@ private:
                                         const VarDecl *D,
                                         bool UnnamedAddr = false);
 
+  /// \brief Creates OpenMP threadprivate function for specified variable
+  /// and returns this function and constructor, copy constructor and
+  /// destructor.
+  void CreateOpenMPCXXInit(const VarDecl *Var, CXXRecordDecl *Ty,
+                           llvm::Function *&InitFunction,
+                           llvm::Value *&Ctor,
+                           llvm::Value *&CCtor,
+                           llvm::Value *&Dtor);
+
+  /// \brief Creates OpenMP threadprivate function for specified array variable
+  /// and returns this function and constructor, copy constructor and
+  /// destructor.
+  void CreateOpenMPArrCXXInit(const VarDecl *Var, CXXRecordDecl *Ty,
+                              llvm::Function *&InitFunction,
+                              llvm::Value *&Ctor,
+                              llvm::Value *&CCtor,
+                              llvm::Value *&Dtor);
   /// SetCommonAttributes - Set attributes which are common to any
   /// form of a global definition (alias, Objective-C method,
   /// function, global variable).

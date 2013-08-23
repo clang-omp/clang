@@ -854,11 +854,11 @@ static bool checkPlaceholderForOverload(Sema &S, Expr *&E,
 
 /// checkArgPlaceholdersForOverload - Check a set of call operands for
 /// placeholders.
-static bool checkArgPlaceholdersForOverload(Sema &S, Expr **args,
-                                            unsigned numArgs,
+static bool checkArgPlaceholdersForOverload(Sema &S,
+                                            MultiExprArg Args,
                                             UnbridgedCastsSet &unbridged) {
-  for (unsigned i = 0; i != numArgs; ++i)
-    if (checkPlaceholderForOverload(S, args[i], &unbridged))
+  for (unsigned i = 0, e = Args.size(); i != e; ++i)
+    if (checkPlaceholderForOverload(S, Args[i], &unbridged))
       return true;
 
   return false;
@@ -1591,7 +1591,7 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
     // Integral conversions (C++ 4.7).
     SCS.Second = ICK_Integral_Conversion;
     FromType = ToType.getUnqualifiedType();
-  } else if (FromType->isAnyComplexType() && ToType->isComplexType()) {
+  } else if (FromType->isAnyComplexType() && ToType->isAnyComplexType()) {
     // Complex conversions (C99 6.3.1.6)
     SCS.Second = ICK_Complex_Conversion;
     FromType = ToType.getUnqualifiedType();
@@ -3742,6 +3742,26 @@ CompareQualificationConversions(Sema &S,
   }
 
   return Result;
+}
+
+/// MarkAsImplicitConversion - Create an ImplicitCastExpr as the parent of
+/// Arg if Arg is a CXXConstructExpr. This function is called when
+/// constructors are called as part of an implicit conversion. This serves
+/// as a marker to be able to distinguish between implicitly generated
+/// constructor calls and explicit constructor calls.
+static Expr *MarkAsImplicitConversion(ASTContext &Context, ExprResult &Arg) {
+  Expr *ArgExpr = Arg.takeAs<Expr>();
+  Expr *E = ArgExpr;
+
+  if (CXXBindTemporaryExpr *BE = dyn_cast<CXXBindTemporaryExpr>(E))
+    E = BE->getSubExpr();
+
+  if (isa<CXXConstructExpr>(E))
+    return ImplicitCastExpr::Create(Context, ArgExpr->getType(),
+                                    CK_ConstructorConversion, ArgExpr,
+                                    0, ArgExpr->getValueKind());
+  else
+    return ArgExpr;
 }
 
 /// CompareDerivedToBaseConversions - Compares two standard conversion
@@ -9890,7 +9910,7 @@ BuildRecoveryCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
 /// \returns true when an the ExprResult output parameter has been set.
 bool Sema::buildOverloadedCallSet(Scope *S, Expr *Fn,
                                   UnresolvedLookupExpr *ULE,
-                                  Expr **Args, unsigned NumArgs,
+                                  MultiExprArg Args,
                                   SourceLocation RParenLoc,
                                   OverloadCandidateSet *CandidateSet,
                                   ExprResult *Result) {
@@ -9913,15 +9933,14 @@ bool Sema::buildOverloadedCallSet(Scope *S, Expr *Fn,
 #endif
 
   UnbridgedCastsSet UnbridgedCasts;
-  if (checkArgPlaceholdersForOverload(*this, Args, NumArgs, UnbridgedCasts)) {
+  if (checkArgPlaceholdersForOverload(*this, Args, UnbridgedCasts)) {
     *Result = ExprError();
     return true;
   }
 
   // Add the functions denoted by the callee to the set of candidate
   // functions, including those from argument-dependent lookup.
-  AddOverloadedCallCandidates(ULE, llvm::makeArrayRef(Args, NumArgs),
-                              *CandidateSet);
+  AddOverloadedCallCandidates(ULE, Args, *CandidateSet);
 
   // If we found nothing, try to recover.
   // BuildRecoveryCallExpr diagnoses the error itself, so we just bail
@@ -9933,8 +9952,7 @@ bool Sema::buildOverloadedCallSet(Scope *S, Expr *Fn,
     // classes.
     if (getLangOpts().MicrosoftMode && CurContext->isDependentContext() && 
         (isa<FunctionDecl>(CurContext) || isa<CXXRecordDecl>(CurContext))) {
-      CallExpr *CE = new (Context) CallExpr(Context, Fn,
-                                            llvm::makeArrayRef(Args, NumArgs),
+      CallExpr *CE = new (Context) CallExpr(Context, Fn, Args,
                                             Context.DependentTy, VK_RValue,
                                             RParenLoc);
       CE->setTypeDependent(true);
@@ -9954,7 +9972,7 @@ bool Sema::buildOverloadedCallSet(Scope *S, Expr *Fn,
 static ExprResult FinishOverloadedCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
                                            UnresolvedLookupExpr *ULE,
                                            SourceLocation LParenLoc,
-                                           Expr **Args, unsigned NumArgs,
+                                           MultiExprArg Args,
                                            SourceLocation RParenLoc,
                                            Expr *ExecConfig,
                                            OverloadCandidateSet *CandidateSet,
@@ -9962,8 +9980,7 @@ static ExprResult FinishOverloadedCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
                                            OverloadingResult OverloadResult,
                                            bool AllowTypoCorrection) {
   if (CandidateSet->empty())
-    return BuildRecoveryCallExpr(SemaRef, S, Fn, ULE, LParenLoc,
-                                 llvm::MutableArrayRef<Expr *>(Args, NumArgs),
+    return BuildRecoveryCallExpr(SemaRef, S, Fn, ULE, LParenLoc, Args,
                                  RParenLoc, /*EmptyLookup=*/true,
                                  AllowTypoCorrection);
 
@@ -9974,16 +9991,15 @@ static ExprResult FinishOverloadedCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
     if (SemaRef.DiagnoseUseOfDecl(FDecl, ULE->getNameLoc()))
       return ExprError();
     Fn = SemaRef.FixOverloadedFunctionReference(Fn, (*Best)->FoundDecl, FDecl);
-    return SemaRef.BuildResolvedCallExpr(Fn, FDecl, LParenLoc, Args, NumArgs,
-                                         RParenLoc, ExecConfig);
+    return SemaRef.BuildResolvedCallExpr(Fn, FDecl, LParenLoc, Args, RParenLoc,
+                                         ExecConfig);
   }
 
   case OR_No_Viable_Function: {
     // Try to recover by looking for viable functions which the user might
     // have meant to call.
     ExprResult Recovery = BuildRecoveryCallExpr(SemaRef, S, Fn, ULE, LParenLoc,
-                                  llvm::MutableArrayRef<Expr *>(Args, NumArgs),
-                                                RParenLoc,
+                                                Args, RParenLoc,
                                                 /*EmptyLookup=*/false,
                                                 AllowTypoCorrection);
     if (!Recovery.isInvalid())
@@ -9992,16 +10008,14 @@ static ExprResult FinishOverloadedCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
     SemaRef.Diag(Fn->getLocStart(),
          diag::err_ovl_no_viable_function_in_call)
       << ULE->getName() << Fn->getSourceRange();
-    CandidateSet->NoteCandidates(SemaRef, OCD_AllCandidates,
-                                 llvm::makeArrayRef(Args, NumArgs));
+    CandidateSet->NoteCandidates(SemaRef, OCD_AllCandidates, Args);
     break;
   }
 
   case OR_Ambiguous:
     SemaRef.Diag(Fn->getLocStart(), diag::err_ovl_ambiguous_call)
       << ULE->getName() << Fn->getSourceRange();
-    CandidateSet->NoteCandidates(SemaRef, OCD_ViableCandidates,
-                                 llvm::makeArrayRef(Args, NumArgs));
+    CandidateSet->NoteCandidates(SemaRef, OCD_ViableCandidates, Args);
     break;
 
   case OR_Deleted: {
@@ -10010,15 +10024,14 @@ static ExprResult FinishOverloadedCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
       << ULE->getName()
       << SemaRef.getDeletedOrUnavailableSuffix((*Best)->Function)
       << Fn->getSourceRange();
-    CandidateSet->NoteCandidates(SemaRef, OCD_AllCandidates,
-                                 llvm::makeArrayRef(Args, NumArgs));
+    CandidateSet->NoteCandidates(SemaRef, OCD_AllCandidates, Args);
 
     // We emitted an error for the unvailable/deleted function call but keep
     // the call in the AST.
     FunctionDecl *FDecl = (*Best)->Function;
     Fn = SemaRef.FixOverloadedFunctionReference(Fn, (*Best)->FoundDecl, FDecl);
-    return SemaRef.BuildResolvedCallExpr(Fn, FDecl, LParenLoc, Args, NumArgs,
-                                 RParenLoc, ExecConfig);
+    return SemaRef.BuildResolvedCallExpr(Fn, FDecl, LParenLoc, Args, RParenLoc,
+                                         ExecConfig);
   }
   }
 
@@ -10035,22 +10048,22 @@ static ExprResult FinishOverloadedCallExpr(Sema &SemaRef, Scope *S, Expr *Fn,
 ExprResult Sema::BuildOverloadedCallExpr(Scope *S, Expr *Fn,
                                          UnresolvedLookupExpr *ULE,
                                          SourceLocation LParenLoc,
-                                         Expr **Args, unsigned NumArgs,
+                                         MultiExprArg Args,
                                          SourceLocation RParenLoc,
                                          Expr *ExecConfig,
                                          bool AllowTypoCorrection) {
   OverloadCandidateSet CandidateSet(Fn->getExprLoc());
   ExprResult result;
 
-  if (buildOverloadedCallSet(S, Fn, ULE, Args, NumArgs, LParenLoc,
-                             &CandidateSet, &result))
+  if (buildOverloadedCallSet(S, Fn, ULE, Args, LParenLoc, &CandidateSet,
+                             &result))
     return result;
 
   OverloadCandidateSet::iterator Best;
   OverloadingResult OverloadResult =
       CandidateSet.BestViableFunction(*this, Fn->getLocStart(), Best);
 
-  return FinishOverloadedCallExpr(*this, S, Fn, ULE, LParenLoc, Args, NumArgs,
+  return FinishOverloadedCallExpr(*this, S, Fn, ULE, LParenLoc, Args,
                                   RParenLoc, ExecConfig, &CandidateSet,
                                   &Best, OverloadResult,
                                   AllowTypoCorrection);
@@ -10410,8 +10423,11 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
               SourceLocation(), Owned(Args[1]));
           if (Arg1.isInvalid())
             return ExprError();
-          Args[0] = LHS = Arg0.takeAs<Expr>();
-          Args[1] = RHS = Arg1.takeAs<Expr>();
+
+          // Mark the arguments as having an implicit conversion if a
+          // CXXConstructExpr was implicitly created.
+          Args[0] = LHS = MarkAsImplicitConversion(Context, Arg0);
+          Args[1] = RHS = MarkAsImplicitConversion(Context, Arg1);
         }
 
         // Determine the result type.
@@ -10716,8 +10732,9 @@ Sema::CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
 /// member function.
 ExprResult
 Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
-                                SourceLocation LParenLoc, Expr **Args,
-                                unsigned NumArgs, SourceLocation RParenLoc) {
+                                SourceLocation LParenLoc,
+                                MultiExprArg Args,
+                                SourceLocation RParenLoc) {
   assert(MemExprE->getType() == Context.BoundMemberTy ||
          MemExprE->getType() == Context.OverloadTy);
 
@@ -10758,8 +10775,7 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
     }
               
     CXXMemberCallExpr *call
-      = new (Context) CXXMemberCallExpr(Context, MemExprE,
-                                        llvm::makeArrayRef(Args, NumArgs),
+      = new (Context) CXXMemberCallExpr(Context, MemExprE, Args,
                                         resultType, valueKind, RParenLoc);
 
     if (CheckCallReturnType(proto->getResultType(),
@@ -10767,14 +10783,14 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
                             call, 0))
       return ExprError();
 
-    if (ConvertArgumentsForCall(call, op, 0, proto, Args, NumArgs, RParenLoc))
+    if (ConvertArgumentsForCall(call, op, 0, proto, Args, RParenLoc))
       return ExprError();
 
     return MaybeBindToTemporary(call);
   }
 
   UnbridgedCastsSet UnbridgedCasts;
-  if (checkArgPlaceholdersForOverload(*this, Args, NumArgs, UnbridgedCasts))
+  if (checkArgPlaceholdersForOverload(*this, Args, UnbridgedCasts))
     return ExprError();
 
   MemberExpr *MemExpr;
@@ -10818,7 +10834,7 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
       // Microsoft supports direct constructor calls.
       if (getLangOpts().MicrosoftExt && isa<CXXConstructorDecl>(Func)) {
         AddOverloadCandidate(cast<CXXConstructorDecl>(Func), I.getPair(),
-                             llvm::makeArrayRef(Args, NumArgs), CandidateSet);
+                             Args, CandidateSet);
       } else if ((Method = dyn_cast<CXXMethodDecl>(Func))) {
         // If explicit template arguments were provided, we can't call a
         // non-template member function.
@@ -10826,15 +10842,13 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
           continue;
 
         AddMethodCandidate(Method, I.getPair(), ActingDC, ObjectType,
-                           ObjectClassification,
-                           llvm::makeArrayRef(Args, NumArgs), CandidateSet,
+                           ObjectClassification, Args, CandidateSet,
                            /*SuppressUserConversions=*/false);
       } else {
         AddMethodTemplateCandidate(cast<FunctionTemplateDecl>(Func),
                                    I.getPair(), ActingDC, TemplateArgs,
                                    ObjectType,  ObjectClassification,
-                                   llvm::makeArrayRef(Args, NumArgs),
-                                   CandidateSet,
+                                   Args, CandidateSet,
                                    /*SuppressUsedConversions=*/false);
       }
     }
@@ -10858,16 +10872,14 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
       Diag(UnresExpr->getMemberLoc(),
            diag::err_ovl_no_viable_member_function_in_call)
         << DeclName << MemExprE->getSourceRange();
-      CandidateSet.NoteCandidates(*this, OCD_AllCandidates,
-                                  llvm::makeArrayRef(Args, NumArgs));
+      CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args);
       // FIXME: Leaking incoming expressions!
       return ExprError();
 
     case OR_Ambiguous:
       Diag(UnresExpr->getMemberLoc(), diag::err_ovl_ambiguous_member_call)
         << DeclName << MemExprE->getSourceRange();
-      CandidateSet.NoteCandidates(*this, OCD_AllCandidates,
-                                  llvm::makeArrayRef(Args, NumArgs));
+      CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args);
       // FIXME: Leaking incoming expressions!
       return ExprError();
 
@@ -10877,8 +10889,7 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
         << DeclName 
         << getDeletedOrUnavailableSuffix(Best->Function)
         << MemExprE->getSourceRange();
-      CandidateSet.NoteCandidates(*this, OCD_AllCandidates,
-                                  llvm::makeArrayRef(Args, NumArgs));
+      CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args);
       // FIXME: Leaking incoming expressions!
       return ExprError();
     }
@@ -10888,8 +10899,8 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
     // If overload resolution picked a static member, build a
     // non-member call based on that function.
     if (Method->isStatic()) {
-      return BuildResolvedCallExpr(MemExprE, Method, LParenLoc,
-                                   Args, NumArgs, RParenLoc);
+      return BuildResolvedCallExpr(MemExprE, Method, LParenLoc, Args,
+                                   RParenLoc);
     }
 
     MemExpr = cast<MemberExpr>(MemExprE->IgnoreParens());
@@ -10901,8 +10912,7 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
 
   assert(Method && "Member call to something that isn't a method?");
   CXXMemberCallExpr *TheCall =
-    new (Context) CXXMemberCallExpr(Context, MemExprE,
-                                    llvm::makeArrayRef(Args, NumArgs),
+    new (Context) CXXMemberCallExpr(Context, MemExprE, Args,
                                     ResultType, VK, RParenLoc);
 
   // Check for a valid return type.
@@ -10925,11 +10935,11 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
   // Convert the rest of the arguments
   const FunctionProtoType *Proto =
     Method->getType()->getAs<FunctionProtoType>();
-  if (ConvertArgumentsForCall(TheCall, MemExpr, Method, Proto, Args, NumArgs,
+  if (ConvertArgumentsForCall(TheCall, MemExpr, Method, Proto, Args,
                               RParenLoc))
     return ExprError();
 
-  DiagnoseSentinelCalls(Method, LParenLoc, Args, NumArgs);
+  DiagnoseSentinelCalls(Method, LParenLoc, Args);
 
   if (CheckFunctionCall(Method, TheCall, Proto))
     return ExprError();
@@ -10958,14 +10968,14 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
 ExprResult
 Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
                                    SourceLocation LParenLoc,
-                                   Expr **Args, unsigned NumArgs,
+                                   MultiExprArg Args,
                                    SourceLocation RParenLoc) {
   if (checkPlaceholderForOverload(*this, Obj))
     return ExprError();
   ExprResult Object = Owned(Obj);
 
   UnbridgedCastsSet UnbridgedCasts;
-  if (checkArgPlaceholdersForOverload(*this, Args, NumArgs, UnbridgedCasts))
+  if (checkArgPlaceholdersForOverload(*this, Args, UnbridgedCasts))
     return ExprError();
 
   assert(Object.get()->getType()->isRecordType() && "Requires object type argument");
@@ -10992,8 +11002,8 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
   for (LookupResult::iterator Oper = R.begin(), OperEnd = R.end();
        Oper != OperEnd; ++Oper) {
     AddMethodCandidate(Oper.getPair(), Object.get()->getType(),
-                       Object.get()->Classify(Context), 
-                       llvm::makeArrayRef(Args, NumArgs), CandidateSet,
+                       Object.get()->Classify(Context),
+                       Args, CandidateSet,
                        /*SuppressUserConversions=*/ false);
   }
 
@@ -11040,8 +11050,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
       if (const FunctionProtoType *Proto = ConvType->getAs<FunctionProtoType>())
       {
         AddSurrogateCandidate(Conv, I.getPair(), ActingContext, Proto,
-                              Object.get(), llvm::makeArrayRef(Args, NumArgs),
-                              CandidateSet);
+                              Object.get(), Args, CandidateSet);
       }
     }
   }
@@ -11066,16 +11075,14 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
       Diag(Object.get()->getLocStart(),
            diag::err_ovl_no_viable_object_call)
         << Object.get()->getType() << Object.get()->getSourceRange();
-    CandidateSet.NoteCandidates(*this, OCD_AllCandidates,
-                                llvm::makeArrayRef(Args, NumArgs));
+    CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args);
     break;
 
   case OR_Ambiguous:
     Diag(Object.get()->getLocStart(),
          diag::err_ovl_ambiguous_object_call)
       << Object.get()->getType() << Object.get()->getSourceRange();
-    CandidateSet.NoteCandidates(*this, OCD_ViableCandidates,
-                                llvm::makeArrayRef(Args, NumArgs));
+    CandidateSet.NoteCandidates(*this, OCD_ViableCandidates, Args);
     break;
 
   case OR_Deleted:
@@ -11085,8 +11092,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
       << Object.get()->getType() 
       << getDeletedOrUnavailableSuffix(Best->Function)
       << Object.get()->getSourceRange();
-    CandidateSet.NoteCandidates(*this, OCD_AllCandidates,
-                                llvm::makeArrayRef(Args, NumArgs));
+    CandidateSet.NoteCandidates(*this, OCD_AllCandidates, Args);
     break;
   }
 
@@ -11121,8 +11127,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
                                           CK_UserDefinedConversion,
                                           Call.get(), 0, VK_RValue));
 
-    return ActOnCallExpr(S, Call.get(), LParenLoc, MultiExprArg(Args, NumArgs),
-                         RParenLoc);
+    return ActOnCallExpr(S, Call.get(), LParenLoc, Args, RParenLoc);
   }
 
   CheckMemberOperatorAccess(LParenLoc, Object.get(), 0, Best->FoundDecl);
@@ -11140,20 +11145,20 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
     Method->getType()->getAs<FunctionProtoType>();
 
   unsigned NumArgsInProto = Proto->getNumArgs();
-  unsigned NumArgsToCheck = NumArgs;
+  unsigned NumArgsToCheck = Args.size();
 
   // Build the full argument list for the method call (the
   // implicit object parameter is placed at the beginning of the
   // list).
   Expr **MethodArgs;
-  if (NumArgs < NumArgsInProto) {
+  if (Args.size() < NumArgsInProto) {
     NumArgsToCheck = NumArgsInProto;
     MethodArgs = new Expr*[NumArgsInProto + 1];
   } else {
-    MethodArgs = new Expr*[NumArgs + 1];
+    MethodArgs = new Expr*[Args.size() + 1];
   }
   MethodArgs[0] = Object.get();
-  for (unsigned ArgIdx = 0; ArgIdx < NumArgs; ++ArgIdx)
+  for (unsigned ArgIdx = 0, e = Args.size(); ArgIdx != e; ++ArgIdx)
     MethodArgs[ArgIdx + 1] = Args[ArgIdx];
 
   DeclarationNameInfo OpLocInfo(
@@ -11174,7 +11179,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
 
   CXXOperatorCallExpr *TheCall =
     new (Context) CXXOperatorCallExpr(Context, OO_Call, NewFn.take(),
-                                      llvm::makeArrayRef(MethodArgs, NumArgs+1),
+                                      llvm::makeArrayRef(MethodArgs, Args.size()+1),
                                       ResultTy, VK, RParenLoc, false);
   delete [] MethodArgs;
 
@@ -11184,9 +11189,9 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
 
   // We may have default arguments. If so, we need to allocate more
   // slots in the call for them.
-  if (NumArgs < NumArgsInProto)
+  if (Args.size() < NumArgsInProto)
     TheCall->setNumArgs(Context, NumArgsInProto + 1);
-  else if (NumArgs > NumArgsInProto)
+  else if (Args.size() > NumArgsInProto)
     NumArgsToCheck = NumArgsInProto;
 
   bool IsError = false;
@@ -11204,7 +11209,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
   // Check the argument types.
   for (unsigned i = 0; i != NumArgsToCheck; i++) {
     Expr *Arg;
-    if (i < NumArgs) {
+    if (i < Args.size()) {
       Arg = Args[i];
 
       // Pass the argument.
@@ -11234,7 +11239,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
   // If this is a variadic call, handle args passed through "...".
   if (Proto->isVariadic()) {
     // Promote the arguments (C99 6.5.2.2p7).
-    for (unsigned i = NumArgsInProto; i < NumArgs; i++) {
+    for (unsigned i = NumArgsInProto, e = Args.size(); i < e; i++) {
       ExprResult Arg = DefaultVariadicArgumentPromotion(Args[i], VariadicMethod, 0);
       IsError |= Arg.isInvalid();
       TheCall->setArg(i + 1, Arg.take());
@@ -11243,7 +11248,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
 
   if (IsError) return true;
 
-  DiagnoseSentinelCalls(Method, LParenLoc, Args, NumArgs);
+  DiagnoseSentinelCalls(Method, LParenLoc, Args);
 
   if (CheckFunctionCall(Method, TheCall, Proto))
     return true;
@@ -11473,7 +11478,7 @@ Sema::BuildForRangeBeginEndCall(Scope *S, SourceLocation Loc,
                                    /*NeedsADL=*/true, /*Overloaded=*/false,
                                    FoundNames.begin(), FoundNames.end());
 
-    bool CandidateSetError = buildOverloadedCallSet(S, Fn, Fn, &Range, 1, Loc,
+    bool CandidateSetError = buildOverloadedCallSet(S, Fn, Fn, Range, Loc,
                                                     CandidateSet, CallExpr);
     if (CandidateSet->empty() || CandidateSetError) {
       *CallExpr = ExprError();
@@ -11487,7 +11492,7 @@ Sema::BuildForRangeBeginEndCall(Scope *S, SourceLocation Loc,
       *CallExpr = ExprError();
       return FRS_NoViableFunction;
     }
-    *CallExpr = FinishOverloadedCallExpr(*this, S, Fn, Fn, Loc, &Range, 1,
+    *CallExpr = FinishOverloadedCallExpr(*this, S, Fn, Fn, Loc, Range,
                                          Loc, 0, CandidateSet, &Best,
                                          OverloadResult,
                                          /*AllowTypoCorrection=*/false);
