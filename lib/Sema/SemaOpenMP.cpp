@@ -1205,7 +1205,8 @@ StmtResult Sema::ActOnOpenMPForDirective(OpenMPDirectiveKind Kind,
 
     //Build new values for actual indeces.
     Expr *NewDiv = Ends[0];
-    Expr *IdxRVal = ImpCastExprToType(NewVar, IdxTy, CK_LValueToRValue).take();
+    Expr *IdxRVal = DefaultLvalueConversion(NewVar).take();
+    if (!IdxRVal) return StmtError();
     ExprResult Res = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Sub,
                                 NewEnd,
                                 ActOnIntegerConstant(SourceLocation(), 1).take());
@@ -2049,38 +2050,43 @@ OMPClause *Sema::ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind,
 OMPClause *Sema::ActOnOpenMPIfClause(Expr *Condition,
                                      SourceLocation StartLoc,
                                      SourceLocation EndLoc) {
-  ExprResult Val = ActOnBooleanCondition(DSAStack->getCurScope(), Condition->getExprLoc(),
-                                         Condition);
-  if (Val.isInvalid())
-    return 0;
+  QualType Type = Condition->getType();
+  Expr *ValExpr = Condition;
+  if (!Type->isDependentType() && !Type->isInstantiationDependentType()) {
+    ExprResult Val = ActOnBooleanCondition(DSAStack->getCurScope(), Condition->getExprLoc(),
+                                           Condition);
+    if (Val.isInvalid())
+      return 0;
 
-  Expr *ValExpr = Val.take();
-  if (!ValExpr->isEvaluatable(Context)) {
-    SourceLocation ELoc = ValExpr->getExprLoc();
-    QualType QTy = ValExpr->getType().getUnqualifiedType().getCanonicalType();
-    IdentifierInfo *Id = &Context.Idents.get(".omp.if.var.");
-    DeclarationName DN(Id);
-    VarDecl *PseudoVar;
-    DeclContext *DC = Context.getTranslationUnitDecl();
-    TypeSourceInfo *TI = Context.getTrivialTypeSourceInfo(QTy,
-                                                          ELoc);
-    PseudoVar =
-            VarDecl::Create(Context, DC, SourceLocation(),
-                            SourceLocation(), Id, QTy, TI,
-                            SC_Static);
-    PseudoVar->setImplicit();
-    PseudoVar->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
-    ExprResult Init = ActOnIntegerConstant(SourceLocation(), 0);
-    CastKind CK = PrepareScalarCast(Init, QTy);
-    if (CK != CK_NoOp) {
-      Init = ImpCastExprToType(Init.take(), QTy, CK);
+    ValExpr = Val.take();
+    if (!ValExpr->isEvaluatable(Context)) {
+      SourceLocation ELoc = ValExpr->getExprLoc();
+      QualType QTy = ValExpr->getType().getUnqualifiedType().getCanonicalType();
+      IdentifierInfo *Id = &Context.Idents.get(".omp.if.var.");
+      DeclarationName DN(Id);
+      VarDecl *PseudoVar;
+      DeclContext *DC = Context.getTranslationUnitDecl();
+      TypeSourceInfo *TI = Context.getTrivialTypeSourceInfo(QTy,
+                                                            ELoc);
+      PseudoVar =
+              VarDecl::Create(Context, DC, SourceLocation(),
+                              SourceLocation(), Id, QTy, TI,
+                              SC_Static);
+      PseudoVar->setImplicit();
+      PseudoVar->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      ExprResult Init = ActOnIntegerConstant(SourceLocation(), 0);
+      CastKind CK = PrepareScalarCast(Init, QTy);
+      if (CK != CK_NoOp) {
+        Init = ImpCastExprToType(Init.take(), QTy, CK);
+      }
+      PseudoVar->setInit(Init.take());
+      Expr *DRE = BuildDeclRefExpr(PseudoVar, QTy, VK_LValue, ELoc).take();
+      Expr *Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DRE, ValExpr).take();
+      ValExpr = DefaultLvalueConversion(DRE).take();
+      if (!ValExpr) return 0;
+      AdditionalOpenMPStmt.push_back(ImpCastExprToType(Res, Context.VoidTy, CK_ToVoid).take());
+      Consumer.HandleTopLevelDecl(DeclGroupRef(PseudoVar));
     }
-    PseudoVar->setInit(Init.take());
-    Expr *DRE = BuildDeclRefExpr(PseudoVar, QTy, VK_LValue, ELoc).take();
-    Expr *Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DRE, ValExpr).take();
-    ValExpr = ImpCastExprToType(DRE, QTy, CK_LValueToRValue).take();
-    AdditionalOpenMPStmt.push_back(ImpCastExprToType(Res, Context.VoidTy, CK_ToVoid).take());
-    Consumer.HandleTopLevelDecl(DeclGroupRef(PseudoVar));
   }
 
   return new (Context) OMPIfClause(ValExpr, StartLoc, EndLoc);
@@ -2089,38 +2095,43 @@ OMPClause *Sema::ActOnOpenMPIfClause(Expr *Condition,
 OMPClause *Sema::ActOnOpenMPFinalClause(Expr *Condition,
                                         SourceLocation StartLoc,
                                         SourceLocation EndLoc) {
-  ExprResult Val = ActOnBooleanCondition(DSAStack->getCurScope(), Condition->getExprLoc(),
-                                         Condition);
-  if (Val.isInvalid())
-    return 0;
+  QualType Type = Condition->getType();
+  Expr *ValExpr = Condition;
+  if (!Type->isDependentType() && !Type->isInstantiationDependentType()) {
+    ExprResult Val = ActOnBooleanCondition(DSAStack->getCurScope(), Condition->getExprLoc(),
+                                           Condition);
+    if (Val.isInvalid())
+      return 0;
 
-  Expr *ValExpr = Val.take();
-  if (!ValExpr->isEvaluatable(Context)) {
-    SourceLocation ELoc = ValExpr->getExprLoc();
-    QualType QTy = ValExpr->getType().getUnqualifiedType().getCanonicalType();
-    IdentifierInfo *Id = &Context.Idents.get(".omp.final.var.");
-    DeclarationName DN(Id);
-    VarDecl *PseudoVar;
-    DeclContext *DC = Context.getTranslationUnitDecl();
-    TypeSourceInfo *TI = Context.getTrivialTypeSourceInfo(QTy,
-                                                          ELoc);
-    PseudoVar =
-            VarDecl::Create(Context, DC, SourceLocation(),
-                            SourceLocation(), Id, QTy, TI,
-                            SC_Static);
-    PseudoVar->setImplicit();
-    PseudoVar->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
-    ExprResult Init = ActOnIntegerConstant(SourceLocation(), 0);
-    CastKind CK = PrepareScalarCast(Init, QTy);
-    if (CK != CK_NoOp) {
-      Init = ImpCastExprToType(Init.take(), QTy, CK);
+    ValExpr = Val.take();
+    if (!ValExpr->isEvaluatable(Context)) {
+      SourceLocation ELoc = ValExpr->getExprLoc();
+      QualType QTy = ValExpr->getType().getUnqualifiedType().getCanonicalType();
+      IdentifierInfo *Id = &Context.Idents.get(".omp.final.var.");
+      DeclarationName DN(Id);
+      VarDecl *PseudoVar;
+      DeclContext *DC = Context.getTranslationUnitDecl();
+      TypeSourceInfo *TI = Context.getTrivialTypeSourceInfo(QTy,
+                                                            ELoc);
+      PseudoVar =
+              VarDecl::Create(Context, DC, SourceLocation(),
+                              SourceLocation(), Id, QTy, TI,
+                              SC_Static);
+      PseudoVar->setImplicit();
+      PseudoVar->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      ExprResult Init = ActOnIntegerConstant(SourceLocation(), 0);
+      CastKind CK = PrepareScalarCast(Init, QTy);
+      if (CK != CK_NoOp) {
+        Init = ImpCastExprToType(Init.take(), QTy, CK);
+      }
+      PseudoVar->setInit(Init.take());
+      Expr *DRE = BuildDeclRefExpr(PseudoVar, QTy, VK_LValue, ELoc).take();
+      Expr *Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DRE, ValExpr).take();
+      ValExpr = DefaultLvalueConversion(DRE).take();
+      if (!ValExpr) return 0;
+      AdditionalOpenMPStmt.push_back(ImpCastExprToType(Res, Context.VoidTy, CK_ToVoid).take());
+      Consumer.HandleTopLevelDecl(DeclGroupRef(PseudoVar));
     }
-    PseudoVar->setInit(Init.take());
-    Expr *DRE = BuildDeclRefExpr(PseudoVar, QTy, VK_LValue, ELoc).take();
-    Expr *Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DRE, ValExpr).take();
-    ValExpr = ImpCastExprToType(DRE, QTy, CK_LValueToRValue).take();
-    AdditionalOpenMPStmt.push_back(ImpCastExprToType(Res, Context.VoidTy, CK_ToVoid).take());
-    Consumer.HandleTopLevelDecl(DeclGroupRef(PseudoVar));
   }
 
   return new (Context) OMPFinalClause(ValExpr, StartLoc, EndLoc);
@@ -2177,22 +2188,37 @@ OMPClause *Sema::ActOnOpenMPNumThreadsClause(Expr *NumThreads,
   if (!NumThreads)
     return 0;
 
-  SourceLocation Loc = NumThreads->getExprLoc();
-  ExprResult Value = ConvertToIntegralOrEnumerationType(Loc,
-                                                        NumThreads,
-                                                        ConvertDiagnoser,
-                                                        true);
-  if (Value.isInvalid())
-    return 0;
+  QualType Type = NumThreads->getType();
+  Expr *ValExpr = NumThreads;
+  if (!Type->isDependentType() && !Type->isInstantiationDependentType()) {
+    SourceLocation Loc = NumThreads->getExprLoc();
+    ExprResult Value = ConvertToIntegralOrEnumerationType(Loc,
+                                                          NumThreads,
+                                                          ConvertDiagnoser,
+                                                          true);
+    if (Value.isInvalid() ||
+        !Value.get()->getType()->isIntegralOrUnscopedEnumerationType())
+      return 0;
 
-  llvm::APSInt Result;
-  if (Value.get()->isIntegerConstantExpr(Result, Context) &&
-      !Result.isStrictlyPositive()) {
-    Diag(Loc, diag::err_negative_expression_in_clause)
-      << NumThreads->getSourceRange();
-    return 0;
+    llvm::APSInt Result;
+    if (Value.get()->isIntegerConstantExpr(Result, Context) &&
+        !Result.isStrictlyPositive()) {
+      Diag(Loc, diag::err_negative_expression_in_clause)
+        << NumThreads->getSourceRange();
+      return 0;
+    }
+    Value = DefaultLvalueConversion(Value.take());
+    if (Value.isInvalid())
+      return 0;
+    CastKind CK = PrepareScalarCast(Value, Context.IntTy);
+    if (CK != CK_NoOp)
+      Value = ImpCastExprToType(Value.take(), Context.IntTy, CK);
+    if (Value.isInvalid())
+      return 0;
+    ValExpr = Value.take();
   }
-  return new (Context) OMPNumThreadsClause(Value.take(), StartLoc, EndLoc);
+
+  return new (Context) OMPNumThreadsClause(ValExpr, StartLoc, EndLoc);
 }
 
 OMPClause *Sema::ActOnOpenMPCollapseClause(Expr *NumLoops,
@@ -2477,7 +2503,8 @@ OMPClause *Sema::ActOnOpenMPScheduleClause(OpenMPScheduleClauseKind Kind,
     PseudoVar->setInit(Init.take());
     Expr *DRE = BuildDeclRefExpr(PseudoVar, QTy, VK_LValue, ELoc).take();
     Expr *Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DRE, ValExpr).take();
-    ValExpr = ImpCastExprToType(DRE, QTy, CK_LValueToRValue).take();
+    ValExpr = DefaultLvalueConversion(DRE).take();
+    if (!ValExpr) return 0;
     AdditionalOpenMPStmt.push_back(ImpCastExprToType(Res, Context.VoidTy, CK_ToVoid).take());
     Consumer.HandleTopLevelDecl(DeclGroupRef(PseudoVar));
   }
@@ -2908,7 +2935,8 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
                                                     ELoc).take());
       InitializedEntity Entity = InitializedEntity::InitializeVariable(PseudoVar);
       InitializationKind InitKind = InitializationKind::CreateCopy(ELoc, ELoc);
-      Expr *Arg = ImpCastExprToType(PseudoDE, PseudoDE->getType(), CK_LValueToRValue).take();
+      Expr *Arg = DefaultLvalueConversion(PseudoDE).take();
+      if (!Arg) continue;
       InitializationSequence InitSeq(*this, Entity, InitKind, MultiExprArg(&Arg, 1));
       ExprResult Res = InitSeq.Perform(*this, Entity, InitKind, MultiExprArg(&Arg, 1));
       if (Res.isInvalid()) continue;
@@ -3126,7 +3154,8 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
                                                                   Type,
                                                                   VK_LValue,
                                                                   ELoc).take());
-      Expr *PseudoDE2RVal = ImpCastExprToType(PseudoDE2, Type, CK_LValueToRValue).take();
+      Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).take();
+      if (!PseudoDE2RVal) continue;
       ExprResult Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, PseudoDE1, PseudoDE2RVal).take();
       if (Res.isInvalid()) continue;
       PseudoVars2.push_back(PseudoDE2);
@@ -3316,7 +3345,8 @@ OMPClause *Sema::ActOnOpenMPCopyinClause(ArrayRef<Expr *> VarList,
                                                                   Type,
                                                                   VK_LValue,
                                                                   ELoc).take());
-      Expr *PseudoDE2RVal = ImpCastExprToType(PseudoDE2, Type, CK_LValueToRValue).take();
+      Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).take();
+      if (!PseudoDE2RVal) continue;
       ExprResult Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, PseudoDE1, PseudoDE2RVal).take();
       if (Res.isInvalid()) continue;
       PseudoVars2.push_back(PseudoDE2);
@@ -3467,7 +3497,8 @@ OMPClause *Sema::ActOnOpenMPCopyPrivateClause(ArrayRef<Expr *> VarList,
                                                                 Type,
                                                                 VK_LValue,
                                                                 ELoc).take());
-    Expr *PseudoDE2RVal = ImpCastExprToType(PseudoDE2, Type, CK_LValueToRValue).take();
+    Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).take();
+    if (!PseudoDE2RVal) continue;
     ExprResult Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, PseudoDE1, PseudoDE2RVal).take();
     if (Res.isInvalid()) continue;
     PseudoVars1.push_back(PseudoDE1);
