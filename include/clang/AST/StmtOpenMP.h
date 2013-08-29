@@ -1725,7 +1725,7 @@ class OMPForDirective : public OMPExecutableDirective {
     : OMPExecutableDirective(OMPForDirectiveClass, OMPD_for,
                              StartLoc, EndLoc, N,
                              reinterpret_cast<OMPClause **>(this + 1), true,
-                             4 + CollapsedNum),
+                             5 + CollapsedNum),
       CollapsedNum(CollapsedNum) { }
 
   /// \brief Build an empty directive.
@@ -1736,7 +1736,7 @@ class OMPForDirective : public OMPExecutableDirective {
     : OMPExecutableDirective(OMPForDirectiveClass, OMPD_for,
                              SourceLocation(), SourceLocation(), N,
                              reinterpret_cast<OMPClause **>(this + 1),
-                             true, 4 + CollapsedNum),
+                             true, 5 + CollapsedNum),
       CollapsedNum(CollapsedNum) { }
   void setNewIterVar(Expr *V) {
     reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[1] = V;
@@ -1747,11 +1747,14 @@ class OMPForDirective : public OMPExecutableDirective {
   void setInit(Expr *I) {
     reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3] = I;
   }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4] = F;
+  }
   void setCounters(ArrayRef<Expr *> VL) {
     assert(VL.size() == CollapsedNum &&
            "Number of variables is not the same as the number of collapsed loops.");
     std::copy(VL.begin(), VL.end(),
-              &(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4]));
+              &(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[5]));
   }
 public:
   /// \brief Creates directive with a list of \a Clauses.
@@ -1767,7 +1770,7 @@ public:
                                  SourceLocation EndLoc,
                                  ArrayRef<OMPClause *> Clauses,
                                  Stmt *AssociatedStmt, Expr *NewIterVar,
-                                 Expr *NewIterEnd, Expr *Init,
+                                 Expr *NewIterEnd, Expr *Init, Expr *Final,
                                  ArrayRef<Expr *> VarCnts);
 
   /// \brief Creates an empty directive with the place for \a N clauses.
@@ -1787,8 +1790,11 @@ public:
   Expr *getInit() const {
     return cast<Expr>(reinterpret_cast<Stmt *const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[3]);
   }
+  Expr *getFinal() const {
+    return cast<Expr>(reinterpret_cast<Stmt *const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[4]);
+  }
   ArrayRef<Expr *> getCounters() const {
-    return llvm::makeArrayRef(reinterpret_cast<Expr * const *>(&(reinterpret_cast<Stmt * const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[4])),
+    return llvm::makeArrayRef(reinterpret_cast<Expr * const *>(&(reinterpret_cast<Stmt * const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[5])),
                               CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
@@ -1800,6 +1806,9 @@ public:
   }
   Expr *getInit() {
     return cast<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4]);
   }
 
   static bool classof(const Stmt *T) {

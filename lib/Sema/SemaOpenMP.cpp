@@ -1182,6 +1182,7 @@ StmtResult Sema::ActOnOpenMPForDirective(OpenMPDirectiveKind Kind,
   Expr *NewEnd = 0;
   Expr *NewVar = 0;
   Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
   if (!SkipExprCount) {
     NewEnd = Ends[0];
     for (unsigned I = 1; I < StmtCount; ++I) {
@@ -1205,9 +1206,6 @@ StmtResult Sema::ActOnOpenMPForDirective(OpenMPDirectiveKind Kind,
     //Build new values for actual indeces.
     Expr *NewDiv = Ends[0];
     Expr *IdxRVal = ImpCastExprToType(NewVar, IdxTy, CK_LValueToRValue).take();
-    Expr* IdxRem = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Div, IdxRVal,
-                              NewEnd).take();
-    if (!IdxRem) return StmtError();
     ExprResult Res = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Sub,
                                 NewEnd,
                                 ActOnIntegerConstant(SourceLocation(), 1).take());
@@ -1220,15 +1218,25 @@ StmtResult Sema::ActOnOpenMPForDirective(OpenMPDirectiveKind Kind,
     NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, NewIncr,
                          Incrs[0]).take();
     if (!NewIncr) return StmtError();
-    Expr *Offs = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, IdxRem,
-                            Ends[0]).take();
-    if (!Offs) return StmtError();
-    Offs = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, Offs,
-                      Incrs[0]).take();
-    if (!Offs) return StmtError();
-    NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Add,
-                         NewIncr, Offs).take();
-    if (!NewIncr) return StmtError();
+    NewFinal = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Assign,
+                          VarCnts[0], Inits[0]).take();
+    if (!NewFinal) return StmtError();
+    NewFinal = ImpCastExprToType(NewFinal,
+                                 Context.VoidTy, CK_ToVoid).take();
+    if (!NewFinal) return StmtError();
+    Expr *NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, Ends[0],
+                                 Incrs[0]).take();
+    if (!NewFinal1) return StmtError();
+    NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc,
+                           (OpKinds[0] == BO_Add) ? BO_AddAssign : BO_SubAssign,
+                           VarCnts[0], NewFinal1).take();
+    if (!NewFinal1) return StmtError();
+    NewFinal1 = ImpCastExprToType(NewFinal1,
+                                  Context.VoidTy, CK_ToVoid).take();
+    if (!NewFinal1) return StmtError();
+    NewFinal = CreateBuiltinBinOp(StartLoc, BO_Comma,
+                                  NewFinal, NewFinal1).take();
+    if (!NewFinal) return StmtError();
     //Expr *NewStep = BuildBinOp(DSAStack->getCurScope(), StartLoc, OpKinds[0],
     //                           Inits[0], NewIncr).take();
     //if (!NewStep) return StmtError();
@@ -1260,15 +1268,28 @@ StmtResult Sema::ActOnOpenMPForDirective(OpenMPDirectiveKind Kind,
       NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, NewIncr,
                            Incrs[I]).take();
       if (!NewIncr) return StmtError();
-      Offs = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, IdxRem,
-                        Ends[I]).take();
-      if (!Offs) return StmtError();
-      Offs = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, Offs,
-                        Incrs[I]).take();
-      if (!Offs) return StmtError();
-      NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Add,
-                           NewIncr, Offs).take();
-      if (!NewIncr) return StmtError();
+      NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Assign,
+                             VarCnts[I], Inits[I]).take();
+      if (!NewFinal1) return StmtError();
+      NewFinal = CreateBuiltinBinOp(StartLoc, BO_Comma,
+                                    NewFinal, NewFinal1).take();
+      if (!NewFinal) return StmtError();
+      NewFinal1 = ImpCastExprToType(NewFinal1,
+                                    Context.VoidTy, CK_ToVoid).take();
+      if (!NewFinal1) return StmtError();
+      NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul,
+                             Ends[I], Incrs[I]).take();
+      if (!NewFinal1) return StmtError();
+      NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc,
+                             (OpKinds[I] == BO_Add) ? BO_AddAssign : BO_SubAssign,
+                             VarCnts[I], NewFinal1).take();
+      if (!NewFinal1) return StmtError();
+      NewFinal1 = ImpCastExprToType(NewFinal1,
+                                    Context.VoidTy, CK_ToVoid).take();
+      if (!NewFinal1) return StmtError();
+      NewFinal = CreateBuiltinBinOp(StartLoc, BO_Comma,
+                                    NewFinal, NewFinal1).take();
+      if (!NewFinal) return StmtError();
 //      NewStep = BuildBinOp(DSAStack->getCurScope(), StartLoc, OpKinds[I],
 //                           Inits[I], NewIncr).take();
 //      if (!NewStep) return StmtError();
@@ -1299,13 +1320,15 @@ StmtResult Sema::ActOnOpenMPForDirective(OpenMPDirectiveKind Kind,
     }
     NewVarCntExpr = ImpCastExprToType(NewVarCntExpr,
                                       Context.VoidTy, CK_ToVoid).take();
+    NewFinal = ImpCastExprToType(NewFinal,
+                                 Context.VoidTy, CK_ToVoid).take();
   }
 
   getCurFunction()->setHasBranchProtectedScope();
 
   return Owned(OMPForDirective::Create(Context, StartLoc, EndLoc,
                                        Clauses, AStmt, NewVar, NewEnd,
-                                       NewVarCntExpr, VarCnts));
+                                       NewVarCntExpr, NewFinal, VarCnts));
 }
 
 StmtResult Sema::ActOnOpenMPSectionsDirective(OpenMPDirectiveKind Kind,
@@ -2533,14 +2556,22 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
     Decl *D = DE->getDecl();
     VarDecl *VD = cast<VarDecl>(D);
 
+    QualType Type = VD->getType();
+    if (Type->isDependentType() || Type->isInstantiationDependentType()) {
+      // It will be analyzed later.
+      Vars.push_back(*I);
+      DefaultInits.push_back(0);
+      continue;
+    }
+
     // OpenMP [2.9.3.3, Restrictions, C/C++, p.3]
     //  A variable that appears in a private clause must not have an incomplete
     //  type or a reference type.
-    if (RequireCompleteType(ELoc, VD->getType(),
+    if (RequireCompleteType(ELoc, Type,
                             diag::err_omp_private_incomplete_type)) {
       continue;
     }
-    if (VD->getType()->isReferenceType()) {
+    if (Type->isReferenceType()) {
       Diag(ELoc, diag::err_omp_clause_ref_type_arg)
         << getOpenMPClauseName(OMPC_private);
       bool IsDecl = VD->isThisDeclarationADefinition(Context) ==
@@ -2577,7 +2608,7 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
     //  A variable of class type (or array thereof) that appears in a private
     //  clause requires an accesible, unambiguous default constructor for the
     //  class type.
-    QualType Type = VD->getType().getNonReferenceType().getCanonicalType();
+    Type = Type.getNonReferenceType().getCanonicalType();
     while (Type->isArrayType()) {
       QualType ElemType = cast<ArrayType>(Type.getTypePtr())->getElementType();
       Type = ElemType.getNonReferenceType().getCanonicalType();
@@ -2679,14 +2710,23 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
     Decl *D = DE->getDecl();
     VarDecl *VD = cast<VarDecl>(D);
 
+    QualType Type = VD->getType();
+    if (Type->isDependentType() || Type->isInstantiationDependentType()) {
+      // It will be analyzed later.
+      Vars.push_back(*I);
+      PseudoVars.push_back(0);
+      Inits.push_back(0);
+      continue;
+    }
+
     // OpenMP [2.9.3.4, Restrictions, C/C++, p.2]
     //  A variable that appears in a firstprivate clause must not have an
     //  incomplete type or a reference type.
-    if (RequireCompleteType(ELoc, VD->getType(),
+    if (RequireCompleteType(ELoc, Type,
                             diag::err_omp_firstprivate_incomplete_type)) {
       continue;
     }
-    if (VD->getType()->isReferenceType()) {
+    if (Type->isReferenceType()) {
       Diag(ELoc, diag::err_omp_clause_ref_type_arg)
         << getOpenMPClauseName(OMPC_firstprivate);
       bool IsDecl = VD->isThisDeclarationADefinition(Context) ==
@@ -2714,7 +2754,7 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
     DeclRefExpr *PrevRef;
     OpenMPDirectiveKind CurrDir = DSAStack->getCurrentDirective();
     OpenMPClauseKind Kind = DSAStack->getTopDSA(VD, PrevRef);
-    QualType Type = VD->getType().getNonReferenceType().getCanonicalType();
+    Type = Type.getNonReferenceType().getCanonicalType();
     bool IsConstant = Type.isConstant(Context);
     while (Type->isArrayType()) {
       QualType ElemType = cast<ArrayType>(Type.getTypePtr())->getElementType();
@@ -2920,14 +2960,24 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
     Decl *D = DE->getDecl();
     VarDecl *VD = cast<VarDecl>(D);
 
+    QualType Type = VD->getType();
+    if (Type->isDependentType() || Type->isInstantiationDependentType()) {
+      // It will be analyzed later.
+      Vars.push_back(*I);
+      PseudoVars1.push_back(0);
+      PseudoVars2.push_back(0);
+      Assignments.push_back(0);
+      continue;
+    }
+
     // OpenMP [2.9.3.11, Restrictions, C/C++, p.4]
     //  A variable that appears in a firstprivate clause must not have an
     //  incomplete type or a reference type.
-    if (RequireCompleteType(ELoc, VD->getType(),
+    if (RequireCompleteType(ELoc, Type,
                             diag::err_omp_lastprivate_incomplete_type)) {
       continue;
     }
-    if (VD->getType()->isReferenceType()) {
+    if (Type->isReferenceType()) {
       Diag(ELoc, diag::err_omp_clause_ref_type_arg)
         << getOpenMPClauseName(OMPC_lastprivate);
       bool IsDecl = VD->isThisDeclarationADefinition(Context) ==
@@ -2950,7 +3000,7 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
     //  for firstprivate.
     DeclRefExpr *PrevRef;
     OpenMPClauseKind Kind = DSAStack->getTopDSA(VD, PrevRef);
-    QualType Type = VD->getType().getNonReferenceType().getCanonicalType();
+    Type = Type.getNonReferenceType().getCanonicalType();
     while (Type->isArrayType()) {
       QualType ElemType = cast<ArrayType>(Type.getTypePtr())->getElementType();
       Type = ElemType.getNonReferenceType().getCanonicalType();
@@ -3123,6 +3173,13 @@ OMPClause *Sema::ActOnOpenMPSharedClause(ArrayRef<Expr *> VarList,
     Decl *D = DE->getDecl();
     VarDecl *VD = cast<VarDecl>(D);
 
+    QualType Type = VD->getType();
+    if (Type->isDependentType() || Type->isInstantiationDependentType()) {
+      // It will be analyzed later.
+      Vars.push_back(*I);
+      continue;
+    }
+
     // OpenMP [2.9.1.1, Data-sharing Attribute Rules for Variables Referenced
     // in a Construct]
     //  Variables with the predetermined data-sharing attributes may not be
@@ -3180,6 +3237,16 @@ OMPClause *Sema::ActOnOpenMPCopyinClause(ArrayRef<Expr *> VarList,
     Decl *D = DE->getDecl();
     VarDecl *VD = cast<VarDecl>(D);
 
+    QualType Type = VD->getType();
+    if (Type->isDependentType() || Type->isInstantiationDependentType()) {
+      // It will be analyzed later.
+      Vars.push_back(*I);
+      PseudoVars1.push_back(0);
+      PseudoVars2.push_back(0);
+      Assignments.push_back(0);
+      continue;
+    }
+
     // OpenMP [2.9.2, Restrictions, p.1]
     //  A threadprivate variable must not appear in any clause except the
     //  copyin, copyprivate, schedule, num_threads, and if clauses.
@@ -3198,7 +3265,7 @@ OMPClause *Sema::ActOnOpenMPCopyinClause(ArrayRef<Expr *> VarList,
     //  A variable of class type (or array thereof) that appears in a
     //  firstprivate clause requires an accesible, unambiguous copy assignment
     //  operator for the class type.
-    QualType Type = VD->getType().getNonReferenceType().getCanonicalType();
+    Type = Type.getNonReferenceType().getCanonicalType();
     while (Type->isArrayType()) {
       QualType ElemType = cast<ArrayType>(Type.getTypePtr())->getElementType();
       Type = ElemType.getNonReferenceType().getCanonicalType();
@@ -3298,6 +3365,16 @@ OMPClause *Sema::ActOnOpenMPCopyPrivateClause(ArrayRef<Expr *> VarList,
     Decl *D = DE->getDecl();
     VarDecl *VD = cast<VarDecl>(D);
 
+    QualType Type = VD->getType();
+    if (Type->isDependentType() || Type->isInstantiationDependentType()) {
+      // It will be analyzed later.
+      Vars.push_back(*I);
+      PseudoVars1.push_back(0);
+      PseudoVars2.push_back(0);
+      Assignments.push_back(0);
+      continue;
+    }
+
     // OpenMP [2.11.4.2, Restrictions, p.2]
     //  A list item that appears in a copyprivate clause may not appear in
     //  a private or firstprivate clause on the single construct.
@@ -3340,7 +3417,7 @@ OMPClause *Sema::ActOnOpenMPCopyPrivateClause(ArrayRef<Expr *> VarList,
     //  A variable of class type (or array thereof) that appears in a
     //  copytprivate clause requires an accesible, unambiguous copy assignment
     //  operator for the class type.
-    QualType Type = VD->getType().getNonReferenceType().getCanonicalType();
+    Type = Type.getNonReferenceType().getCanonicalType();
     while (Type->isArrayType()) {
       QualType ElemType = cast<ArrayType>(Type.getTypePtr())->getElementType();
       Type = ElemType.getNonReferenceType().getCanonicalType();
@@ -3504,7 +3581,17 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
     }
     Decl *D = DE->getDecl();
     VarDecl *VD = cast<VarDecl>(D);
+
     QualType Type = VD->getType();
+    if (Type->isDependentType() || Type->isInstantiationDependentType()) {
+      // It will be analyzed later.
+      Vars.push_back(*I);
+      DefaultInits.push_back(0);
+      OpExprs.push_back(0);
+      HelperParams1.push_back(0);
+      HelperParams2.push_back(0);
+      continue;
+    }
 
     // OpenMP [2.9.3.6, Restrictions, C/C++, p.4]
     //  If a list-item is a reference type then it must bind to the same object

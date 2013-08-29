@@ -1405,11 +1405,11 @@ OMPForDirective *OMPForDirective::Create(ASTContext &C,
                                          ArrayRef<OMPClause *> Clauses,
                                          Stmt *AssociatedStmt,
                                          Expr *NewIterVar, Expr *NewIterEnd,
-                                         Expr *Init,
+                                         Expr *Init, Expr *Final,
                                          ArrayRef<Expr *> VarCnts) {
   void *Mem = C.Allocate(sizeof(OMPForDirective) +
                          sizeof(OMPClause *) * Clauses.size() +
-                         sizeof(Stmt *) * 4 +
+                         sizeof(Stmt *) * 5 +
                          sizeof(Stmt *) * VarCnts.size(),
                          llvm::alignOf<OMPForDirective>());
   OMPForDirective *Dir = new (Mem) OMPForDirective(StartLoc, EndLoc,
@@ -1420,6 +1420,7 @@ OMPForDirective *OMPForDirective::Create(ASTContext &C,
   Dir->setNewIterVar(NewIterVar);
   Dir->setNewIterEnd(NewIterEnd);
   Dir->setInit(Init);
+  Dir->setFinal(Final);
   Dir->setCounters(VarCnts);
   return Dir;
 }
@@ -1429,7 +1430,7 @@ OMPForDirective *OMPForDirective::CreateEmpty(ASTContext &C,
                                               unsigned CollapsedNum,
                                               EmptyShell) {
   void *Mem = C.Allocate(sizeof(OMPForDirective) + sizeof(OMPClause *) * N +
-                         sizeof(Stmt *) * 4 + sizeof(Stmt *) * CollapsedNum,
+                         sizeof(Stmt *) * 5 + sizeof(Stmt *) * CollapsedNum,
                          llvm::alignOf<OMPForDirective>());
   return new (Mem) OMPForDirective(CollapsedNum, N);
 }

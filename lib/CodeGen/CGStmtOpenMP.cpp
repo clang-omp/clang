@@ -2512,13 +2512,13 @@ void CodeGenFunction::EmitPostOMPLastPrivateClause(const OMPLastPrivateClause &C
     Builder.CreateCondBr(Builder.CreateIsNull(LiterVal),
                          LPEndBB, LPBB);
     LPIP = LPBB->end();
-    //if (isa<OMPForDirective>(S)) {
-    //  Builder.SetInsertPoint(LPBB);
-    //  EmitStmt(cast<OMPForDirective>(S).getInit());
-    //  EnsureInsertPoint();
-    //  LPBB = Builder.GetInsertBlock();
-    //  LPIP = Builder.GetInsertPoint();
-    //}
+    if (isa<OMPForDirective>(S)) {
+      Builder.SetInsertPoint(LPBB);
+      EmitStmt(cast<OMPForDirective>(S).getFinal());
+      EnsureInsertPoint();
+      LPBB = Builder.GetInsertBlock();
+      LPIP = Builder.GetInsertPoint();
+    }
     Builder.SetInsertPoint(LPEndBB);
     if (!CGM.OpenMPSupport.getNoWait())
       EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(barrier), S.getLocEnd(),
