@@ -4419,7 +4419,7 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
 
     IdentifierInfo *IIRAI = &Context.Idents.get("random_access_iterator_tag");
     DeclarationNameInfo DNIRAI(IIRAI, SourceLocation());
-    LookupResult RRAI(*this, DNIRAI, LookupTagName);
+    LookupResult RRAI(*this, DNIRAI, LookupOrdinaryName);
     TypeDecl *TDRAI;
     CXXRecordDecl *RDType = Type->getAsCXXRecordDecl();
     if (!LookupParsedName(RRAI, DSAStack->getCurScope(), &SS) ||
@@ -4431,7 +4431,7 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
 
     IdentifierInfo *IIC = &Context.Idents.get("iterator_category");
     DeclarationNameInfo DNIIC(IIC, SourceLocation());
-    LookupResult RIC(*this, DNIIC, LookupTagName);
+    LookupResult RIC(*this, DNIIC, LookupOrdinaryName);
     TypeDecl *TDIC;
     if (!LookupQualifiedName(RIC, TRDType) || !RIC.isSingleResult() ||
         !(TDIC = RIC.getAsSingle<TypeDecl>()) ||
