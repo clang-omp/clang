@@ -177,6 +177,13 @@ OpenMPClauseKind DSAStackTy::getDSA(StackTy::reverse_iterator Iter,
     if (!D->isFunctionOrMethodVarDecl())
       return OMPC_shared;
 
+    // OpenMP [2.9.1.2, Data-sharing Attribute Rules for Variables Referenced
+    // in a region but not in construct]
+    //  Variables with static storage duration that are declared in called
+    //  routines in the region are shared.
+    if (D->hasGlobalStorage())
+      return OMPC_shared;
+
     // OpenMP [2.9.1.1, Data-sharing Attribute Rules for Variables Referenced
     // in a region but not in construct]
     //  Other variables declared in called routines in the region are private.
