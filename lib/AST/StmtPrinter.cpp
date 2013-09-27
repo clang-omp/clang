@@ -625,6 +625,12 @@ void OMPClausePrinter::VisitOMPDefaultClause(OMPDefaultClause *Node) {
      << ")";
 }
 
+void OMPClausePrinter::VisitOMPProcBindClause(OMPProcBindClause *Node) {
+  OS << "proc_bind("
+     << getOpenMPSimpleClauseTypeName(OMPC_proc_bind, Node->getThreadAffinity())
+     << ")";
+}
+
 void OMPClausePrinter::VisitOMPPrivateClause(OMPPrivateClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "private";

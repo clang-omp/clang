@@ -434,13 +434,14 @@ bool Parser::ParseOpenMPSimpleVarList(OpenMPDirectiveKind Kind,
 /// \brief Parsing of OpenMP clauses.
 ///
 ///    clause:
-///       if-clause|num_threads-clause|default-clause|private-clause|
-///       firstprivate-clause|shared-clause|copyin-clause|reduction-clause|
-///       lastprivate-clause | schedule-clause | collapse-close |
-///       ordered-clause | nowait-clause | copyprivate-clause | flush_clause
+///       if-clause|num_threads-clause|default-clause|proc_bind-clause|
+///       private-clause|firstprivate-clause|shared-clause|copyin-clause|
+///       reduction-clause|lastprivate-clause|schedule-clause|collapse-close|
+///       ordered-clause|nowait-clause|copyprivate-clause|flush_clause
 ///
 OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
-                                     OpenMPClauseKind CKind, bool FirstClause) {
+                                     OpenMPClauseKind CKind,
+                                     bool FirstClause) {
   OMPClause *Clause = 0;
   bool ErrorFound = false;
   // Check if clause is allowed for the given directive.
@@ -455,14 +456,14 @@ OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
   case OMPC_num_threads:
   case OMPC_collapse:
   case OMPC_final:
-    // OpenMP [2.4, Restrictions, p.3]
+    // OpenMP [2.5, Restrictions, p.3]
     //  At most one if clause can appear on the directive.
-    // OpenMP [2.4, Restrictions, p.4]
+    // OpenMP [2.5, Restrictions, p.5]
     //  At most one num_threads clause can appear on the directive.
-    // OpenMP [2.5.1, Restrictions, p. 4]
+    // OpenMP [2.7.1, Restrictions, p. 4]
     //  Only one collapse clause can appear on a loop directive.
-    // OpenMP [2.9.1, Restrictions, p. 4]
-    //  Only one final clause can appear on the directive.
+    // OpenMP [2.11.1, Restrictions, p. 4]
+    //  At most one final clause can appear on the directive.
     if (!FirstClause) {
       Diag(Tok, diag::err_omp_more_one_clause)
            << getOpenMPDirectiveName(DKind) << getOpenMPClauseName(CKind);
@@ -471,9 +472,12 @@ OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
     Clause = ParseOpenMPSingleExprClause(CKind);
     break;
   case OMPC_default:
-    // OpenMP [2.9.3.1, Restrictions]
+  case OMPC_proc_bind:
+    // OpenMP [2.14.3.1, Restrictions]
     //  Only a single default clause may be specified on a parallel or task
     //  directive.
+    // OpenMP [2.5, Restrictions, p. 4]
+    //  At most one proc_bind clause can appear on the directive.
     if (!FirstClause) {
       Diag(Tok, diag::err_omp_more_one_clause)
            << getOpenMPDirectiveName(DKind) << getOpenMPClauseName(CKind);
@@ -623,10 +627,13 @@ OMPClause *Parser::ParseOpenMPSingleExprWithTypeClause(OpenMPClauseKind Kind) {
                                                      Tok.getLocation());
 }
 
-/// \brief Parsing of simple OpenMP clauses like 'default'.
+/// \brief Parsing of simple OpenMP clauses like 'default' or 'proc_bind'.
 ///
 ///    default-clause:
 ///         'default' '(' 'none' | 'shared' ')'
+///
+///    proc_bind-clause:
+///         'proc_bind' '(' 'master' | 'close' | 'spread' ')'
 ///
 OMPClause *Parser::ParseOpenMPSimpleClause(OpenMPClauseKind Kind) {
   SourceLocation Loc = Tok.getLocation();
@@ -641,7 +648,8 @@ OMPClause *Parser::ParseOpenMPSimpleClause(OpenMPClauseKind Kind) {
     ConsumeAnyToken();
 
   unsigned Type = Tok.isAnnotation() ?
-                     OMPC_DEFAULT_unknown :
+                     ((Kind == OMPC_default) ? OMPC_DEFAULT_unknown :
+                                               OMPC_PROC_BIND_unknown) :
                      getOpenMPSimpleClauseType(Kind, PP.getSpelling(Tok));
   SourceLocation TypeLoc = Tok.getLocation();
   if (Tok.isNot(tok::r_paren) && Tok.isNot(tok::comma) &&

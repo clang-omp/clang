@@ -367,6 +367,70 @@ public:
   }
 };
 
+/// \brief This represents 'proc_bind' clause in the '#pragma omp ...' directive.
+///
+/// \code
+/// #pragma omp parallel proc_bind(master)
+/// \endcode
+/// In this example directive '#pragma omp parallel' has simple 'proc_bind'
+/// clause with thread affinity 'master'.
+///
+class OMPProcBindClause : public OMPClause {
+  friend class OMPClauseReader;
+  /// \brief Thread affinity defined in 'proc_bind' clause.
+  OpenMPProcBindClauseKind ThreadAffinity;
+  /// \brief Start location of the thread affinity in source code.
+  SourceLocation ThreadAffinityLoc;
+
+  /// \brief Set thread affinity of the clauses.
+  ///
+  /// \param K Argument of clause.
+  ///
+  void setThreadAffinity(OpenMPProcBindClauseKind K) { ThreadAffinity = K; }
+
+  /// \brief Set argument location.
+  ///
+  /// \param KLoc Argument location.
+  ///
+  void setThreadAffinityLoc(SourceLocation KLoc) { ThreadAffinityLoc = KLoc; }
+public:
+  /// \brief Build 'proc_bind' clause with argument \a A ('master', 'close' or
+  /// 'spread').
+  ///
+  /// \brief A Argument of the clause ('master', 'close' or 'spread').
+  /// \brief ALoc Starting location of the argument.
+  /// \brief StartLoc Starting location of the clause.
+  /// \brief EndLoc Ending location of the clause.
+  ///
+  OMPProcBindClause(OpenMPProcBindClauseKind A, SourceLocation ALoc,
+                    SourceLocation StartLoc, SourceLocation EndLoc)
+    : OMPClause(OMPC_proc_bind, StartLoc, EndLoc), ThreadAffinity(A),
+      ThreadAffinityLoc(ALoc) { }
+
+  /// \brief Build an empty clause.
+  ///
+  explicit OMPProcBindClause()
+    : OMPClause(OMPC_proc_bind, SourceLocation(), SourceLocation()),
+      ThreadAffinity(OMPC_PROC_BIND_unknown),
+      ThreadAffinityLoc(SourceLocation()) { }
+
+  /// \brief Fetches thread affinity.
+  ///
+  OpenMPProcBindClauseKind getThreadAffinity() const { return ThreadAffinity; }
+
+  /// \brief Fetches location of clause kind.
+  ///
+  SourceLocation getThreadAffinityLoc() const { return ThreadAffinityLoc; }
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_proc_bind;
+  }
+
+  StmtRange children() {
+    return StmtRange();
+  }
+};
+
 /// \brief This represents clause 'private' in the '#pragma omp ...' directives.
 ///
 /// \code

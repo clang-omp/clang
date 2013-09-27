@@ -1689,6 +1689,9 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_default:
     C = new (Context) OMPDefaultClause();
     break;
+  case OMPC_proc_bind:
+    C = new (Context) OMPProcBindClause();
+    break;
   case OMPC_schedule:
     C = new (Context) OMPScheduleClause();
     break;
@@ -1773,6 +1776,12 @@ void OMPClauseReader::VisitOMPDefaultClause(OMPDefaultClause *C) {
   C->setDefaultKind(
        static_cast<OpenMPDefaultClauseKind>(Record[Idx++]));
   C->setDefaultKindLoc(Reader->ReadSourceLocation(Record, Idx));
+}
+
+void OMPClauseReader::VisitOMPProcBindClause(OMPProcBindClause *C) {
+  C->setThreadAffinity(
+       static_cast<OpenMPProcBindClauseKind>(Record[Idx++]));
+  C->setThreadAffinityLoc(Reader->ReadSourceLocation(Record, Idx));
 }
 
 void OMPClauseReader::VisitOMPScheduleClause(OMPScheduleClause *C) {

@@ -2262,6 +2262,11 @@ OMPClause *Sema::ActOnOpenMPSimpleClause(OpenMPClauseKind Kind,
                              static_cast<OpenMPDefaultClauseKind>(Argument),
                              ArgumentLoc, StartLoc, EndLoc);
     break;
+  case OMPC_proc_bind:
+    Res = ActOnOpenMPProcBindClause(
+                             static_cast<OpenMPProcBindClauseKind>(Argument),
+                             ArgumentLoc, StartLoc, EndLoc);
+    break;
   default:
     break;
   }
@@ -2306,6 +2311,36 @@ OMPClause *Sema::ActOnOpenMPDefaultClause(OpenMPDefaultClauseKind Kind,
     break;
   }
   return new (Context) OMPDefaultClause(Kind, KindLoc, StartLoc, EndLoc);
+}
+
+OMPClause *Sema::ActOnOpenMPProcBindClause(OpenMPProcBindClauseKind Kind,
+                                           SourceLocation KindLoc,
+                                           SourceLocation StartLoc,
+                                           SourceLocation EndLoc) {
+  if (Kind == OMPC_PROC_BIND_unknown) {
+    std::string Values;
+    std::string Sep(NUM_OPENMP_PROC_BIND_KINDS > 1 ? ", " : "");
+    for (unsigned i = OMPC_PROC_BIND_unknown + 1;
+         i < NUM_OPENMP_PROC_BIND_KINDS; ++i) {
+      Values += "'";
+      Values += getOpenMPSimpleClauseTypeName(OMPC_proc_bind, i);
+      Values += "'";
+      switch (i) {
+      case NUM_OPENMP_PROC_BIND_KINDS - 2:
+        Values += " or ";
+        break;
+      case NUM_OPENMP_PROC_BIND_KINDS - 1:
+        break;
+      default:
+        Values += Sep;
+        break;
+      }
+    }
+    Diag(KindLoc, diag::err_omp_unexpected_clause_value)
+      << Values << getOpenMPClauseName(OMPC_proc_bind);
+    return 0;
+  }
+  return new (Context) OMPProcBindClause(Kind, KindLoc, StartLoc, EndLoc);
 }
 
 OMPClause *Sema::ActOnOpenMPClause(OpenMPClauseKind Kind,

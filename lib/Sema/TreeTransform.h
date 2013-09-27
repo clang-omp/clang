@@ -1339,6 +1339,18 @@ public:
                                               StartLoc, EndLoc);
   }
 
+  /// \brief Build a new OpenMP 'proc_bind' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPProcBindClause(OpenMPProcBindClauseKind Kind,
+                                      SourceLocation KindLoc,
+                                      SourceLocation StartLoc,
+                                      SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPProcBindClause(Kind, KindLoc,
+                                               StartLoc, EndLoc);
+  }
+
   /// \brief Build a new OpenMP 'schedule' clause.
   ///
   /// By default, performs semantic analysis to build the new statement.
@@ -6697,6 +6709,15 @@ TreeTransform<Derived>::TransformOMPDefaultClause(OMPDefaultClause *C) {
                                               C->getDefaultKindLoc(),
                                               C->getLocStart(),
                                               C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPProcBindClause(OMPProcBindClause *C) {
+  return getDerived().RebuildOMPProcBindClause(C->getThreadAffinity(),
+                                               C->getThreadAffinityLoc(),
+                                               C->getLocStart(),
+                                               C->getLocEnd());
 }
 
 template<typename Derived>

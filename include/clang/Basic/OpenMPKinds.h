@@ -49,6 +49,15 @@ enum OpenMPDefaultClauseKind {
   NUM_OPENMP_DEFAULT_KINDS
 };
 
+/// \brief OpenMP attributes for 'proc_bind' clause.
+enum OpenMPProcBindClauseKind {
+  OMPC_PROC_BIND_unknown = 0,
+#define OPENMP_PROC_BIND_KIND(Name) \
+  OMPC_PROC_BIND_##Name,
+#include "clang/Basic/OpenMPKinds.def"
+  NUM_OPENMP_PROC_BIND_KINDS
+};
+
 /// \brief OpenMP operators for 'reduction' clause.
 enum OpenMPReductionClauseOperator {
   OMPC_REDUCTION_unknown = 0,

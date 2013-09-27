@@ -6837,6 +6837,11 @@ public:
                                       SourceLocation KindLoc,
                                       SourceLocation StartLoc,
                                       SourceLocation EndLoc);
+  /// \brief Called on well-formed 'proc_bind' clause.
+  OMPClause *ActOnOpenMPProcBindClause(OpenMPProcBindClauseKind Kind,
+                                       SourceLocation KindLoc,
+                                       SourceLocation StartLoc,
+                                       SourceLocation EndLoc);
 
   OMPClause *ActOnOpenMPVarListClause(OpenMPClauseKind Kind,
                                       ArrayRef<Expr *> Vars,

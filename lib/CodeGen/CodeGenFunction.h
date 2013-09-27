@@ -2302,6 +2302,8 @@ public:
   void EmitFinalOMPClause(const OMPClause &C, const OMPExecutableDirective &S);
   void EmitInitOMPNumThreadsClause(const OMPNumThreadsClause &C,
                                    const OMPExecutableDirective &S);
+  void EmitInitOMPProcBindClause(const OMPProcBindClause &C,
+                                 const OMPExecutableDirective &S);
   void EmitAfterInitOMPIfClause(const OMPIfClause &C,
                                 const OMPExecutableDirective &S);
   void EmitFinalOMPIfClause(const OMPIfClause &C,
@@ -2354,11 +2356,11 @@ public:
   void EmitOMPSingleDirective(const OMPSingleDirective &S);
   void EmitOMPCriticalDirective(const OMPCriticalDirective &S);
   void EmitOMPOrderedDirective(const OMPOrderedDirective &S);
-  llvm::CallInst *EmitOMPCallWithLocAndTidHelper(llvm::Function *F,
+  llvm::CallInst *EmitOMPCallWithLocAndTidHelper(llvm::Value *F,
         SourceLocation L, unsigned Flags = 0x02);
   void EmitOMPConditionalIfHelper(const OMPExecutableDirective &S,
-        llvm::Function *Func, SourceLocation Loc,
-        llvm::Function *EndFunc, SourceLocation EndLoc,
+        llvm::Value *Func, SourceLocation Loc,
+        llvm::Value *EndFunc, SourceLocation EndLoc,
         bool HasClauses, llvm::AllocaInst *DidIt,
         const std::string &NameStr);
   void EmitOMPCapturedBodyHelper(const OMPExecutableDirective &S);

@@ -71,11 +71,11 @@ public:
 
 #define OPENMPRTL_FUNC(name) Get__kmpc_##name(this)
 
-#define DEFAULT_GET_OPENMP_FUNC(name)                                          \
-static llvm::Function *Get__kmpc_##name(clang::CodeGen::CodeGenModule *CGM) {\
-   return llvm::cast<llvm::Function>(CGM->CreateRuntimeFunction(            \
+#define DEFAULT_GET_OPENMP_FUNC(name)                                           \
+static llvm::Value *Get__kmpc_##name(clang::CodeGen::CodeGenModule *CGM) {      \
+   return CGM->CreateRuntimeFunction(                                           \
       llvm::TypeBuilder<__kmpc_##name, false>::get(CGM->getLLVMContext()),      \
-      "__kmpc_"#name));                                                        \
+      "__kmpc_"#name);                                                          \
 }
 
 DEFAULT_GET_OPENMP_FUNC(threadprivate_register)

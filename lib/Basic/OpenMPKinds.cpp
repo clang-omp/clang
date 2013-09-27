@@ -81,6 +81,12 @@ unsigned clang::getOpenMPSimpleClauseType(OpenMPClauseKind Kind,
              .Case(#Name, OMPC_DEFAULT_##Name)
 #include "clang/Basic/OpenMPKinds.def"
              .Default(OMPC_DEFAULT_unknown);
+  case OMPC_proc_bind:
+    return llvm::StringSwitch<OpenMPProcBindClauseKind>(Str)
+#define OPENMP_PROC_BIND_KIND(Name) \
+             .Case(#Name, OMPC_PROC_BIND_##Name)
+#include "clang/Basic/OpenMPKinds.def"
+             .Default(OMPC_PROC_BIND_unknown);
   case OMPC_reduction:
     return llvm::StringSwitch<OpenMPReductionClauseOperator>(Str)
 #define OPENMP_REDUCTION_OPERATOR(Name, Symbol) \
@@ -113,6 +119,17 @@ const char *clang::getOpenMPSimpleClauseTypeName(OpenMPClauseKind Kind,
       break;
     }
     llvm_unreachable("Invalid OpenMP 'default' clause type");
+  case OMPC_proc_bind:
+    switch (Type) {
+    case OMPC_PROC_BIND_unknown:
+      return "unknown";
+#define OPENMP_PROC_BIND_KIND(Name) \
+    case OMPC_PROC_BIND_##Name : return #Name;
+#include "clang/Basic/OpenMPKinds.def"
+    default:
+      break;
+    }
+    llvm_unreachable("Invalid OpenMP 'proc_bind' clause type");
   case OMPC_reduction:
     switch (Type) {
     case OMPC_REDUCTION_unknown:

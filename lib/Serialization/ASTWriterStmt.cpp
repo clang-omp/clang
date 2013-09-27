@@ -1699,6 +1699,11 @@ void OMPClauseWriter::VisitOMPDefaultClause(OMPDefaultClause *C) {
   Writer->Writer.AddSourceLocation(C->getDefaultKindLoc(), Record);
 }
 
+void OMPClauseWriter::VisitOMPProcBindClause(OMPProcBindClause *C) {
+  Record.push_back(C->getThreadAffinity());
+  Writer->Writer.AddSourceLocation(C->getThreadAffinityLoc(), Record);
+}
+
 void OMPClauseWriter::VisitOMPScheduleClause(OMPScheduleClause *C) {
   Record.push_back(C->getScheduleKind());
   Writer->Writer.AddSourceLocation(C->getScheduleKindLoc(), Record);

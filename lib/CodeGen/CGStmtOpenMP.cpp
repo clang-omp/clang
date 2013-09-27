@@ -36,9 +36,19 @@ using namespace CodeGen;
 namespace {
 struct ident_t{};
 enum sched_type {};
+enum kmp_proc_bind_t {};
 typedef void (*kmpc_micro)(int32_t *global_tid, int32_t *bound_tid, ...);
 typedef void (__kmpc_fork_call)(ident_t *loc, int32_t argc, kmpc_micro microtask, ...);
 typedef void (__kmpc_push_num_threads)(ident_t *loc, int32_t global_tid, int32_t num_threads);
+typedef void (__kmpc_push_proc_bind)(ident_t *loc, int32_t global_tid, kmp_proc_bind_t proc_bind);
+const int KMP_PROC_BIND_FALSE = 0;
+const int KMP_PROC_BIND_TRUE = 1;
+const int KMP_PROC_BIND_MASTER = 2;
+const int KMP_PROC_BIND_CLOSE = 3;
+const int KMP_PROC_BIND_SPREAD = 4;
+const int KMP_PROC_BIND_DISABLED = 5;
+const int KMP_PROC_BIND_INTEL = 6;
+const int KMP_PROC_BIND_DEFAULT = 7;
 const int KMP_IDENT_BARRIER_EXPL = 0x20;
 const int KMP_IDENT_BARRIER_IMPL = 0x0040;
 const int KMP_IDENT_BARRIER_IMPL_FOR = 0x0040;
@@ -253,8 +263,16 @@ public:
     return TypeBuilder<llvm::types::i<32>,   X>::get(C);
   }
 };
+template <bool X>
+class TypeBuilder<kmp_proc_bind_t, X> {
+public:
+  static IntegerType *get(LLVMContext &C) {
+    return TypeBuilder<llvm::types::i<32>,   X>::get(C);
+  }
+};
 
 typedef llvm::TypeBuilder<kmp_task_t, false> TaskTBuilder;
+typedef llvm::TypeBuilder<kmp_proc_bind_t, false> ProcBindTBuilder;
 }
 
 
@@ -265,10 +283,10 @@ typedef llvm::TypeBuilder<kmp_task_t, false> TaskTBuilder;
     getAtomicFuncGeneral(*this, QTyRes, QTyIn, Aop, Capture, Reverse)
 
 #define DEFAULT_GET_OPENMP_FUNC(name)                                          \
-static llvm::Function *Get__kmpc_##name(clang::CodeGen::CodeGenModule *CGM) {  \
-   return llvm::cast<llvm::Function>(CGM->CreateRuntimeFunction(               \
+static llvm::Value *Get__kmpc_##name(clang::CodeGen::CodeGenModule *CGM) {     \
+   return CGM->CreateRuntimeFunction(                                          \
       llvm::TypeBuilder<__kmpc_##name, false>::get(CGM->getLLVMContext()),     \
-      "__kmpc_"#name));                                                        \
+      "__kmpc_"#name);                                                         \
 }
 
 enum EAtomicOperation {
@@ -315,7 +333,7 @@ static QualType getAtomicType(CodeGenFunction &CGF,
   return QualType();
 }
 
-static llvm::Function *getAtomicFuncGeneral(CodeGenFunction &CGF,
+static llvm::Value *getAtomicFuncGeneral(CodeGenFunction &CGF,
         QualType QTyRes,
         QualType QTyIn,
         EAtomicOperation Aop,
@@ -424,10 +442,10 @@ static llvm::Function *getAtomicFuncGeneral(CodeGenFunction &CGF,
   if (Capture || Aop == OMP_Atomic_rd)
     RetTy = Ty;
   llvm::FunctionType *FunTy = llvm::FunctionType::get(RetTy, Params, false);
-  return llvm::cast<llvm::Function>(CGF.CGM.CreateRuntimeFunction(FunTy, OS.str()));
+  return CGF.CGM.CreateRuntimeFunction(FunTy, OS.str());
 }
 
-static llvm::Function *getAtomicFunc(CodeGenFunction &CGF,
+static llvm::Value *getAtomicFunc(CodeGenFunction &CGF,
                                      QualType QTy,
                                      OpenMPReductionClauseOperator Op) {
 
@@ -472,6 +490,7 @@ static llvm::Function *getAtomicFunc(CodeGenFunction &CGF,
 
 DEFAULT_GET_OPENMP_FUNC(fork_call)
 DEFAULT_GET_OPENMP_FUNC(push_num_threads)
+DEFAULT_GET_OPENMP_FUNC(push_proc_bind)
 DEFAULT_GET_OPENMP_FUNC(barrier)
 DEFAULT_GET_OPENMP_FUNC(reduce_nowait)
 DEFAULT_GET_OPENMP_FUNC(copyprivate)
@@ -1534,6 +1553,9 @@ void CodeGenFunction::EmitInitOMPClause(const OMPClause &C,
   case OMPC_num_threads:
     EmitInitOMPNumThreadsClause(cast<OMPNumThreadsClause>(C), S);
     break;
+  case OMPC_proc_bind:
+    EmitInitOMPProcBindClause(cast<OMPProcBindClause>(C), S);
+    break;
   case OMPC_reduction:
     EmitInitOMPReductionClause(cast<OMPReductionClause>(C), S);
     break;
@@ -1585,6 +1607,7 @@ void CodeGenFunction::EmitAfterInitOMPClause(const OMPClause &C,
   case OMPC_final:
   case OMPC_mergeable:
   case OMPC_default:
+  case OMPC_proc_bind:
   case OMPC_num_threads:
   case OMPC_schedule:
   case OMPC_copyin:
@@ -1609,6 +1632,7 @@ void CodeGenFunction::EmitPreOMPClause(const OMPClause &C,
   case OMPC_num_threads:
   case OMPC_if:
   case OMPC_default:
+  case OMPC_proc_bind:
   case OMPC_shared:
   case OMPC_collapse:
   case OMPC_nowait:
@@ -1653,6 +1677,7 @@ void CodeGenFunction::EmitPostOMPClause(const OMPClause &C,
   case OMPC_copyin:
   case OMPC_copyprivate:
   case OMPC_default:
+  case OMPC_proc_bind:
   case OMPC_shared:
   case OMPC_collapse:
   case OMPC_nowait:
@@ -1691,6 +1716,7 @@ void CodeGenFunction::EmitCloseOMPClause(const OMPClause &C,
   case OMPC_copyin:
   case OMPC_copyprivate:
   case OMPC_default:
+  case OMPC_proc_bind:
   case OMPC_shared:
   case OMPC_private:
   case OMPC_firstprivate:
@@ -1724,6 +1750,7 @@ void CodeGenFunction::EmitFinalOMPClause(const OMPClause &C,
   case OMPC_copyin:
   case OMPC_copyprivate:
   case OMPC_default:
+  case OMPC_proc_bind:
   case OMPC_shared:
   case OMPC_private:
   case OMPC_firstprivate:
@@ -1798,6 +1825,43 @@ void CodeGenFunction::EmitInitOMPNumThreadsClause(
                              GTid,
                              NumThreads};
   EmitRuntimeCall(OPENMPRTL_FUNC(push_num_threads), RealArgs);
+}
+
+void CodeGenFunction::EmitInitOMPProcBindClause(
+                                         const OMPProcBindClause &C,
+                                         const OMPExecutableDirective &S) {
+  // __kmpc_push_proc_bind(&loc, global_tid, proc_bind);
+  // ident_t loc = {...};
+  llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(C.getLocStart(), *this);
+  // global_tid = __kmpc_global_thread_num(...);
+  llvm::Value *GTid =
+     CGM.CreateOpenMPGlobalThreadNum(C.getLocStart(), *this);
+  // proc_bind = proc_bind...;
+  llvm::Value *ProcBind = 0;
+  switch (C.getThreadAffinity()) {
+  case OMPC_PROC_BIND_master:
+    ProcBind =
+      llvm::ConstantInt::get(llvm::ProcBindTBuilder::get(CGM.getLLVMContext()),
+                             KMP_PROC_BIND_MASTER);
+    break;
+  case OMPC_PROC_BIND_close:
+    ProcBind =
+      llvm::ConstantInt::get(llvm::ProcBindTBuilder::get(CGM.getLLVMContext()),
+                             KMP_PROC_BIND_CLOSE);
+    break;
+  case OMPC_PROC_BIND_spread:
+    ProcBind =
+      llvm::ConstantInt::get(llvm::ProcBindTBuilder::get(CGM.getLLVMContext()),
+                             KMP_PROC_BIND_SPREAD);
+    break;
+  case OMPC_PROC_BIND_unknown:
+  case NUM_OPENMP_PROC_BIND_KINDS:
+    llvm_unreachable("Unknown thread affinity");
+  }
+  llvm::Value *RealArgs[] = {Loc,
+                             GTid,
+                             ProcBind};
+  EmitRuntimeCall(OPENMPRTL_FUNC(push_proc_bind), RealArgs);
 }
 
 void CodeGenFunction::EmitAfterInitOMPIfClause(const OMPIfClause &C,
@@ -3087,7 +3151,7 @@ void CodeGenFunction::EmitPostOMPReductionClause(
     IP1 = Builder.GetInsertPoint();
     RedBB1 = Builder.GetInsertBlock();
     Builder.SetInsertPoint(RedBB2, IP2);
-    llvm::Function* AtomicFunc = OPENMPRTL_ATOMIC_FUNC(QTy, C.getOperator());
+    llvm::Value* AtomicFunc = OPENMPRTL_ATOMIC_FUNC(QTy, C.getOperator());
     if (isa<BinaryOperator>((*OpI)->IgnoreImpCasts()) && AtomicFunc) {
       // __kmpc_atomic_...(&loc, global_tid, &glob, &reduction);
       // ident_t loc = {...};
@@ -3144,7 +3208,7 @@ void CodeGenFunction::EmitPostOMPReductionClause(
   CGM.OpenMPSupport.setReductionIPs(RedBB1, IP1, RedBB2, IP2);
 }
 
-llvm::CallInst* CodeGenFunction::EmitOMPCallWithLocAndTidHelper(llvm::Function *F,
+llvm::CallInst* CodeGenFunction::EmitOMPCallWithLocAndTidHelper(llvm::Value *F,
     SourceLocation L, unsigned Flags) {
   llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(L, *this, Flags);
   llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(L, *this);
@@ -3161,8 +3225,8 @@ void CodeGenFunction::EmitOMPCapturedBodyHelper(const OMPExecutableDirective &S)
 
 void CodeGenFunction::EmitOMPConditionalIfHelper(
   const OMPExecutableDirective &S,
-  llvm::Function *Func, SourceLocation Loc,
-  llvm::Function *EndFunc, SourceLocation EndLoc,
+  llvm::Value *Func, SourceLocation Loc,
+  llvm::Value *EndFunc, SourceLocation EndLoc,
   bool HasClauses, llvm::AllocaInst *DidIt,
   const std::string &NameStr) {
 
@@ -3325,7 +3389,8 @@ void CodeGenFunction::EmitOMPAtomicDirective(const OMPAtomicDirective &S) {
     case OMPC_read: {
       QualType QTy = S.getX()->getType();
       QualType AQTy = getAtomicType(*this, QTy);
-      llvm::Function *AtomicFunc = AQTy.isNull() ? 0 : OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTy, AQTy, OMP_Atomic_rd, false, false);
+      llvm::Value *AtomicFunc = AQTy.isNull() ? 0 :
+         OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTy, AQTy, OMP_Atomic_rd, false, false);
       if (X.isSimple() && AtomicFunc) {
         llvm::Type *ATy = ConvertTypeForMem(AQTy);
         llvm::SmallVector<llvm::Value *, 5> Args;
@@ -3353,7 +3418,8 @@ void CodeGenFunction::EmitOMPAtomicDirective(const OMPAtomicDirective &S) {
     case OMPC_write: {
       QualType QTy = S.getX()->getType();
       QualType AQTy = getAtomicType(*this, QTy);
-      llvm::Function *AtomicFunc = AQTy.isNull() ? 0 : OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTy, AQTy, OMP_Atomic_wr, false, false);
+      llvm::Value *AtomicFunc = AQTy.isNull() ? 0 :
+        OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTy, AQTy, OMP_Atomic_wr, false, false);
       if (X.isSimple() && AtomicFunc) {
         llvm::Type *ATy = ConvertTypeForMem(AQTy);
         llvm::SmallVector<llvm::Value *, 5> Args;
@@ -3414,7 +3480,9 @@ void CodeGenFunction::EmitOMPAtomicDirective(const OMPAtomicDirective &S) {
         Aop = OMP_Atomic_invalid;
         break;
       }
-      llvm::Function *AtomicFunc = (AQTyRes.isNull() || AQTyIn.isNull()) ? 0 : OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTyRes, AQTyIn, Aop, false, S.isReversed());
+      llvm::Value *AtomicFunc = (AQTyRes.isNull() || AQTyIn.isNull()) ? 0 :
+        OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTyRes, AQTyIn, Aop, false,
+                                      S.isReversed());
       if (X.isSimple() && AtomicFunc) {
         llvm::Type *ATyRes = ConvertTypeForMem(AQTyRes);
         llvm::SmallVector<llvm::Value *, 5> Args;
@@ -3477,7 +3545,9 @@ void CodeGenFunction::EmitOMPAtomicDirective(const OMPAtomicDirective &S) {
         Aop = OMP_Atomic_invalid;
         break;
       }
-      llvm::Function *AtomicFunc = (AQTyRes.isNull() || AQTyIn.isNull()) ? 0 : OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTyRes, AQTyIn, Aop, true, S.isReversed());
+      llvm::Value *AtomicFunc = (AQTyRes.isNull() || AQTyIn.isNull()) ? 0 :
+        OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTyRes, AQTyIn, Aop, true,
+                                      S.isReversed());
       if (X.isSimple() && AtomicFunc) {
         llvm::Type *ATy = ConvertTypeForMem(AQTyRes);
         llvm::SmallVector<llvm::Value *, 5> Args;
