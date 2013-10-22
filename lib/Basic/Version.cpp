@@ -36,7 +36,7 @@ std::string getClangRepositoryPath() {
 
   // If the SVN_REPOSITORY is empty, try to use the SVN keyword. This helps us
   // pick up a tag in an SVN export, for example.
-  static StringRef SVNRepository("$URL: https://abataev-mobl.ccr.corp.intel.com/svn/OpenMP/trunk/tools/clang/lib/Basic/Version.cpp $");
+  static StringRef SVNRepository("$URL$");
   if (URL.empty()) {
     URL = SVNRepository.slice(SVNRepository.find(':'),
                               SVNRepository.find("/lib/Basic"));
