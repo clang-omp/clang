@@ -1403,6 +1403,7 @@ void ASTDumper::VisitCapturedStmt(const CapturedStmt *Node) {
       break;
     }
   }
+  dumpDecl(Node->getCapturedDecl());
 }
 
 //===----------------------------------------------------------------------===//
