@@ -6386,6 +6386,10 @@ def note_omp_marked_here : Note<
   "marked as %0 here">;
 def err_omp_clause_ref_type_arg : Error<
   "arguments of OpenMP clause '%0' cannot be of reference type">;
+def err_omp_expected_int_or_ptr : Error<
+  "argument of a linear clause should be of integral or pointer type">;
+def err_omp_expected_array_or_ptr : Error<
+  "argument of an aligned clause should be array, pointer, reference to array or reference to pointer">;
 def err_omp_required_access : Error<
   "%0 variable must be %1">;
 def err_omp_clause_not_arithmetic_type_arg : Error<
@@ -6447,11 +6451,29 @@ def err_omp_atomic_not_expression : Error <
 def err_omp_atomic_wrong_statement : Error <
   "statement form is not allowed for '#pragma omp atomic %0'">;
 def err_omp_no_dsa_for_variable : Error <
-  "variable %0 must have explicitly specified data sharing attributes">;
+  "variable %q0 must have explicitly specified data sharing attributes">;
 def err_omp_for_cannot_break: Error<
-  "cannot break from a '#pragma omp for' loop">;
+  "cannot break from a '#pragma omp %0' loop">;
+def err_omp_for_cannot_have_eh: Error<
+  "exception handling is not allowed in a '#pragma omp %0' loop">;
 def err_capture_vm_type : Error<
-    "variable %0 with variably modified type cannot be captured">;
+  "variable %q0 with variably modified type cannot be captured">;
+def err_omp_wrong_var_in_combiner : Error<
+  "variable %q0 is not allowed in combiner expression for '#pragma omp declare reduction', only 'omp_in' or 'omp_out' are allowed">;
+def err_omp_wrong_var_in_initializer : Error<
+  "variable %q0 is not allowed in initializer expression for '#pragma omp declare reduction', only 'omp_priv' or 'omp_orig' are allowed">;
+def err_omp_reduction_qualified_type : Error<
+  "a type name cannot be qualified with 'const', 'volatile' or 'restrict'">;
+def err_omp_reduction_function_type : Error<
+  "a type name cannot be a function type">;
+def err_omp_reduction_reference_type : Error<
+  "a type name cannot be a reference type">;
+def err_omp_reduction_array_type : Error<
+  "a type name cannot be an array type">;
+def err_omp_reduction_redeclared : Error <
+  "previous declaration with type %0 is found">;
+def err_omp_reduction_non_function_init : Error <
+  "expected function call">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {

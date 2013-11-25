@@ -970,6 +970,9 @@ public:
   /// \brief Emit a code for threadprivate variable.
   ///
   void EmitOMPThreadPrivate(const VarDecl *VD, const Expr *TPE);
+  /// \brief Emit a code for declare reduction variables.
+  ///
+  void EmitOMPDeclareReduction(const OMPDeclareReductionDecl *D);
 
   /// \brief Creates a structure with the location info for Intel OpenMP RTL.
   llvm::Value *CreateIntelOpenMPRTLLoc(SourceLocation Loc,

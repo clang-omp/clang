@@ -1364,6 +1364,19 @@ public:
                                                StartLoc, EndLoc);
   }
 
+  /// \brief Build a new OpenMP 'dist_schedule' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPDistScheduleClause(OpenMPScheduleClauseKind Kind,
+                                          SourceLocation KindLoc,
+                                          Expr *ChunkSize,
+                                          SourceLocation StartLoc,
+                                          SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPDistScheduleClause(Kind, KindLoc, ChunkSize,
+                                                   StartLoc, EndLoc);
+  }
+
   /// \brief Build a new OpenMP 'private' clause.
   ///
   /// By default, performs semantic analysis to build the new statement.
@@ -1438,9 +1451,11 @@ public:
                                        SourceLocation StartLoc,
                                        SourceLocation EndLoc,
                                        OpenMPReductionClauseOperator Op,
+                                       DeclarationName OpName,
                                        SourceLocation OpLoc) {
     return getSema().ActOnOpenMPReductionClause(VarList,
-                                                StartLoc, EndLoc, Op, OpLoc);
+                                                StartLoc, EndLoc, Op,
+                                                OpName, OpLoc);
   }
 
   /// \brief Build a new OpenMP 'ordered' clause.
@@ -1524,6 +1539,24 @@ public:
     return getSema().ActOnOpenMPSeqCstClause(StartLoc, EndLoc);
   }
 
+  /// \brief Build a new OpenMP 'inbranch' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPInBranchClause(SourceLocation StartLoc,
+                                      SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPInBranchClause(StartLoc, EndLoc);
+  }
+
+  /// \brief Build a new OpenMP 'notinbranch' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPNotInBranchClause(SourceLocation StartLoc,
+                                         SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPNotInBranchClause(StartLoc, EndLoc);
+  }
+
   /// \brief Build a new OpenMP list of vars for 'flush' directive.
   ///
   /// By default, performs semantic analysis to build the new statement.
@@ -1532,6 +1565,83 @@ public:
                                    SourceLocation StartLoc,
                                    SourceLocation EndLoc) {
     return getSema().ActOnOpenMPFlushClause(VarList, StartLoc, EndLoc);
+  }
+
+  /// \brief Build a new OpenMP list of vars for 'uniform' directive.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPUniformClause(ArrayRef<Expr *> VarList,
+                                     SourceLocation StartLoc,
+                                     SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPUniformClause(VarList, StartLoc, EndLoc);
+  }
+
+  /// \brief Build a new OpenMP 'safelen' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPSafelenClause(Expr *Len,
+                                     SourceLocation StartLoc,
+                                     SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPSafelenClause(Len, StartLoc, EndLoc);
+  }
+
+  /// \brief Build a new OpenMP 'simdlen' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPSimdlenClause(Expr *Len,
+                                     SourceLocation StartLoc,
+                                     SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPSimdlenClause(Len, StartLoc, EndLoc);
+  }
+
+  /// \brief Build a new OpenMP 'num_teams' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPNumTeamsClause(Expr *NumTeams,
+                                      SourceLocation StartLoc,
+                                      SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPNumTeamsClause(NumTeams, StartLoc, EndLoc);
+  }
+
+  /// \brief Build a new OpenMP 'thread_limit' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPThreadLimitClause(Expr *ThreadLimit,
+                                         SourceLocation StartLoc,
+                                         SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPThreadLimitClause(ThreadLimit,
+                                                  StartLoc, EndLoc);
+  }
+
+  /// \brief Build a new OpenMP 'linear' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPLinearClause(ArrayRef<Expr *> VarList,
+                                    SourceLocation StartLoc,
+                                    SourceLocation EndLoc,
+                                    Expr *Step,
+                                    SourceLocation StepLoc) {
+    return getSema().ActOnOpenMPLinearClause(VarList, StartLoc, EndLoc,
+                                             Step, StepLoc);
+  }
+
+  /// \brief Build a new OpenMP 'aligned' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPAlignedClause(ArrayRef<Expr *> VarList,
+                                     SourceLocation StartLoc,
+                                     SourceLocation EndLoc,
+                                     Expr *Alignment,
+                                     SourceLocation AlignmentLoc) {
+    return getSema().ActOnOpenMPAlignedClause(VarList, StartLoc, EndLoc,
+                                              Alignment, AlignmentLoc);
   }
 
   /// \brief Rebuild the operand to an Objective-C \@synchronized statement.
@@ -6517,6 +6627,26 @@ TreeTransform<Derived>::TransformOMPForDirective(OMPForDirective *D) {
 
 template<typename Derived>
 StmtResult
+TreeTransform<Derived>::TransformOMPSimdDirective(OMPSimdDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_simd, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformOMPForSimdDirective(OMPForSimdDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_for_simd, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template<typename Derived>
+StmtResult
 TreeTransform<Derived>::TransformOMPSectionsDirective(OMPSectionsDirective *D) {
   DeclarationNameInfo DirName;
   getDerived().getSema().StartOpenMPDSABlock(OMPD_sections, DirName, 0);
@@ -6741,6 +6871,26 @@ TreeTransform<Derived>::TransformOMPScheduleClause(OMPScheduleClause *C) {
 
 template<typename Derived>
 OMPClause *
+TreeTransform<Derived>::TransformOMPDistScheduleClause(
+  OMPDistScheduleClause *C) {
+  // Transform expression.
+  ExprResult E;
+  if (C->getChunkSize()) {
+    E = getDerived().TransformExpr(C->getChunkSize());
+
+    if (E.isInvalid())
+      return 0;
+  }
+
+  return getDerived().RebuildOMPDistScheduleClause(C->getScheduleKind(),
+                                                   C->getScheduleKindLoc(),
+                                                   E.take(),
+                                                   C->getLocStart(),
+                                                   C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
 TreeTransform<Derived>::TransformOMPPrivateClause(OMPPrivateClause *C) {
   llvm::SmallVector<Expr *, 5> Vars;
   Vars.reserve(C->varlist_size());
@@ -6867,6 +7017,7 @@ TreeTransform<Derived>::TransformOMPReductionClause(OMPReductionClause *C) {
                                                 C->getLocStart(),
                                                 C->getLocEnd(),
                                                 C->getOperator(),
+                                                C->getOpName(),
                                                 C->getOperatorLoc());
 }
 
@@ -6926,6 +7077,20 @@ TreeTransform<Derived>::TransformOMPSeqCstClause(OMPSeqCstClause *C) {
 
 template<typename Derived>
 OMPClause *
+TreeTransform<Derived>::TransformOMPInBranchClause(OMPInBranchClause *C) {
+  return getDerived().RebuildOMPInBranchClause(
+                        C->getLocStart(), C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPNotInBranchClause(OMPNotInBranchClause *C) {
+  return getDerived().RebuildOMPNotInBranchClause(
+                        C->getLocStart(), C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
 TreeTransform<Derived>::TransformOMPFlushClause(OMPFlushClause *C) {
   llvm::SmallVector<Expr *, 5> Vars;
   Vars.reserve(C->varlist_size());
@@ -6938,7 +7103,130 @@ TreeTransform<Derived>::TransformOMPFlushClause(OMPFlushClause *C) {
     Vars.push_back(EVar.take());
   }
   return getDerived().RebuildOMPFlushClause(Vars, C->getLocStart(),
-                                            C->getLocEnd());
+                                                  C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPUniformClause(OMPUniformClause *C) {
+  llvm::SmallVector<Expr *, 5> Vars;
+  Vars.reserve(C->varlist_size());
+  for (OMPVarList<OMPUniformClause>::varlist_iterator I = C->varlist_begin(),
+                                                      E = C->varlist_end();
+       I != E; ++I) {
+    ExprResult EVar = getDerived().TransformExpr(cast<Expr>(*I));
+    if (EVar.isInvalid())
+      return 0;
+    Vars.push_back(EVar.take());
+  }
+  return getDerived().RebuildOMPUniformClause(Vars, C->getLocStart(),
+                                                    C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPSafelenClause(OMPSafelenClause *C) {
+  // Transform length expression.
+  ExprResult E = getDerived().TransformExpr(C->getSafelen());
+
+  if (E.isInvalid())
+    return 0;
+
+  return getDerived().RebuildOMPSafelenClause(E.take(),
+                                              C->getLocStart(),
+                                              C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPSimdlenClause(OMPSimdlenClause *C) {
+  // Transform length expression.
+  ExprResult E = getDerived().TransformExpr(C->getSimdlen());
+
+  if (E.isInvalid())
+    return 0;
+
+  return getDerived().RebuildOMPSimdlenClause(E.take(),
+                                              C->getLocStart(),
+                                              C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPNumTeamsClause(OMPNumTeamsClause *C) {
+  // Transform the number-of-teams expession.
+  ExprResult E = getDerived().TransformExpr(C->getNumTeams());
+
+  if (E.isInvalid())
+    return 0;
+
+  return getDerived().RebuildOMPSimdlenClause(E.take(),
+                                              C->getLocStart(),
+                                              C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPThreadLimitClause(OMPThreadLimitClause *C) {
+  // Transform the thread-limit expression.
+  ExprResult E = getDerived().TransformExpr(C->getThreadLimit());
+
+  if (E.isInvalid())
+    return 0;
+
+  return getDerived().RebuildOMPThreadLimitClause(E.take(),
+                                              C->getLocStart(),
+                                              C->getLocEnd());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPLinearClause(OMPLinearClause *C) {
+  // Transform step expression.
+  ExprResult E = getDerived().TransformExpr(C->getStep());
+  if (E.isInvalid())
+    return 0;
+
+  llvm::SmallVector<Expr *, 5> Vars;
+  Vars.reserve(C->varlist_size());
+  for (OMPVarList<OMPLinearClause>::varlist_iterator I = C->varlist_begin(),
+                                                     E = C->varlist_end();
+       I != E; ++I) {
+    ExprResult EVar = getDerived().TransformExpr(cast<Expr>(*I));
+    if (EVar.isInvalid())
+      return 0;
+    Vars.push_back(EVar.take());
+  }
+  return getDerived().RebuildOMPLinearClause(Vars,
+                                             C->getLocStart(),
+                                             C->getLocEnd(),
+                                             E.take(),
+                                             C->getStepLoc());
+}
+
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPAlignedClause(OMPAlignedClause *C) {
+  // Transform alignment expression.
+  ExprResult E = getDerived().TransformExpr(C->getAlignment());
+  if (E.isInvalid())
+    return 0;
+
+  llvm::SmallVector<Expr *, 5> Vars;
+  Vars.reserve(C->varlist_size());
+  for (OMPVarList<OMPAlignedClause>::varlist_iterator I = C->varlist_begin(),
+                                                      E = C->varlist_end();
+       I != E; ++I) {
+    ExprResult EVar = getDerived().TransformExpr(cast<Expr>(*I));
+    if (EVar.isInvalid())
+      return 0;
+    Vars.push_back(EVar.take());
+  }
+  return getDerived().RebuildOMPAlignedClause(Vars,
+                                              C->getLocStart(),
+                                              C->getLocEnd(),
+                                              E.take(),
+                                              C->getAlignmentLoc());
 }
 
 //===----------------------------------------------------------------------===//

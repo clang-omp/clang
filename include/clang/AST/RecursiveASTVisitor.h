@@ -1411,6 +1411,16 @@ DEF_TRAVERSE_DECL(OMPThreadPrivateDecl, {
     }
   })
 
+DEF_TRAVERSE_DECL(OMPDeclareReductionDecl, {
+    for (OMPDeclareReductionDecl::datalist_iterator I = D->datalist_begin(),
+                                                    E = D->datalist_end();
+         I != E; ++I) {
+      TRY_TO(TraverseType(I->QTy));
+      TRY_TO(TraverseStmt(I->CombinerFunction));
+      TRY_TO(TraverseStmt(I->InitFunction));
+    }
+  })
+
 // A helper method for TemplateDecl's children.
 template<typename Derived>
 bool RecursiveASTVisitor<Derived>::TraverseTemplateParameterListHelper(
@@ -2306,6 +2316,14 @@ DEF_TRAVERSE_STMT(OMPParallelDirective, {
 })
 
 DEF_TRAVERSE_STMT(OMPForDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPSimdDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPForSimdDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 

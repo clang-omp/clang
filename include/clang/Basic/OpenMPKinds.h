@@ -24,9 +24,9 @@ enum OpenMPDirectiveKind {
   OMPD_unknown = 0,
 #define OPENMP_DIRECTIVE(Name) \
   OMPD_##Name,
+#define OPENMP_DIRECTIVE_EXT(Name, Str) \
+  OMPD_##Name,
 #include "clang/Basic/OpenMPKinds.def"
-  OMPD_parallel_for,
-  OMPD_parallel_sections,
   NUM_OPENMP_DIRECTIVES
 };
 
@@ -67,7 +67,7 @@ enum OpenMPReductionClauseOperator {
   NUM_OPENMP_REDUCTION_OPERATORS
 };
 
-/// \brief OpenMP attributes for 'schedule' clause.
+/// \brief OpenMP attributes for 'schedule' and 'dist_schedule' clauses.
 enum OpenMPScheduleClauseKind {
   OMPC_SCHEDULE_unknown = 0,
 #define OPENMP_SCHEDULE_KIND(Name) \

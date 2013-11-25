@@ -703,9 +703,14 @@ void OMPClausePrinter::VisitOMPCopyPrivateClause(OMPCopyPrivateClause *Node) {
 
 void OMPClausePrinter::VisitOMPReductionClause(OMPReductionClause *Node) {
   if (!Node->varlist_empty()) {
-    OS << "reduction("
-       << getOpenMPSimpleClauseTypeName(OMPC_reduction, Node->getOperator())
-       << ':';
+    OS << "reduction(";
+    if (Node->getOperator() == OMPC_REDUCTION_custom) {
+      Node->getOpName().printName(OS);
+    } else {
+      OS << getOpenMPSimpleClauseTypeName(OMPC_reduction, Node->getOperator());
+    }
+    OS << ':';
+
     for (OMPVarList<OMPReductionClause>::varlist_iterator
                                              I = Node->varlist_begin(),
                                              E = Node->varlist_end();
@@ -734,6 +739,16 @@ void OMPClausePrinter::VisitOMPLastPrivateClause(OMPLastPrivateClause *Node) {
 void OMPClausePrinter::VisitOMPScheduleClause(OMPScheduleClause *Node) {
   OS << "schedule("
      << getOpenMPSimpleClauseTypeName(OMPC_schedule, Node->getScheduleKind());
+  if (Node->getChunkSize()) {
+    OS << ", ";
+    Printer->PrintExpr(Node->getChunkSize());
+  }
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPDistScheduleClause(OMPDistScheduleClause *Node) {
+  OS << "dist_schedule("
+     << getOpenMPSimpleClauseTypeName(OMPC_dist_schedule, Node->getScheduleKind());
   if (Node->getChunkSize()) {
     OS << ", ";
     Printer->PrintExpr(Node->getChunkSize());
@@ -777,6 +792,14 @@ void OMPClausePrinter::VisitOMPSeqCstClause(OMPSeqCstClause *Node) {
   OS << "seq_cst";
 }
 
+void OMPClausePrinter::VisitOMPInBranchClause(OMPInBranchClause *Node) {
+  OS << "inbranch";
+}
+
+void OMPClausePrinter::VisitOMPNotInBranchClause(OMPNotInBranchClause *Node) {
+  OS << "notinbranch";
+}
+
 void OMPClausePrinter::VisitOMPFlushClause(OMPFlushClause *Node) {
   if (!Node->varlist_empty()) {
     for (OMPVarList<OMPFlushClause>::varlist_iterator
@@ -785,6 +808,80 @@ void OMPClausePrinter::VisitOMPFlushClause(OMPFlushClause *Node) {
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPUniformClause(OMPUniformClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "uniform";
+    for (OMPVarList<OMPUniformClause>::varlist_iterator
+                                             I = Node->varlist_begin(),
+                                             E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPSafelenClause(OMPSafelenClause *Node) {
+  OS << "safelen(";
+  Printer->PrintExpr(Node->getSafelen());
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPSimdlenClause(OMPSimdlenClause *Node) {
+  OS << "simdlen(";
+  Printer->PrintExpr(Node->getSimdlen());
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPNumTeamsClause(OMPNumTeamsClause *Node) {
+  OS << "num_teams(";
+  Printer->PrintExpr(Node->getNumTeams());
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPThreadLimitClause(OMPThreadLimitClause *Node) {
+  OS << "thread_limit(";
+  Printer->PrintExpr(Node->getThreadLimit());
+  OS << ")";
+}
+
+void OMPClausePrinter::VisitOMPLinearClause(OMPLinearClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "linear";
+    for (OMPVarList<OMPLinearClause>::varlist_iterator
+                                             I = Node->varlist_begin(),
+                                             E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    if (Node->getStep() != 0) {
+      OS << ": ";
+      Printer->PrintExpr(Node->getStep());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPAlignedClause(OMPAlignedClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "aligned";
+    for (OMPVarList<OMPAlignedClause>::varlist_iterator
+                                             I = Node->varlist_begin(),
+                                             E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    if (Node->getAlignment() != 0) {
+      OS << ": ";
+      Printer->PrintExpr(Node->getAlignment());
     }
     OS << ")";
   }
@@ -890,6 +987,16 @@ void StmtPrinter::VisitOMPFlushDirective(OMPFlushDirective *Node) {
 
 void StmtPrinter::VisitOMPOrderedDirective(OMPOrderedDirective *Node) {
   Indent() << "#pragma omp ordered";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPSimdDirective(OMPSimdDirective *Node) {
+  Indent() << "#pragma omp simd ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPForSimdDirective(OMPForSimdDirective *Node) {
+  Indent() << "#pragma omp for simd ";
   VisitOMPExecutableDirective(Node);
 }
 

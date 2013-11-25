@@ -7,7 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 /// \file
-/// \brief This file implements OMPThreadPrivateDecl class.
+/// \brief This file implements OMPThreadPrivateDecl, OMPDeclareReduction
+/// classes.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -57,4 +58,62 @@ void OMPThreadPrivateDecl::setVars(ArrayRef<Expr *> VL) {
          "Number of variables is not the same as the preallocated buffer");
   Expr **Vars = reinterpret_cast<Expr **>(this + 1);
   std::copy(VL.begin(), VL.end(), Vars);
+}
+
+//===----------------------------------------------------------------------===//
+// OMPDeclareReductionDecl Implementation.
+//===----------------------------------------------------------------------===//
+
+void OMPDeclareReductionDecl::anchor() { }
+
+unsigned OMPDeclareReductionDecl::getFirstElementOffset() {
+  unsigned Size = sizeof(OMPDeclareReductionDecl);
+  // Realign
+  Size =
+    llvm::RoundUpToAlignment(Size,
+                             llvm::alignOf<OMPDeclareReductionDecl::ReductionData>());
+  return Size;
+}
+
+OMPDeclareReductionDecl *
+OMPDeclareReductionDecl::Create(ASTContext &C, DeclContext *DC,
+                                SourceLocation L,
+                                DeclarationName Name,
+                                unsigned N) {
+  unsigned Size = getFirstElementOffset() +
+                  N * sizeof(OMPDeclareReductionDecl::ReductionData);
+
+  void *Mem = C.Allocate(Size);
+  OMPDeclareReductionDecl *D = new (Mem) OMPDeclareReductionDecl(OMPDeclareReduction,
+                                                                 DC, L,
+                                                                 Name);
+  D->NumTypes = N;
+  return D;
+}
+
+OMPDeclareReductionDecl *OMPDeclareReductionDecl::CreateDeserialized(ASTContext &C,
+                                                                     unsigned ID,
+                                                                     unsigned N) {
+  unsigned Size = getFirstElementOffset() +
+                  N * sizeof(OMPDeclareReductionDecl::ReductionData);
+
+  void *Mem = AllocateDeserializedDecl(C, ID, Size);
+  OMPDeclareReductionDecl *D = new (Mem) OMPDeclareReductionDecl(OMPDeclareReduction,
+                                                                 0, SourceLocation(),
+                                                                 DeclarationName());
+  D->NumTypes = N;
+  return D;
+}
+
+void OMPDeclareReductionDecl::setData(
+                           ArrayRef<OMPDeclareReductionDecl::ReductionData> RD) {
+  assert(RD.size() == NumTypes &&
+         "Number of inits is not the same as the preallocated buffer");
+  unsigned Size = getFirstElementOffset();
+  OMPDeclareReductionDecl::ReductionData *Data =
+    reinterpret_cast<OMPDeclareReductionDecl::ReductionData *>(
+                                               reinterpret_cast<char *>(this) + Size);
+  for (unsigned i = 0; i < NumTypes; ++i)
+    Data[i] = RD[i];
+  //std::copy(RD.begin(), RD.end(), Data);
 }

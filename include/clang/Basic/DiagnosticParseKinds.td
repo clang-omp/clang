@@ -844,6 +844,8 @@ def err_omp_unknown_reduction_op : Error <
   "expected reduction identifier">;
 def err_omp_immediate_directive : Error <
   "'#pragma omp %0' cannot be immediate substatement">;
+def err_omp_expected_reduction_identifier : Error <
+  "expected identifier or one of the following operators: '+', '-', '*', '&', '|', '^', '&&' and '||'">;
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {

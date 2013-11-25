@@ -157,7 +157,9 @@ public:
     /// This declaration is a C++ operator declared in a non-class
     /// context.  All such operators are also in IDNS_Ordinary.
     /// C++ lexical operator lookup looks for these.
-    IDNS_NonMemberOperator   = 0x0400
+    IDNS_NonMemberOperator   = 0x0400,
+    /// For OpenMP declare reduction constructs.
+    IDNS_OMPDeclareReduction = 0x0800
   };
 
   /// ObjCDeclQualifier - 'Qualifiers' written next to the return and

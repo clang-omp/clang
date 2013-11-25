@@ -15,7 +15,8 @@
 #ifndef LLVM_CLANG_AST_OPENMP_H
 #define LLVM_CLANG_AST_OPENMP_H
 
-#include "clang/AST/DeclBase.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/OpenMPClause.h"
 #include "llvm/ADT/ArrayRef.h"
 
 namespace clang {
@@ -76,6 +77,82 @@ public:
   static bool classofKind(Kind K) { return K == OMPThreadPrivate; }
 };
 
+/// \brief This represents '#pragma omp declare reduction ...' directive.
+/// For example, in the following, declared reduction 'foo':
+///
+/// \code
+/// #pragma omp declare reduction (foo : int,float : omp_out += omp_in) initializer (omp_priv = 0)
+/// \endcode
+///
+class OMPDeclareReductionDecl : public NamedDecl, public DeclContext {
+public:
+  struct ReductionData {
+    ReductionData(QualType QTy, SourceRange TyRange, Expr *Combiner, Expr *Init)
+      : QTy(QTy), TyRange(TyRange), CombinerFunction(Combiner), InitFunction(Init) { }
+    QualType QTy;
+    SourceRange TyRange;
+    Expr *CombinerFunction;
+    Expr *InitFunction;
+  };
+private:
+  friend class ASTDeclReader;
+  unsigned NumTypes;
+
+  virtual void anchor();
+
+  OMPDeclareReductionDecl(Kind DK, DeclContext *DC, SourceLocation L,
+                          DeclarationName Name) :
+    NamedDecl(DK, DC, L, Name), DeclContext(DK), NumTypes(0) {
+      setModulePrivate();
+    }
+
+  static unsigned getFirstElementOffset();
+
+  ArrayRef<ReductionData> getData() const {
+    return ArrayRef<ReductionData>(
+                   reinterpret_cast<const ReductionData *>(
+                                reinterpret_cast<const char *>(this) +
+                                getFirstElementOffset()),
+                   NumTypes);
+  }
+
+  llvm::MutableArrayRef<ReductionData> getData() {
+    return llvm::MutableArrayRef<ReductionData>(
+                   reinterpret_cast<ReductionData *>(
+                                reinterpret_cast<char *>(this) +
+                                getFirstElementOffset()),
+                   NumTypes);
+  }
+
+public:
+  static OMPDeclareReductionDecl *Create(ASTContext &C, DeclContext *DC,
+                                         SourceLocation L,
+                                         DeclarationName Name,
+                                         unsigned N);
+  static OMPDeclareReductionDecl *CreateDeserialized(ASTContext &C,
+                                                     unsigned ID, unsigned N);
+
+  void setData(ArrayRef<ReductionData> RD);
+
+  typedef llvm::MutableArrayRef<ReductionData>::iterator datalist_iterator;
+  typedef ArrayRef<ReductionData>::iterator datalist_const_iterator;
+
+  unsigned datalist_size() const { return NumTypes; }
+  bool datalist_empty() const { return NumTypes == 0; }
+  datalist_iterator datalist_begin() { return getData().begin(); }
+  datalist_iterator datalist_end() { return getData().end(); }
+  datalist_const_iterator datalist_begin() const { return getData().begin(); }
+  datalist_const_iterator datalist_end() const { return getData().end(); }
+
+  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
+  static bool classofKind(Kind K) { return K == OMPDeclareReduction; }
+  static DeclContext *castToDeclContext(const OMPDeclareReductionDecl *D) {
+    return static_cast<DeclContext *>(const_cast<OMPDeclareReductionDecl*>(D));
+  }
+  static OMPDeclareReductionDecl *castFromDeclContext(const DeclContext *DC) {
+    return static_cast<OMPDeclareReductionDecl *>(const_cast<DeclContext*>(DC));
+  }
+};
 }  // end namespace clang
 
 #endif

@@ -1052,6 +1052,8 @@ namespace clang {
       DECL_IMPORT,
       /// \brief An OMPThreadPrivateDecl record.
       DECL_OMP_THREADPRIVATE,
+      /// \brief An OMPDeclareReductionDecl record.
+      DECL_OMP_DECLAREREDUCTION,
       /// \brief An EmptyDecl record.
       DECL_EMPTY
     };
@@ -1314,9 +1316,11 @@ namespace clang {
       STMT_SEH_FINALLY,           // SEHFinallyStmt
       STMT_SEH_TRY,               // SEHTryStmt
 
-      // OpenMP drectives
+      // OpenMP directives
       STMT_OMP_PARALLEL_DIRECTIVE,
       STMT_OMP_FOR_DIRECTIVE,
+      STMT_OMP_SIMD_DIRECTIVE,
+      STMT_OMP_FOR_SIMD_DIRECTIVE,
       STMT_OMP_SECTIONS_DIRECTIVE,
       STMT_OMP_SECTION_DIRECTIVE,
       STMT_OMP_SINGLE_DIRECTIVE,

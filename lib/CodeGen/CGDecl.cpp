@@ -91,6 +91,9 @@ void CodeGenFunction::EmitDecl(const Decl &D) {
   case Decl::OMPThreadPrivate:
     CGM.EmitOMPThreadPrivate(cast<OMPThreadPrivateDecl>(&D));
     break;
+  case Decl::OMPDeclareReduction:
+    CGM.EmitOMPDeclareReduction(cast<OMPDeclareReductionDecl>(&D));
+    break;
   case Decl::UsingDirective: // using namespace X; [C++]
     if (CGDebugInfo *DI = getDebugInfo())
       DI->EmitUsingDirective(cast<UsingDirectiveDecl>(D));

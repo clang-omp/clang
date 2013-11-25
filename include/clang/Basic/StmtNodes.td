@@ -179,6 +179,8 @@ def AsTypeExpr : DStmt<Expr>;
 def OMPExecutableDirective : Stmt<1>;
 def OMPParallelDirective : DStmt<OMPExecutableDirective>;
 def OMPForDirective : DStmt<OMPExecutableDirective>;
+def OMPSimdDirective : DStmt<OMPExecutableDirective>;
+def OMPForSimdDirective : DStmt<OMPExecutableDirective>;
 def OMPSectionsDirective : DStmt<OMPExecutableDirective>;
 def OMPSectionDirective : DStmt<OMPExecutableDirective>;
 def OMPSingleDirective : DStmt<OMPExecutableDirective>;

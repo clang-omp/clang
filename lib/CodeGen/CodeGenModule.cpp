@@ -2952,6 +2952,9 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
   case Decl::OMPThreadPrivate:
     EmitOMPThreadPrivate(cast<OMPThreadPrivateDecl>(D));
     break;
+  case Decl::OMPDeclareReduction:
+    EmitOMPDeclareReduction(cast<OMPDeclareReductionDecl>(D));
+    break;
 
   default:
     // Make sure we handled everything we should, every other kind is a

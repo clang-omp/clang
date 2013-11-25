@@ -289,6 +289,16 @@ StmtProfiler::VisitOMPForDirective(const OMPForDirective *S) {
 }
 
 void
+StmtProfiler::VisitOMPSimdDirective(const OMPSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void
+StmtProfiler::VisitOMPForSimdDirective(const OMPForSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void
 StmtProfiler::VisitOMPSectionsDirective(const OMPSectionsDirective *S) {
   VisitOMPExecutableDirective(S);
 }

@@ -1511,12 +1511,44 @@ Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty, ExprValueKind VK,
   return BuildDeclRefExpr(D, Ty, VK, NameInfo, SS);
 }
 
+static bool CheckOMPDeclareReductionVar(Sema &S, ValueDecl *D,
+                                        SourceLocation Loc) {
+  if (S.CurrentInstantiationScope) return true;
+  if (!D || !isa<VarDecl>(D)) return true;
+  if (!S.getCurScope() || !S.getCurScope()->getEntity()) return true;
+  if (S.getCurScope()->getEntity() != S.CurContext) return true;
+  DeclContext *Parent =
+    static_cast<DeclContext *>(S.getCurScope()->getEntity());
+  if (FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(Parent)) {
+    Parent = FD->getDeclContext();
+    if (OMPDeclareReductionDecl *OMPDR =
+          dyn_cast_or_null<OMPDeclareReductionDecl>(Parent)) {
+      if (D->getDeclContext() != FD) {
+        S.Diag(Loc,
+               (FD->getDeclName() == OMPDR->getDeclName()) ?
+                                       diag::err_omp_wrong_var_in_combiner :
+                                       diag::err_omp_wrong_var_in_initializer)
+          << cast<NamedDecl>(D);
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 /// BuildDeclRefExpr - Build an expression that references a
 /// declaration that does not require a closure capture.
 ExprResult
 Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty, ExprValueKind VK,
                        const DeclarationNameInfo &NameInfo,
                        const CXXScopeSpec *SS, NamedDecl *FoundD) {
+  // Check that only 'omp_in' and 'omp_out' can be used in
+  // 'omp declare reduction' combiner.
+  // Check that only 'omp_priv' and 'omp_orig' can be used in
+  // 'omp declare reduction' initializer.
+  if (!CheckOMPDeclareReductionVar(*this, D, NameInfo.getLoc()))
+    return ExprError();
+
   if (getLangOpts().CUDA)
     if (const FunctionDecl *Caller = dyn_cast<FunctionDecl>(CurContext))
       if (const FunctionDecl *Callee = dyn_cast<FunctionDecl>(D)) {
@@ -2681,6 +2713,42 @@ Sema::BuildDeclarationNameExpr(const CXXScopeSpec &SS,
   }
 }
 
+ExprResult Sema::BuildPredefinedExpr(SourceLocation Loc,
+                                     PredefinedExpr::IdentType IT) {
+  // Pick the current block, lambda or function.
+  Decl *currentDecl;
+  if (const BlockScopeInfo *BSI = getCurBlock())
+    currentDecl = BSI->TheDecl;
+  else if (const LambdaScopeInfo *LSI = getCurLambda())
+    currentDecl = LSI->CallOperator;
+  else if (const CapturedRegionScopeInfo *CSI = getCurCapturedRegion())
+    currentDecl = CSI->TheCapturedDecl;
+  else
+    currentDecl = getCurFunctionOrMethodDecl();
+
+  if (!currentDecl) {
+    Diag(Loc, diag::ext_predef_outside_function);
+    currentDecl = Context.getTranslationUnitDecl();
+  }
+
+  QualType ResTy;
+  if (cast<DeclContext>(currentDecl)->isDependentContext()) {
+    ResTy = Context.DependentTy;
+  } else {
+    // Pre-defined identifiers are of type char[x], where x is the length of
+    // the string.
+    unsigned Length = PredefinedExpr::ComputeName(IT, currentDecl).length();
+
+    llvm::APInt LengthI(32, Length + 1);
+    if (IT == PredefinedExpr::LFunction)
+      ResTy = Context.WCharTy.withConst();
+    else
+      ResTy = Context.CharTy.withConst();
+    ResTy = Context.getConstantArrayType(ResTy, LengthI, ArrayType::Normal, 0);
+  }
+  return Owned(new (Context) PredefinedExpr(Loc, ResTy, IT));
+}
+
 ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
   PredefinedExpr::IdentType IT;
 
@@ -2692,37 +2760,7 @@ ExprResult Sema::ActOnPredefinedExpr(SourceLocation Loc, tok::TokenKind Kind) {
   case tok::kw___PRETTY_FUNCTION__: IT = PredefinedExpr::PrettyFunction; break;
   }
 
-  // Pre-defined identifiers are of type char[x], where x is the length of the
-  // string.
-
-  Decl *currentDecl = getCurFunctionOrMethodDecl();
-  // Blocks and lambdas can occur at global scope. Don't emit a warning.
-  if (!currentDecl) {
-    if (const BlockScopeInfo *BSI = getCurBlock())
-      currentDecl = BSI->TheDecl;
-    else if (const LambdaScopeInfo *LSI = getCurLambda())
-      currentDecl = LSI->CallOperator;
-  }
-
-  if (!currentDecl) {
-    Diag(Loc, diag::ext_predef_outside_function);
-    currentDecl = Context.getTranslationUnitDecl();
-  }
-
-  QualType ResTy;
-  if (cast<DeclContext>(currentDecl)->isDependentContext()) {
-    ResTy = Context.DependentTy;
-  } else {
-    unsigned Length = PredefinedExpr::ComputeName(IT, currentDecl).length();
-
-    llvm::APInt LengthI(32, Length + 1);
-    if (IT == PredefinedExpr::LFunction)
-      ResTy = Context.WCharTy.withConst();
-    else
-      ResTy = Context.CharTy.withConst();
-    ResTy = Context.getConstantArrayType(ResTy, LengthI, ArrayType::Normal, 0);
-  }
-  return Owned(new (Context) PredefinedExpr(Loc, ResTy, IT));
+  return BuildPredefinedExpr(Loc, IT);
 }
 
 ExprResult Sema::ActOnCharacterConstant(const Token &Tok, Scope *UDLScope) {

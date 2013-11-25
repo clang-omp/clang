@@ -16,6 +16,7 @@
 
 #include "CGBuilder.h"
 #include "CGDebugInfo.h"
+#include "CGLoopInfo.h"
 #include "CGValue.h"
 #include "CodeGenModule.h"
 #include "clang/AST/CharUnits.h"
@@ -578,6 +579,7 @@ public:
   const TargetInfo &Target;
 
   typedef std::pair<llvm::Value *, llvm::Value *> ComplexPairTy;
+  LoopInfoStack LoopStack;
   CGBuilderTy Builder;
 
   /// CurFuncDecl - Holds the Decl for the current outermost
@@ -678,6 +680,136 @@ public:
   };
   CGCapturedStmtInfo *CapturedStmtInfo;
 
+  class CGSIMDForStmtInfo; // Defined below, after simd wrappers.
+
+  /// \brief Wrapper for "#pragma simd" and "#pragma omp simd".
+  class CGPragmaSimdWrapper {
+    public:
+      // \brief Helper for EmitPragmaSimd - process 'safelen' clause.
+      virtual bool emitSafelen(CodeGenFunction *CGF) const = 0;
+
+      // \brief Emit updates of local variables from clauses
+      // and loop counters in the beginning of __simd_helper.
+      virtual bool walkLocalVariablesToEmit(
+                      CodeGenFunction *CGF,
+                      CGSIMDForStmtInfo *Info) const = 0;
+
+      /// \brief Emit the SIMD loop initalization, loop stride expression
+      /// as loop invariants, and cache those values.
+      virtual void emitInit(CodeGenFunction &CGF,
+          llvm::Value *&LoopIndex, llvm::Value *&LoopCount) = 0;
+
+      /// \brief Emit the loop increment.
+      virtual void emitIncrement(CodeGenFunction &CGF,
+                                 llvm::Value *IndexVar) const = 0;
+
+      // \brief Emit final values of loop counters and linear vars.
+      virtual void emitLinearFinal(CodeGenFunction &CGF) const = 0;
+
+      /// \brief Get the beginning location of for stmt.
+      virtual SourceLocation getForLoc() const = 0;
+
+      /// \brief Get the source range.
+      virtual SourceRange getSourceRange() const = 0;
+
+      /// \brief Retrieve the initialization expression.
+      virtual const Stmt *getInit() const = 0;
+
+      /// \brief Retrieve the loop condition expression.
+      virtual const Expr *getCond() const = 0;
+
+      /// \brief Retrieve the loop body.
+      virtual const CapturedStmt *getAssociatedStmt() const = 0;
+
+      /// \brief Retrieve the loop count expression.
+      virtual const Expr *getLoopCount() const = 0;
+
+      /// \brief Extract the loop body from the collapsed loop nest.
+      /// Useful for openmp (it is noop for SIMDForStmt).
+      virtual Stmt *extractLoopBody(Stmt *S) const = 0;
+
+      /// \brief Return true if it is openmp pragma.
+      virtual bool isOmp() const = 0;
+
+      /// \brief Get the wrapped SIMDForStmt or OMPSimdDirective.
+      virtual const Stmt *getStmt() const = 0;
+
+      virtual ~CGPragmaSimdWrapper() { };
+  };
+
+
+  class CGPragmaOmpSimd : public CGPragmaSimdWrapper {
+    public:
+      CGPragmaOmpSimd(const OMPExecutableDirective *S)
+        : SimdOmp(S) {}
+
+      virtual bool emitSafelen(CodeGenFunction *CGF) const LLVM_OVERRIDE;
+      virtual bool walkLocalVariablesToEmit(
+                      CodeGenFunction *CGF,
+                      CGSIMDForStmtInfo *Info) const LLVM_OVERRIDE;
+
+      virtual void emitInit(CodeGenFunction &CGF,
+          llvm::Value *&LoopIndex, llvm::Value *&LoopCount) LLVM_OVERRIDE;
+
+      virtual void emitIncrement(CodeGenFunction &CGF,
+                                 llvm::Value *IndexVar) const LLVM_OVERRIDE { }
+
+      virtual void emitLinearFinal(CodeGenFunction &CGF) const LLVM_OVERRIDE;
+
+      virtual SourceLocation getForLoc() const LLVM_OVERRIDE;
+      virtual SourceRange getSourceRange() const LLVM_OVERRIDE;
+      virtual const Stmt *getInit() const LLVM_OVERRIDE;
+      virtual const Expr *getCond() const LLVM_OVERRIDE;
+      virtual const CapturedStmt *getAssociatedStmt() const LLVM_OVERRIDE;
+      virtual const Expr *getLoopCount() const LLVM_OVERRIDE;
+      virtual Stmt *extractLoopBody(Stmt *S) const LLVM_OVERRIDE;
+      virtual bool isOmp() const LLVM_OVERRIDE { return true; }
+      virtual const Stmt *getStmt() const LLVM_OVERRIDE { return SimdOmp; }
+      virtual ~CGPragmaOmpSimd() LLVM_OVERRIDE { }
+
+    private:
+      const OMPExecutableDirective *SimdOmp;
+  };
+
+  /// \brief API for SIMD for statement code generation.
+  /// This class is intended to provide an interface to CG to work in the
+  /// same manner with "#pragma simd" and "#pragma omp simd", using wrapper
+  /// (CGPragmaSimdWrapper) for addressing any differences between them.
+  class CGSIMDForStmtInfo : public CGCapturedStmtInfo {
+  public:
+    CGSIMDForStmtInfo(const CGPragmaSimdWrapper &Wr, llvm::MDNode *LoopID)
+      : CGCapturedStmtInfo(*(Wr.getAssociatedStmt()), CR_SIMDFor),
+        Wrapper(Wr), LoopID(LoopID) { }
+
+    virtual StringRef getHelperName() const { return "__simd_for_helper"; }
+
+    virtual void EmitBody(CodeGenFunction &CGF, Stmt *S) {
+      CGF.EmitSIMDForHelperBody(Wrapper.extractLoopBody(S));
+    }
+
+    llvm::MDNode *getLoopID() const { return LoopID; }
+
+
+    bool isOmp() const { return Wrapper.isOmp(); }
+    const Stmt *getStmt() const { return Wrapper.getStmt(); }
+
+    // \brief Emit updates of local variables from clauses
+    // and loop counters in the beginning of __simd_helper.
+    bool walkLocalVariablesToEmit(CodeGenFunction *CGF) {
+      return Wrapper.walkLocalVariablesToEmit(CGF, this);
+    }
+
+    static bool classof(const CGSIMDForStmtInfo *) { return true; }
+    static bool classof(const CGCapturedStmtInfo *I) {
+      return I->getKind() == CR_SIMDFor;
+    }
+  private:
+    /// \brief Wrapper around SIMDForStmt/OMPSimdDirective.
+    const CGPragmaSimdWrapper &Wrapper;
+    /// \brief The loop id metadata.
+    llvm::MDNode *LoopID;
+
+  };
   /// BoundsChecking - Emit run-time bounds checks. Higher values mean
   /// potentially higher performance penalties.
   unsigned char BoundsChecking;
@@ -1351,6 +1483,9 @@ private:
   /// The current lexical scope.
   LexicalScope *CurLexicalScope;
 
+  /// ExceptionsDisabled - Whether exceptions are currently disabled.
+  bool ExceptionsDisabled;
+
   /// ByrefValueInfoMap - For each __block variable, contains a pair of the LLVM
   /// type as well as the field number that contains the actual data.
   llvm::DenseMap<const ValueDecl *, std::pair<llvm::Type *,
@@ -1370,7 +1505,7 @@ private:
   ///   "work_group_size_hint", and three 32-bit integers X, Y and Z.
   /// - A node for the reqd_work_group_size(X,Y,Z) qualifier contains string 
   ///   "reqd_work_group_size", and three 32-bit integers X, Y and Z.
-  void EmitOpenCLKernelMetadata(const FunctionDecl *FD, 
+  void EmitOpenCLKernelMetadata(const FunctionDecl *FD,
                                 llvm::Function *Fn);
 
 public:
@@ -1425,6 +1560,9 @@ public:
     if (!EHStack.requiresLandingPad()) return 0;
     return getInvokeDestImpl();
   }
+
+  void disableExceptions() { ExceptionsDisabled = true; }
+  void enableExceptions() { ExceptionsDisabled = false; }
 
   const TargetInfo &getTarget() const { return Target; }
   llvm::LLVMContext &getLLVMContext() { return CGM.getLLVMContext(); }
@@ -2275,9 +2413,20 @@ public:
   void EmitCXXTryStmt(const CXXTryStmt &S);
   void EmitCXXForRangeStmt(const CXXForRangeStmt &S);
 
+  LValue InitCapturedStruct(const CapturedStmt &S);
   llvm::Function *EmitCapturedStmt(const CapturedStmt &S, CapturedRegionKind K);
   llvm::Function *GenerateCapturedStmtFunction(const CapturedDecl *CD,
                                                const RecordDecl *RD);
+
+  void EmitPragmaSimd(CGPragmaSimdWrapper &W);
+  llvm::Function *EmitSimdFunction(CGPragmaSimdWrapper &W);
+
+  void EmitSIMDForHelperCall(llvm::Function *BodyFunc,
+                             LValue CapStruct, llvm::Value *LoopIndex,
+                             bool IsLastIter);
+  void EmitSIMDForHelperBody(const Stmt *S);
+
+
   llvm::Value *GenerateCapturedStmtArgument(const CapturedStmt &S);
   void EmitCapturedStmtInlined(const CapturedStmt &S, CapturedRegionKind K,
                                llvm::Value *Arg);
@@ -2287,6 +2436,8 @@ public:
 public:
   void EmitOMPParallelDirective(const OMPParallelDirective &S);
   void EmitOMPForDirective(const OMPForDirective &S);
+  void EmitOMPSimdDirective(const OMPSimdDirective &S);
+  void EmitOMPForSimdDirective(const OMPForSimdDirective &S);
   void EmitOMPTaskDirective(const OMPTaskDirective &S);
   void EmitOMPSectionsDirective(const OMPSectionsDirective &S);
   void EmitOMPSectionDirective(const OMPSectionDirective &S);
@@ -2371,6 +2522,9 @@ public:
     ArrayRef<const Expr *>::iterator VarIter2,
     llvm::Value *Dst,
     llvm::Value *Src);
+  void EmitOMPDirectiveWithLoop(
+    OpenMPDirectiveKind DKind,
+    const OMPExecutableDirective &S);
 
   //===--------------------------------------------------------------------===//
   //                         LValue Expression Emission

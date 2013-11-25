@@ -24,9 +24,9 @@ OpenMPDirectiveKind clang::getOpenMPDirectiveKind(StringRef Str) {
   return llvm::StringSwitch<OpenMPDirectiveKind>(Str)
 #define OPENMP_DIRECTIVE(Name) \
            .Case(#Name, OMPD_##Name)
+#define OPENMP_DIRECTIVE_EXT(Name, Str) \
+           .Case(Str, OMPD_##Name)
 #include "clang/Basic/OpenMPKinds.def"
-           .Case("parallel for", OMPD_parallel_for)
-           .Case("parallel sections", OMPD_parallel_sections)
            .Default(OMPD_unknown);
 }
 
@@ -37,11 +37,9 @@ const char *clang::getOpenMPDirectiveName(OpenMPDirectiveKind Kind) {
     return "unknown";
 #define OPENMP_DIRECTIVE(Name) \
   case OMPD_##Name : return #Name;
+#define OPENMP_DIRECTIVE_EXT(Name, Str) \
+  case OMPD_##Name : return Str;
 #include "clang/Basic/OpenMPKinds.def"
-  case OMPD_parallel_for:
-    return "parallel for";
-  case OMPD_parallel_sections:
-    return "parallel sections";
   default:
     break;
   }
@@ -142,6 +140,7 @@ const char *clang::getOpenMPSimpleClauseTypeName(OpenMPClauseKind Kind,
     }
     llvm_unreachable("Invalid OpenMP 'reduction' clause operator");
   case OMPC_schedule:
+  case OMPC_dist_schedule:
     switch (Type) {
     case OMPC_SCHEDULE_unknown:
       return "unknown";
@@ -181,6 +180,25 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
       break;
     }
     break;
+  case OMPD_simd:
+    switch (CKind) {
+#define OPENMP_SIMD_CLAUSE(Name) \
+    case OMPC_##Name: return true;
+#include "clang/Basic/OpenMPKinds.def"
+    default:
+      break;
+    }
+    break;
+  case OMPD_for_simd:
+    switch (CKind) {
+#define OPENMP_FOR_SIMD_CLAUSE(Name) \
+    case OMPC_##Name: return true;
+#include "clang/Basic/OpenMPKinds.def"
+    default:
+      break;
+    }
+    break;
+
   case OMPD_sections:
     switch (CKind) {
 #define OPENMP_SECTIONS_CLAUSE(Name) \

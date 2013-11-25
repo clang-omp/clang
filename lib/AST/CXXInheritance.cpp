@@ -445,6 +445,24 @@ FindNestedNameSpecifierMember(const CXXBaseSpecifier *Specifier,
   return false;
 }
 
+bool CXXRecordDecl::FindOMPDeclareReductionMember(const CXXBaseSpecifier *Specifier, 
+                                                  CXXBasePath &Path,
+                                                  void *Name) {
+  RecordDecl *BaseRecord =
+    Specifier->getType()->castAs<RecordType>()->getDecl();
+  
+  const unsigned IDNS = IDNS_OMPDeclareReduction;
+  DeclarationName N = DeclarationName::getFromOpaquePtr(Name);
+  for (Path.Decls = BaseRecord->lookup(N);
+       !Path.Decls.empty();
+       Path.Decls = Path.Decls.slice(1)) {
+    if (Path.Decls.front()->isInIdentifierNamespace(IDNS))
+      return true;
+  }
+  
+  return false;
+}
+
 void OverridingMethods::add(unsigned OverriddenSubobject, 
                             UniqueVirtualMethod Overriding) {
   SmallVector<UniqueVirtualMethod, 4> &SubobjectOverrides

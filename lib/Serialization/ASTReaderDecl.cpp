@@ -292,6 +292,7 @@ namespace clang {
     void VisitObjCPropertyDecl(ObjCPropertyDecl *D);
     void VisitObjCPropertyImplDecl(ObjCPropertyImplDecl *D);
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
+    void VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D);
   };
 }
 
@@ -1652,6 +1653,22 @@ void ASTDeclReader::VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D) {
   D->setVars(Vars);
 }
 
+void ASTDeclReader::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
+  VisitDecl(D);
+  D->setDeclName(Reader.ReadDeclarationName(F, Record, Idx));
+  unsigned NumTypes = D->datalist_size();
+  SmallVector<OMPDeclareReductionDecl::ReductionData, 16> Data;
+  Data.reserve(NumTypes);
+  for (unsigned i = 0; i != NumTypes; ++i) {
+    QualType QTy = Reader.readType(F, Record, Idx);
+    SourceRange SR = Reader.ReadSourceRange(F, Record, Idx);
+    Expr *E1 = Reader.ReadExpr(F);
+    Expr *E2 = Reader.ReadExpr(F);
+    Data.push_back(OMPDeclareReductionDecl::ReductionData(QTy, SR, E1, E2));
+  }
+  D->setData(Data);
+}
+
 //===----------------------------------------------------------------------===//
 // Attribute Reading
 //===----------------------------------------------------------------------===//
@@ -2168,6 +2185,9 @@ Decl *ASTReader::ReadDeclRecord(DeclID ID) {
     break;
   case DECL_OMP_THREADPRIVATE:
     D = OMPThreadPrivateDecl::CreateDeserialized(Context, ID, Record[Idx++]);
+    break;
+  case DECL_OMP_DECLAREREDUCTION:
+    D = OMPDeclareReductionDecl::CreateDeserialized(Context, ID, Record[Idx++]);
     break;
   case DECL_EMPTY:
     D = EmptyDecl::CreateDeserialized(Context, ID);

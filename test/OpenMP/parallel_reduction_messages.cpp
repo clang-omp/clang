@@ -15,7 +15,7 @@ class S2 {
 public:
   S2():a(0) { }
   S2(S2 &s2):a(s2.a) { }
-  static float S2s; // expected-note {{'S2s' declared here}} expected-note {{predetermined as shared}}
+  static float S2s; // expected-note {{predetermined as shared}}
   static const float S2sc;
 };
 const float S2::S2sc = 0; // expected-note {{'S2sc' defined here}}
@@ -70,6 +70,7 @@ int main(int argc, char **argv) {
   S3 &p = k;
   const int &r = da[i]; // expected-note {{'r' defined here}}
   int &q = qa[i]; // expected-note {{'q' defined here}}
+  float fl; // expected-note {{'fl' defined here}}
   #pragma omp parallel reduction // expected-error {{expected '(' after 'reduction'}} expected-error {{expected reduction identifier}}
   #pragma omp parallel reduction + // expected-error {{expected '(' after 'reduction'}} expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}}
   #pragma omp parallel reduction ( // expected-error {{expected reduction identifier}} expected-error {{expected ')'}} expected-note {{to match this '('}}
@@ -88,7 +89,7 @@ int main(int argc, char **argv) {
   #pragma omp parallel reduction(+ : ba) // expected-error {{arguments of OpenMP clause 'reduction' cannot be of array type}}
   #pragma omp parallel reduction(* : ca) // expected-error {{arguments of OpenMP clause 'reduction' cannot be of array type}}
   #pragma omp parallel reduction(- : da) // expected-error {{arguments of OpenMP clause 'reduction' cannot be of array type}}
-  #pragma omp parallel reduction(^ : S2::S2s) // expected-error {{arguments of OpenMP clause 'reduction' with bitwise operators cannot be of floating type}}
+  #pragma omp parallel reduction(^ : fl) // expected-error {{arguments of OpenMP clause 'reduction' with bitwise operators cannot be of floating type}}
   #pragma omp parallel reduction(&& : S2::S2s) // expected-error {{shared variable cannot be reduction}}
   #pragma omp parallel reduction(&& : S2::S2sc) // expected-error {{const-qualified variable cannot be reduction}}
   #pragma omp parallel reduction(& : e, g) // expected-error {{reduction variable must have an accessible, unambiguous default constructor}} expected-error {{no viable overloaded '&='}}

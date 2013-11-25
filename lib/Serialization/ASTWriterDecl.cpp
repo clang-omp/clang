@@ -126,6 +126,7 @@ namespace clang {
     void VisitObjCPropertyDecl(ObjCPropertyDecl *D);
     void VisitObjCPropertyImplDecl(ObjCPropertyImplDecl *D);
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
+    void VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D);
   };
 }
 
@@ -1340,6 +1341,21 @@ void ASTDeclWriter::VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D) {
        I != E; ++I)
     Writer.AddStmt(*I);
   Code = serialization::DECL_OMP_THREADPRIVATE;
+}
+
+void ASTDeclWriter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
+  Record.push_back(D->datalist_size());
+  VisitDecl(D);
+  Writer.AddDeclarationName(D->getDeclName(), Record);
+  for (OMPDeclareReductionDecl::datalist_iterator I = D->datalist_begin(),
+                                                  E = D->datalist_end();
+       I != E; ++I) {
+    Writer.AddTypeRef(I->QTy, Record);
+    Writer.AddSourceRange(I->TyRange, Record);
+    Writer.AddStmt(I->CombinerFunction);
+    Writer.AddStmt(I->InitFunction);
+  }
+  Code = serialization::DECL_OMP_DECLAREREDUCTION;
 }
 
 //===----------------------------------------------------------------------===//

@@ -275,7 +275,95 @@ typedef llvm::TypeBuilder<kmp_task_t, false> TaskTBuilder;
 typedef llvm::TypeBuilder<kmp_proc_bind_t, false> ProcBindTBuilder;
 }
 
+namespace {
+// Getters for fields of the loop-like directives. We may want to add a
+// common parent to all the loop-like directives to get rid of these.
+//
+const Expr *getInitFromLoopDirective(const OMPExecutableDirective *ED) {
+  if (const OMPForDirective *D = dyn_cast<OMPForDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPSimdDirective *D = dyn_cast<OMPSimdDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPForSimdDirective *D = dyn_cast<OMPForSimdDirective>(ED)) {
+    return D->getInit();
+  }
+  assert(0 && "bad loop directive");
+  return 0;
+}
 
+const Expr *getFinalFromLoopDirective(const OMPExecutableDirective *ED) {
+  if (const OMPForDirective *D = dyn_cast<OMPForDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPSimdDirective *D = dyn_cast<OMPSimdDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPForSimdDirective *D = dyn_cast<OMPForSimdDirective>(ED)) {
+    return D->getFinal();
+  }
+  assert(0 && "bad loop directive");
+  return 0;
+}
+
+const Expr *getNewIterVarFromLoopDirective(const OMPExecutableDirective *ED) {
+  if (const OMPForDirective *D = dyn_cast<OMPForDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPSimdDirective *D = dyn_cast<OMPSimdDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPForSimdDirective *D = dyn_cast<OMPForSimdDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  assert(0 && "bad loop directive");
+  return 0;
+}
+
+const Expr *getNewIterEndFromLoopDirective(const OMPExecutableDirective *ED) {
+  if (const OMPForDirective *D = dyn_cast<OMPForDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPSimdDirective *D = dyn_cast<OMPSimdDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPForSimdDirective *D = dyn_cast<OMPForSimdDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  assert(0 && "bad loop directive");
+  return 0;
+}
+
+const ArrayRef<Expr *> getCountersFromLoopDirective(const OMPExecutableDirective *ED) {
+  if (const OMPForDirective *D = dyn_cast<OMPForDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPSimdDirective *D = dyn_cast<OMPSimdDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPForSimdDirective *D = dyn_cast<OMPForSimdDirective>(ED)) {
+    return D->getCounters();
+  }
+  assert(0 && "bad loop directive");
+  return 0;
+}
+
+unsigned getCollapsedNumberFromLoopDirective(const OMPExecutableDirective *ED) {
+  if (const OMPForDirective *D = dyn_cast<OMPForDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPSimdDirective *D = dyn_cast<OMPSimdDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPForSimdDirective *D = dyn_cast<OMPForSimdDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  assert(0 && "bad loop directive");
+  return 0;
+}
+
+}
 
 #define OPENMPRTL_FUNC(name) Get__kmpc_##name(&CGM)
 #define OPENMPRTL_ATOMIC_FUNC(QTy, Op) getAtomicFunc(*this, QTy, Op)
@@ -446,8 +534,8 @@ static llvm::Value *getAtomicFuncGeneral(CodeGenFunction &CGF,
 }
 
 static llvm::Value *getAtomicFunc(CodeGenFunction &CGF,
-                                     QualType QTy,
-                                     OpenMPReductionClauseOperator Op) {
+                                  QualType QTy,
+                                  OpenMPReductionClauseOperator Op) {
 
   EAtomicOperation Aop = OMP_Atomic_invalid;
   switch (Op) {
@@ -481,6 +569,8 @@ static llvm::Value *getAtomicFunc(CodeGenFunction &CGF,
     case OMPC_REDUCTION_max:
       Aop = OMP_Atomic_max;
       break;
+    case OMPC_REDUCTION_custom:
+      return 0;
     case OMPC_REDUCTION_unknown:
     case NUM_OPENMP_REDUCTION_OPERATORS:
       llvm_unreachable("Unknown reduction operation.");
@@ -699,8 +789,18 @@ void CodeGenFunction::EmitOMPParallelDirective(const OMPParallelDirective &S) {
   CGM.OpenMPSupport.endOpenMPRegion();
 }
 
-/// Generate an instructions for '#pragma omp for' directive.
-void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
+/// Generate instruction for OpenMP loop-like directives.
+void CodeGenFunction::EmitOMPDirectiveWithLoop(
+                        OpenMPDirectiveKind DKind,
+                        const OMPExecutableDirective &S) {
+
+  // Several Simd-specific vars are declared here.
+  bool HasSimd = DKind == OMPD_for_simd;
+  CGPragmaOmpSimd SimdWrapper(&S);
+  llvm::Function *BodyFunction = 0;
+  bool SeparateLastIter = false;
+  LValue CapStruct;
+
   // Init list of private globals in the stack.
   CGM.OpenMPSupport.startOpenMPRegion(false);
   CGM.OpenMPSupport.setNoWait(false);
@@ -751,7 +851,7 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
     int Schedule;
     const Expr *ChunkSize;
     CGM.OpenMPSupport.getScheduleChunkSize(Schedule, ChunkSize);
-    const Expr *IterVar = S.getNewIterVar();
+    const Expr *IterVar = getNewIterVarFromLoopDirective(&S);
     int TypeSize = 4;
     if (getContext().getTypeSizeInChars(IterVar->getType()).getQuantity() > TypeSize)
       TypeSize = 8;
@@ -759,9 +859,9 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
     if (IterVar->getType()->hasUnsignedIntegerRepresentation())
       isSigned = false;
     llvm::Value *LB = TypeSize == 4 ? Builder.getInt32(0) : Builder.getInt64(0);
-    llvm::Value *UB = EmitScalarExpr(S.getNewIterEnd());
+    llvm::Value *UB = EmitScalarExpr(getNewIterEndFromLoopDirective(&S));
 #ifdef DEBUG
-    llvm::AllocaInst *DebugUB = CreateMemTemp(S.getNewIterEnd()->getType(), "debug.ub");
+    llvm::AllocaInst *DebugUB = CreateMemTemp(getNewIterEndFromLoopDirective(&S)->getType(), "debug.ub");
     Builder.CreateStore(UB, DebugUB);
 #endif
     UB = Builder.CreateIntCast(UB, TypeSize == 4 ? Builder.getInt32Ty() :
@@ -775,7 +875,7 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
       Chunk = TypeSize == 4 ? Builder.getInt32(0) : Builder.getInt64(0);
     }
     llvm::BasicBlock *EndBB = createBasicBlock("omp.loop.end");
-    llvm::BasicBlock *OMPLoopBB = createBasicBlock("omp.loop.begin");
+    llvm::BasicBlock *OMPLoopBB = 0; //createBasicBlock("omp.loop.begin");
     llvm::AllocaInst *PLast = CreateTempAlloca(Int32Ty, "last");
     PLast->setAlignment(CGM.getDataLayout().getPrefTypeAlignment(Int32Ty));
     InitTempAlloca(PLast, Builder.getInt32(0));
@@ -789,18 +889,18 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
     llvm::AllocaInst *PSt = CreateTempAlloca(VarTy, "st");
     PSt->setAlignment(CGM.getDataLayout().getPrefTypeAlignment(VarTy));
     InitTempAlloca(PSt, TypeSize == 4 ? Builder.getInt32(1) : Builder.getInt64(1));
-    QualType QTy = S.getNewIterVar()->getType();
+    QualType QTy = getNewIterVarFromLoopDirective(&S)->getType();
     llvm::AllocaInst *Private = CreateMemTemp(QTy, ".idx.");
     llvm::Type *IdxTy = cast<llvm::PointerType>(Private->getType())->getElementType();
     llvm::BasicBlock *MainBB;
-    llvm::BasicBlock *FiniBB = createBasicBlock("omp.loop.fini");
+    llvm::BasicBlock *FiniBB = 0;
 
-    ArrayRef<Expr *> Arr = S.getCounters();
+    ArrayRef<Expr *> Arr = getCountersFromLoopDirective(&S);
 //    llvm::SmallVector<const Expr *, 16> Incs;
     const Stmt *Body = S.getAssociatedStmt();
     if (const CapturedStmt *CS = dyn_cast_or_null<CapturedStmt>(Body))
       Body = CS->getCapturedStmt();
-    for (unsigned I = 0; I < S.getCollapsedNumber(); ++I) {
+    for (unsigned I = 0; I < getCollapsedNumberFromLoopDirective(&S); ++I) {
       const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(Arr[I])->getDecl());
       bool SkippedContainers = false;
       while (!SkippedContainers) {
@@ -829,7 +929,8 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
     const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(IterVar)->getDecl());
     CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
 
-    if (0) {//Schedule == KMP_SCH_STATIC_CHUNKED || Schedule == KMP_SCH_STATIC) {
+
+    if (0) {//Schedule == KMP_SCH_STATIC_CHUNKED || Schedule == KMP_SCH_STATIC
       llvm::Value *RealArgs[] = {Loc,
                                  GTid,
                                  Builder.getInt32(Schedule),
@@ -898,12 +999,35 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
       Builder.CreateStore(LB, Private);
       MainBB = createBasicBlock("omp.loop.main");
       FiniBB = createBasicBlock("omp.loop.fini");
+      if (HasSimd) {
+        // Update vectorizer width on the loop stack.
+        SeparateLastIter = SimdWrapper.emitSafelen(this);
+
+        if (SeparateLastIter) {
+          // Emit the following for the lastprivate vars update:
+          //   --UB;
+          // It is unclear if putting it under "if (*PLast)" will be
+          // more or less efficient, this needs to be investigated.
+          UB = Builder.CreateSub(
+            UB, llvm::ConstantInt::get(UB->getType(), 1));
+          Builder.CreateStore(UB, PUB);
+        }
+
+        // Initialize the captured struct.
+        CapStruct = InitCapturedStruct(*SimdWrapper.getAssociatedStmt());
+      }
+
       EmitBranch(MainBB);
       EmitBlock(MainBB);
+
+      if (HasSimd) {
+        // Push current LoopInfo onto the LoopStack.
+        LoopStack.Push(MainBB);
+      }
     }
     {
       RunCleanupsScope ThenScope(*this);
-      EmitStmt(S.getInit());
+      EmitStmt(getInitFromLoopDirective(&S));
 #ifdef DEBUG
       // CodeGen for clauses (call start).
       for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
@@ -927,6 +1051,7 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
 #endif
       llvm::Value *Idx = Builder.CreateLoad(Private, ".idx.");
       llvm::BasicBlock *UBLBCheckBB = createBasicBlock("omp.lb_ub.check_pass");
+      UB = Builder.CreateLoad(PUB);
       llvm::Value *UBLBCheck = isSigned ?
                            Builder.CreateICmpSLE(Idx, UB, "omp.idx.le.ub") :
                            Builder.CreateICmpULE(Idx, UB, "omp.idx.le.ub");
@@ -937,7 +1062,12 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
 
       BreakContinueStack.push_back(BreakContinue(getJumpDestInCurrentScope(EndBB),
                                                  getJumpDestInCurrentScope(ContBlock)));
-      {
+      if (HasSimd) {
+        RunCleanupsScope Scope(*this);
+        BodyFunction = EmitSimdFunction(SimdWrapper);
+        EmitSIMDForHelperCall(BodyFunction, CapStruct, Private, false);
+      }
+      else {
         RunCleanupsScope Scope(*this);
         EmitStmt(Body);
       }
@@ -945,7 +1075,7 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
       EnsureInsertPoint();
       EmitBranch(ContBlock);
       EmitBlock(ContBlock);
-      //llvm::Value *Idx = Builder.CreateLoad(Private, ".idx.");
+      Idx = Builder.CreateLoad(Private, ".idx.");
       llvm::Value *NextIdx = Builder.CreateAdd(Idx,
                                   llvm::ConstantInt::get(IdxTy, 1),
                                   ".next.idx.");
@@ -957,7 +1087,10 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
 //        EnsureInsertPoint();
 //      }
       EmitBranch(MainBB);
-      if (1) {//!(Schedule == KMP_SCH_STATIC_CHUNKED || Schedule == KMP_SCH_STATIC)) {
+      if (HasSimd) {
+        LoopStack.Pop();
+      }
+      if (1) {//!(Schedule == KMP_SCH_STATIC_CHUNKED || Schedule == KMP_SCH_STATIC)
         EmitBlock(FiniBB);
         llvm::Value *RealArgsFini[] = {Loc, GTid};
         if (TypeSize == 4 && isSigned)
@@ -968,9 +1101,17 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
           EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_8), RealArgsFini);
         else
           EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_8u), RealArgsFini);
+
+        if (SeparateLastIter) {
+          // Emit the following for the lastprivate vars update:
+          //   call __simd_helper(cs, idx, 1)
+          //
+          EmitSIMDForHelperCall(BodyFunction, CapStruct, Private, true);
+        }
+
         EmitBranch(OMPLoopBB);
       }
-      //EmitStmt(S.getInit());
+      //EmitStmt(getInitFromLoopDirective(&S));
       //EnsureInsertPoint();
       //UBLBCheck = isSigned ?
       //                     Builder.CreateICmpSLE(NextIdx, UB, "omp.idx.le.ub") :
@@ -979,7 +1120,7 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
       //Builder.CreateCondBr(UBLBCheck, UBLBCheckBB, OMPLoopBB);
     }
     EmitBlock(EndBB, true);
-    if (0) {//Schedule == KMP_SCH_STATIC_CHUNKED || Schedule == KMP_SCH_STATIC) {
+    if (0) {//Schedule == KMP_SCH_STATIC_CHUNKED || Schedule == KMP_SCH_STATIC
       llvm::Value *RealArgsFini[] = {Loc, GTid};
       EmitRuntimeCall(OPENMPRTL_FUNC(for_static_fini), RealArgsFini);
     }
@@ -989,7 +1130,6 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
   if (CGM.OpenMPSupport.hasLastPrivate() || !CGM.OpenMPSupport.getNoWait())
     EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(barrier), S.getLocEnd(),
                                    KMP_IDENT_BARRIER_IMPL_FOR);
-
   // CodeGen for clauses (call end).
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
@@ -1010,9 +1150,18 @@ void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
 
   EnsureInsertPoint();
 
-
   // Remove list of private globals from the stack.
   CGM.OpenMPSupport.endOpenMPRegion();
+
+  if (HasSimd) {
+    // Emit the final values of 'linear' variables.
+    SimdWrapper.emitLinearFinal(*this);
+  }
+}
+
+/// Generate an instructions for '#pragma omp for' directive.
+void CodeGenFunction::EmitOMPForDirective(const OMPForDirective &S) {
+  EmitOMPDirectiveWithLoop(OMPD_for, S);
 }
 
 static void EmitUntiedPartIdInc(CodeGenFunction &CGF) {
@@ -1589,6 +1738,9 @@ void CodeGenFunction::EmitInitOMPClause(const OMPClause &C,
   case OMPC_capture:
   case OMPC_update:
   case OMPC_seq_cst:
+  case OMPC_linear:
+  case OMPC_aligned:
+  case OMPC_safelen:
     break;
   }
 }
@@ -1621,6 +1773,9 @@ void CodeGenFunction::EmitAfterInitOMPClause(const OMPClause &C,
   case OMPC_capture:
   case OMPC_update:
   case OMPC_seq_cst:
+  case OMPC_linear:
+  case OMPC_aligned:
+  case OMPC_safelen:
     break;
   }
 }
@@ -1646,6 +1801,9 @@ void CodeGenFunction::EmitPreOMPClause(const OMPClause &C,
   case OMPC_capture:
   case OMPC_update:
   case OMPC_seq_cst:
+  case OMPC_linear:
+  case OMPC_aligned:
+  case OMPC_safelen:
     break;
   case OMPC_copyin:
     EmitPreOMPCopyinClause(cast<OMPCopyinClause>(C), S);
@@ -1691,6 +1849,9 @@ void CodeGenFunction::EmitPostOMPClause(const OMPClause &C,
   case OMPC_capture:
   case OMPC_update:
   case OMPC_seq_cst:
+  case OMPC_linear:
+  case OMPC_aligned:
+  case OMPC_safelen:
     break;
   case OMPC_private:
     EmitPostOMPPrivateClause(cast<OMPPrivateClause>(C), S);
@@ -1732,6 +1893,9 @@ void CodeGenFunction::EmitCloseOMPClause(const OMPClause &C,
   case OMPC_capture:
   case OMPC_update:
   case OMPC_seq_cst:
+  case OMPC_linear:
+  case OMPC_aligned:
+  case OMPC_safelen:
     break;
   case OMPC_lastprivate:
     EmitCloseOMPLastPrivateClause(cast<OMPLastPrivateClause>(C), S);
@@ -1767,6 +1931,9 @@ void CodeGenFunction::EmitFinalOMPClause(const OMPClause &C,
   case OMPC_capture:
   case OMPC_update:
   case OMPC_seq_cst:
+  case OMPC_linear:
+  case OMPC_aligned:
+  case OMPC_safelen:
     break;
   case OMPC_if:
     EmitFinalOMPIfClause(cast<OMPIfClause>(C), S);
@@ -2000,13 +2167,13 @@ void CodeGenFunction::EmitCopyAssignment(
     // Get element type.
     QualType QTy = (*I)->getType();
     const Type *MainTy = QTy.getTypePtr();
-    const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
-    const Type *PrevTy = MainTy;
-    while (Ty != 0) {
-      PrevTy = Ty;
-      Ty = Ty->getArrayElementTypeNoTypeQual();
-    }
-    Ty = PrevTy;
+    //const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
+    //const Type *PrevTy = MainTy;
+    //while (Ty != 0) {
+    //  PrevTy = Ty;
+    //  Ty = Ty->getArrayElementTypeNoTypeQual();
+    //}
+    //Ty = PrevTy;
 
     if (!*AssignIter) {
       // For trivial assignment operator copy by memcpy.
@@ -2160,13 +2327,13 @@ void CodeGenFunction::EmitPreOMPPrivateClause(
     //}
     QualType QTy = (*I)->getType();
     const Type *MainTy = QTy.getTypePtr();
-    const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
-    const Type *PrevTy = MainTy;
-    while (Ty != 0) {
-      PrevTy = Ty;
-      Ty = Ty->getArrayElementTypeNoTypeQual();
-    }
-    Ty = PrevTy;
+    //const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
+    //const Type *PrevTy = MainTy;
+    //while (Ty != 0) {
+    //  PrevTy = Ty;
+    //  Ty = Ty->getArrayElementTypeNoTypeQual();
+    //}
+    //Ty = PrevTy;
     llvm::Value *Private;
     llvm::Value *PTask;
     llvm::Value *TaskTVal;
@@ -2295,13 +2462,12 @@ void CodeGenFunction::EmitPreOMPFirstPrivateClause(
     //}
     QualType QTy = (*I)->getType();
     const Type *MainTy = QTy.getTypePtr();
-    const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
-    const Type *PrevTy = MainTy;
-    while (Ty != 0) {
-      PrevTy = Ty;
-      Ty = Ty->getArrayElementTypeNoTypeQual();
-    }
-    Ty = PrevTy;
+    //const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
+    //const Type *PrevTy = MainTy;
+    //while (Ty != 0) {
+    //  PrevTy = Ty;
+    //  Ty = Ty->getArrayElementTypeNoTypeQual();
+    //}
     llvm::Value *Private = 0;
     llvm::Value *PTask;
     llvm::Value *TaskTVal;
@@ -2502,13 +2668,13 @@ void CodeGenFunction::EmitPreOMPLastPrivateClause(
     //}
     QualType QTy = (*I)->getType();
     const Type *MainTy = QTy.getTypePtr();
-    const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
-    const Type *PrevTy = MainTy;
-    while (Ty != 0) {
-      PrevTy = Ty;
-      Ty = Ty->getArrayElementTypeNoTypeQual();
-    }
-    Ty = PrevTy;
+    //const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
+    //const Type *PrevTy = MainTy;
+    //while (Ty != 0) {
+    //  PrevTy = Ty;
+    //  Ty = Ty->getArrayElementTypeNoTypeQual();
+    //}
+    //Ty = PrevTy;
     llvm::AllocaInst *Private =
              CreateMemTemp(QTy, CGM.getMangledName(VD) + ".lastprivate.");
     // CodeGen for classes with the default constructor.
@@ -2740,6 +2906,7 @@ void CodeGenFunction::EmitCloseOMPLastPrivateClause(const OMPLastPrivateClause &
 void CodeGenFunction::EmitInitOMPReductionClause(
                                             const OMPReductionClause &C,
                                             const OMPExecutableDirective &S) {
+  assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   // Type1 tmp1(var1);
   // anon.field1 = &tmp1;
   // Type2 tmp2(var2);
@@ -2797,6 +2964,7 @@ void CodeGenFunction::EmitInitOMPReductionClause(
 void CodeGenFunction::EmitPreOMPReductionClause(
                                             const OMPReductionClause &C,
                                             const OMPExecutableDirective &S) {
+  assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   // Type1 tmp1(var1);
   // anon.field1 = &tmp1;
   // Type2 tmp2(var2);
@@ -2824,7 +2992,20 @@ void CodeGenFunction::EmitPreOMPReductionClause(
     //const Type *Ty = QTy.getTypePtr();
     if (!isTrivialInitializer(*InitIter)) {
       RunCleanupsScope InitBlock(*this);
-      EmitAnyExprToMem(*InitIter, Private, (*InitIter)->getType().getQualifiers(), false);
+      const FunctionDecl *FD = 0;
+      if (const DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*InitIter)) {
+        if (const FunctionDecl *D =
+                  dyn_cast_or_null<FunctionDecl>(DRE->getDecl()))
+          FD = D;
+      }
+      if (FD && isa<OMPDeclareReductionDecl>(FD->getDeclContext())) {
+        llvm::Value *RegularAddr = EmitLValue(*I).getAddress();
+        llvm::Value *Args[] = {Private, RegularAddr};
+        EmitCallOrInvoke(CGM.GetAddrOfGlobal(FD), Args);
+        CGM.OpenMPSupport.setHasFirstPrivate(true);
+      } else {
+        EmitAnyExprToMem(*InitIter, Private, (*InitIter)->getType().getQualifiers(), false);
+      }
     } else if (*InitIter) {
       switch (C.getOperator()) {
       case OMPC_REDUCTION_or:
@@ -2845,11 +3026,11 @@ void CodeGenFunction::EmitPreOMPReductionClause(
         break;
       case OMPC_REDUCTION_min:
       case OMPC_REDUCTION_max:
+      case OMPC_REDUCTION_custom:
         llvm_unreachable("Operator kind not allowed.");
-        break;
       case OMPC_REDUCTION_unknown:
       case NUM_OPENMP_REDUCTION_OPERATORS:
-        llvm_unreachable("Unkonwn operator kind.");
+        llvm_unreachable("Unknown operator kind.");
       }
     } else {
       llvm::Type *Ty = ConvertTypeForMem(QTy);
@@ -3035,6 +3216,8 @@ void CodeGenFunction::EmitPreOMPReductionClause(
         }
         }
         break;
+      case OMPC_REDUCTION_custom:
+        llvm_unreachable("Custom initialization cannot be NULLed.");
       case OMPC_REDUCTION_unknown:
       case NUM_OPENMP_REDUCTION_OPERATORS:
         llvm_unreachable("Unkonwn operator kind.");
@@ -3053,6 +3236,7 @@ void CodeGenFunction::EmitPreOMPReductionClause(
 void CodeGenFunction::EmitPostOMPReductionClause(
                                             const OMPReductionClause &C,
                                             const OMPExecutableDirective &S) {
+  assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   CodeGenFunction &CGF = CGM.OpenMPSupport.getCGFForReductionFunction();
   llvm::Function *ReduceFunc = CGF.CurFn;
   llvm::SwitchInst *Switch =
@@ -3852,6 +4036,7 @@ void CodeGenFunction::EmitOMPTaskgroupDirective(const OMPTaskgroupDirective &S) 
 
 void CodeGenFunction::EmitCloseOMPReductionClause(const OMPReductionClause &C,
                                                   const OMPExecutableDirective &S) {
+  assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   llvm::BasicBlock *RedBB1;
   llvm::BasicBlock *RedBB2;
   llvm::Instruction *IP1;
@@ -3920,10 +4105,334 @@ void CodeGenFunction::EmitCloseOMPReductionClause(const OMPReductionClause &C,
 
 void CodeGenFunction::EmitFinalOMPReductionClause(const OMPReductionClause &C,
                                                   const OMPExecutableDirective &S) {
+  assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   CodeGenFunction &CGF = CGM.OpenMPSupport.getCGFForReductionFunction();
   if (CGF.CurFn) {
     CGF.FinishFunction();
     CGF.CurFn = 0;
   }
+}
+
+// Implementation of '#pragma omp simd'.
+//
+
+SourceLocation CodeGenFunction::CGPragmaOmpSimd::getForLoc() const {
+  const CapturedStmt *Cap = cast<CapturedStmt>(SimdOmp->getAssociatedStmt());
+  const ForStmt *For = dyn_cast<ForStmt>(Cap->getCapturedStmt());
+  if (For) {
+    return For->getSourceRange().getBegin();
+  }
+  return SimdOmp->getSourceRange().getBegin();
+}
+
+SourceRange CodeGenFunction::CGPragmaOmpSimd::getSourceRange() const {
+  return SimdOmp->getSourceRange();
+}
+
+const Stmt *CodeGenFunction::CGPragmaOmpSimd::getInit() const {
+  return getInitFromLoopDirective(SimdOmp);
+}
+
+const Expr *CodeGenFunction::CGPragmaOmpSimd::getCond() const {
+  const CapturedStmt *Cap = dyn_cast_or_null<CapturedStmt>(
+      getAssociatedStmt());
+  if (!Cap) return 0;
+  const ForStmt *For = dyn_cast_or_null<ForStmt>(
+      Cap->getCapturedStmt());
+  if (!For) return 0;
+  return For->getCond();
+}
+
+const CapturedStmt *CodeGenFunction::CGPragmaOmpSimd::getAssociatedStmt() const {
+  return dyn_cast_or_null<CapturedStmt>(SimdOmp->getAssociatedStmt());
+}
+
+const Expr *CodeGenFunction::CGPragmaOmpSimd::getLoopCount() const {
+  const Expr *Op = getNewIterEndFromLoopDirective(SimdOmp);
+  if (const BinaryOperator *Bop = dyn_cast<BinaryOperator>(Op)) {
+    // Expected "N-1" here, so why not eat "-1" to get "N".
+    if (Bop->getOpcode() == BO_Sub) {
+      const Expr *Op = Bop->getRHS();
+      if (const ImplicitCastExpr *Cast = dyn_cast<ImplicitCastExpr>(Op)) {
+        Op = Cast->getSubExpr();
+      }
+      if (const IntegerLiteral *One = dyn_cast<IntegerLiteral>(Op)) {
+        if (One->getValue() == 1) {
+          return Bop->getLHS();
+        }
+      }
+    }
+  }
+  assert(0 && "Unexpected loop count expression");
+  return Op;
+}
+
+Stmt *CodeGenFunction::CGPragmaOmpSimd::extractLoopBody(Stmt *S) const {
+  // '#pragma omp simd' stores the full loop nest, and now we are
+  // going to extract the loop body.
+  unsigned CollapseNum = getCollapsedNumberFromLoopDirective(SimdOmp);
+  if (CollapseNum == 0) {
+    CollapseNum = 1;
+  }
+  Stmt *Body = S;
+  while (CollapseNum > 0) {
+    if (ForStmt *For = dyn_cast<ForStmt>(Body)) {
+      Body = For->getBody();
+      --CollapseNum;
+    }
+    else if (AttributedStmt *AS = dyn_cast<AttributedStmt>(Body)) {
+      Body = AS->getSubStmt();
+    }
+    else if (CompoundStmt *CS = dyn_cast<CompoundStmt>(Body)) {
+      if (CS->size() == 1) {
+        Body = CS->body_back();
+      }
+      else {
+        assert(0 && "Unexpected compound stmt in the loop nest");
+      }
+    }
+    else {
+      assert(0 && "Unexpected stmt in the loop nest");
+    }
+  }
+  assert(Body && "Failed to extract the loop body for 'omp simd'");
+  return Body;
+}
+
+// Simd wrappers implementation for '#pragma omp simd'.
+bool CodeGenFunction::CGPragmaOmpSimd::emitSafelen(CodeGenFunction *CGF) const {
+  bool SeparateLastIter = false;
+  CGF->LoopStack.SetParallel();
+  for (ArrayRef<OMPClause *>::iterator I = SimdOmp->clauses().begin(),
+       E = SimdOmp->clauses().end(); I != E; ++I) {
+    OMPClause *C = dyn_cast<OMPClause>(*I);
+    switch (C->getClauseKind()) {
+      case OMPC_safelen:
+        {
+          RValue Len = CGF->EmitAnyExpr(cast<OMPSafelenClause>(C)->getSafelen(),
+              AggValueSlot::ignored(), true);
+          llvm::ConstantInt *Val = dyn_cast<llvm::ConstantInt>(Len.getScalarVal());
+          assert(Val);
+          CGF->LoopStack.SetVectorizerWidth(Val->getZExtValue());
+          break;
+        }
+      case OMPC_lastprivate:
+        {
+          SeparateLastIter = true;
+          break;
+        }
+      default:
+        // Not handled yet
+        ;
+    }
+  }
+  return SeparateLastIter;
+}
+
+
+// Walker for '#pragma omp simd'
+bool CodeGenFunction::CGPragmaOmpSimd::walkLocalVariablesToEmit(
+                        CodeGenFunction *CGF, 
+                        CGSIMDForStmtInfo *Info) const {
+
+  // Init the OpenMP local vars stack.
+  CGF->CGM.OpenMPSupport.startOpenMPRegion(true);
+  CGF->CGM.OpenMPSupport.setMergeable(false);
+  CGF->CGM.OpenMPSupport.setOrdered(false);
+
+  // Make sure we have local vars for all the loop counters.
+  ArrayRef<Expr *> Counters = getCountersFromLoopDirective(SimdOmp);
+  for (unsigned I = 0; I < getCollapsedNumberFromLoopDirective(SimdOmp); ++I) {
+    const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(Counters[I])->getDecl());
+    if (CGF->CGM.OpenMPSupport.getTopOpenMPPrivateVar(VD))
+      continue;
+    QualType QTy = Counters[I]->getType();
+    llvm::AllocaInst *Private =
+      CGF->CreateMemTemp(QTy, CGF->CGM.getMangledName(VD) + ".counter.");
+    CGF->CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
+  }
+
+  // Here we push index parameter into openmp map.
+  // It is useful for loop counters calculation.
+  const CapturedDecl *CD = cast<CapturedStmt>(
+            getAssociatedStmt())->getCapturedDecl();
+  llvm::Value *LoopIndex = CGF->LocalDeclMap.lookup(CD->getParam(1));
+  const VarDecl *IndexVD = cast<VarDecl>(cast<DeclRefExpr>(
+                              getNewIterVarFromLoopDirective(SimdOmp))->getDecl());
+  CGF->CGM.OpenMPSupport.addOpenMPPrivateVar(IndexVD, LoopIndex);
+
+  for (ArrayRef<OMPClause *>::iterator I = SimdOmp->clauses().begin(),
+       E = SimdOmp->clauses().end(); I != E; ++I) {
+    OMPClause *C = dyn_cast<OMPClause>(*I);
+    switch (C->getClauseKind()) {
+      case OMPC_private:
+      {
+        CGF->EmitPreOMPClause(*(*I), *SimdOmp);
+        break;
+      }
+      case OMPC_lastprivate:
+      {
+        CGF->EmitPreOMPClause(*(*I), *SimdOmp);
+        break;
+      }
+      case OMPC_linear:
+      {
+        // Linear vars are calculated from index, similar to loop indices.
+        OMPLinearClause *L = cast<OMPLinearClause>(C);
+        for (OMPLinearClause::varlist_const_iterator J = L->varlist_begin(),
+                                                     F = L->varlist_end();
+                                                     J != F; ++J) {
+          const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(*J)->getDecl());
+          if (CGF->CGM.OpenMPSupport.getTopOpenMPPrivateVar(VD)) {
+            continue;
+          }
+          QualType QTy = (*J)->getType();
+          llvm::Value *Private = CGF->CreateMemTemp(
+            QTy, CGF->CGM.getMangledName(VD) + ".linear.");
+
+          // Generate "Private = Index * Step + Start"
+          llvm::Value *Start = CGF->EmitAnyExprToTemp(*J).getScalarVal();
+          llvm::Value *Index = CGF->Builder.CreateLoad(LoopIndex);
+          llvm::Value *Result = 0;
+          if (const Expr *StepExpr = L->getStep())
+            Result = CGF->EmitAnyExpr(StepExpr).getScalarVal();
+          else
+            Result = llvm::ConstantInt::get(Index->getType(), 1);
+          Result = CGF->Builder.CreateMul(Index, Result);
+          if (Start->getType()->isPointerTy()) {
+            Result = CGF->Builder.CreateGEP(Start, Result);
+          }
+          else {
+            Result = CGF->Builder.CreateIntCast(Result, Start->getType(), false);
+            Result = CGF->Builder.CreateAdd(Start, Result);
+          }
+          CGF->Builder.CreateStore(Result, Private);
+
+          CGF->CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  // Mark 'aligned' variables -- do this after all private variables are
+  // made 'omp-private' in CGM.OpenMPSupport.
+  for (ArrayRef<OMPClause *>::iterator I = SimdOmp->clauses().begin(),
+       E = SimdOmp->clauses().end(); I != E; ++I) {
+    OMPClause *C = dyn_cast<OMPClause>(*I);
+    switch (C->getClauseKind()) {
+      case OMPC_aligned:
+        {
+          OMPAlignedClause *A = cast<OMPAlignedClause>(C);
+          // Prepare alignment expression for using it below.
+          RValue ARVal = CGF->EmitAnyExpr(A->getAlignment(),
+              AggValueSlot::ignored(), true);
+          llvm::ConstantInt *AVal = dyn_cast<llvm::ConstantInt>(
+              ARVal.getScalarVal());
+          assert(AVal);
+          // Walk the list and push each var's alignment into metadata.
+          for (OMPVarList<OMPAlignedClause>::varlist_iterator
+              J = A->varlist_begin(), F = A->varlist_end(); J != F; ++J) {
+            LValue LVal = CGF->EmitLValue(*J);
+            CGF->LoopStack.AddAligned(LVal.getAddress(),
+                                      (int)(AVal->getZExtValue()));
+          }
+          break;
+        }
+      default:
+        break;
+    }
+  }
+
+  // Emit initializations of loop indices.
+  CGF->EmitStmt(getInitFromLoopDirective(SimdOmp));
+  return false;
+}
+
+void CodeGenFunction::CGPragmaOmpSimd::emitInit(CodeGenFunction &CGF,
+              llvm::Value *&LoopIndex,
+              llvm::Value *&LoopCount) {
+  // Emit loop index
+  const Expr *IterVar = getNewIterVarFromLoopDirective(SimdOmp);
+  LoopIndex = CGF.CreateMemTemp(IterVar->getType(), ".idx.");
+  const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(IterVar)->getDecl());
+  CGF.CGM.OpenMPSupport.addOpenMPPrivateVar(VD, LoopIndex);
+
+  // Emit loop count.
+  LoopCount = CGF.EmitAnyExpr(getLoopCount()).getScalarVal();
+}
+
+// Emit the final values of the loop counters and linear vars.
+void CodeGenFunction::CGPragmaOmpSimd::emitLinearFinal(
+                        CodeGenFunction &CGF) const {
+
+  // Check if we need to update the loop counters.
+  bool NeedUpdateLC = true;
+  ArrayRef<Expr *> Counters = getCountersFromLoopDirective(SimdOmp);
+  for (unsigned I = 0; I < getCollapsedNumberFromLoopDirective(SimdOmp); ++I) {
+    const DeclRefExpr *DRE = cast<DeclRefExpr>(Counters[I]);
+    if (!CGF.LocalDeclMap.lookup(DRE->getDecl())) {
+      NeedUpdateLC = false;
+    }
+  }
+
+  // Emit final values of the loop-counters.
+  if (NeedUpdateLC) CGF.EmitStmt(getFinalFromLoopDirective(SimdOmp));
+
+  // Emit final values of the linear vars.
+  for (ArrayRef<OMPClause *>::iterator I = SimdOmp->clauses().begin(),
+      E = SimdOmp->clauses().end(); I != E; ++I) {
+    OMPClause *C = dyn_cast<OMPClause>(*I);
+    switch (C->getClauseKind()) {
+      case OMPC_linear:
+        {
+          OMPLinearClause *L = cast<OMPLinearClause>(C);
+          for (OMPLinearClause::varlist_const_iterator J = L->varlist_begin(),
+              F = L->varlist_end();
+              J != F; ++J) {
+
+            // Generate "L = LoopCount * Step + L"
+            const Expr *CountExpr = getLoopCount();
+            llvm::Value *Index = CGF.EmitAnyExpr(CountExpr).getScalarVal();
+            llvm::Value *Result = 0;
+            if (const Expr *StepExpr = L->getStep())
+              Result = CGF.EmitAnyExpr(StepExpr).getScalarVal();
+            else
+              Result = llvm::ConstantInt::get(Index->getType(), 1);
+            Result = CGF.Builder.CreateMul(Index, Result);
+
+            // Prepare destination lvalue to store result into.
+            LValue LV = CGF.EmitLValue(*J);
+            llvm::Value *Start = CGF.EmitLoadOfLValue(LV).getScalarVal();
+
+            if (Start->getType()->isPointerTy()) {
+              Result = CGF.Builder.CreateGEP(Start, Result);
+            }
+            else {
+              Result = CGF.Builder.CreateIntCast(Result, Start->getType(),
+                  false);
+              Result = CGF.Builder.CreateAdd(Start, Result);
+            }
+            CGF.EmitStoreOfScalar(Result, LV, false);
+          }
+          break;
+        }
+      default:
+        break;
+    }
+  }
+}
+
+// Generate the instructions for '#pragma omp simd' directive.
+void CodeGenFunction::EmitOMPSimdDirective(const OMPSimdDirective &S) {
+  CGPragmaOmpSimd Wrapper(&S);
+  EmitPragmaSimd(Wrapper);
+}
+
+// Generate the instructions for '#pragma omp for simd' directive.
+void CodeGenFunction::EmitOMPForSimdDirective(const OMPForSimdDirective &S) {
+  EmitOMPDirectiveWithLoop(OMPD_for_simd, S);
 }
 

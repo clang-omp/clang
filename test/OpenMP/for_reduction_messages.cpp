@@ -15,7 +15,7 @@ class S2 {
 public:
   S2():a(0) { }
   S2(S2 &s2):a(s2.a) { }
-  static float S2s; // expected-note {{'S2s' declared here}} expected-note {{predetermined as shared}}
+  static float S2s; //expected-note {{predetermined as shared}}
   static const float S2sc;
 };
 const float S2::S2sc = 0; // expected-note {{'S2sc' defined here}}
@@ -70,6 +70,7 @@ int main(int argc, char **argv) {
   S3 &p = k;
   const int &r = da[i]; // expected-note 2 {{'r' defined here}}
   int &q = qa[i]; // expected-note {{'q' defined here}}
+  float fl; // expected-note {{'fl' defined here}}
   #pragma omp parallel
   #pragma omp for reduction(+ : r) // expected-error {{const-qualified variable cannot be reduction}}
   for (int x = 0; x < 10; ++x) foo();
@@ -121,7 +122,7 @@ int main(int argc, char **argv) {
   #pragma omp for reduction(- : da) // expected-error {{arguments of OpenMP clause 'reduction' cannot be of array type}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp parallel
-  #pragma omp for reduction(^ : S2::S2s) // expected-error {{arguments of OpenMP clause 'reduction' with bitwise operators cannot be of floating type}}
+  #pragma omp for reduction(^ : fl) // expected-error {{arguments of OpenMP clause 'reduction' with bitwise operators cannot be of floating type}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp parallel
   #pragma omp for reduction(&& : S2::S2s) // expected-error {{shared variable cannot be reduction}}

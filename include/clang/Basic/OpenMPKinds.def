@@ -15,6 +15,9 @@
 #ifndef OPENMP_DIRECTIVE
 #  define OPENMP_DIRECTIVE(Name)
 #endif
+#ifndef OPENMP_DIRECTIVE_EXT
+#  define OPENMP_DIRECTIVE_EXT(Name, Str)
+#endif
 #ifndef OPENMP_CLAUSE
 #  define OPENMP_CLAUSE(Name, Class)
 #endif
@@ -23,6 +26,12 @@
 #endif
 #ifndef OPENMP_FOR_CLAUSE
 #  define OPENMP_FOR_CLAUSE(Name)
+#endif
+#ifndef OPENMP_SIMD_CLAUSE
+#  define OPENMP_SIMD_CLAUSE(Name)
+#endif
+#ifndef OPENMP_FOR_SIMD_CLAUSE
+#  define OPENMP_FOR_SIMD_CLAUSE(Name)
 #endif
 #ifndef OPENMP_PARALLEL_FOR_CLAUSE
 #  define OPENMP_PARALLEL_FOR_CLAUSE(Name)
@@ -63,6 +72,7 @@ OPENMP_DIRECTIVE(threadprivate)
 OPENMP_DIRECTIVE(parallel)
 OPENMP_DIRECTIVE(task)
 OPENMP_DIRECTIVE(for)
+OPENMP_DIRECTIVE(simd)
 OPENMP_DIRECTIVE(sections)
 OPENMP_DIRECTIVE(section)
 OPENMP_DIRECTIVE(single)
@@ -75,8 +85,13 @@ OPENMP_DIRECTIVE(taskgroup)
 OPENMP_DIRECTIVE(atomic)
 OPENMP_DIRECTIVE(flush)
 OPENMP_DIRECTIVE(ordered)
+OPENMP_DIRECTIVE(declare)
+OPENMP_DIRECTIVE_EXT(parallel_for, "parallel for")
+OPENMP_DIRECTIVE_EXT(parallel_sections, "parallel sections")
+OPENMP_DIRECTIVE_EXT(declare_reduction, "declare reduction")
+OPENMP_DIRECTIVE_EXT(for_simd, "for simd")
 
-// OpenMP clause.
+// OpenMP clauses.
 OPENMP_CLAUSE(if, OMPIfClause)
 OPENMP_CLAUSE(num_threads, OMPNumThreadsClause)
 OPENMP_CLAUSE(final, OMPFinalClause)
@@ -101,6 +116,16 @@ OPENMP_CLAUSE(update, OMPUpdateClause)
 OPENMP_CLAUSE(capture, OMPCaptureClause)
 OPENMP_CLAUSE(seq_cst, OMPSeqCstClause)
 OPENMP_CLAUSE(flush, OMPFlushClause)
+OPENMP_CLAUSE(safelen, OMPSafelenClause)
+OPENMP_CLAUSE(linear, OMPLinearClause)
+OPENMP_CLAUSE(aligned, OMPAlignedClause)
+OPENMP_CLAUSE(simdlen, OMPSimdlenClause)
+OPENMP_CLAUSE(uniform, OMPUniformClause)
+OPENMP_CLAUSE(inbranch, OMPInBranchClause)
+OPENMP_CLAUSE(notinbranch, OMPNotInBranchClause)
+OPENMP_CLAUSE(num_teams, OMPNumTeamsClause)
+OPENMP_CLAUSE(thread_limit, OMPThreadLimitClause)
+OPENMP_CLAUSE(dist_schedule, OMPDistScheduleClause)
 
 // Clauses allowed for OpenMP directive 'parallel'.
 OPENMP_PARALLEL_CLAUSE(if)
@@ -122,6 +147,27 @@ OPENMP_FOR_CLAUSE(schedule)
 OPENMP_FOR_CLAUSE(collapse)
 OPENMP_FOR_CLAUSE(ordered)
 OPENMP_FOR_CLAUSE(nowait)
+
+// Clauses allowed for OpenMP directive 'simd'.
+OPENMP_SIMD_CLAUSE(safelen)
+OPENMP_SIMD_CLAUSE(linear)
+OPENMP_SIMD_CLAUSE(aligned)
+OPENMP_SIMD_CLAUSE(private)
+OPENMP_SIMD_CLAUSE(lastprivate)
+OPENMP_SIMD_CLAUSE(reduction)
+OPENMP_SIMD_CLAUSE(collapse)
+
+// Clauses allowed for OpenMP directive 'for simd'.
+OPENMP_FOR_SIMD_CLAUSE(private)
+OPENMP_FOR_SIMD_CLAUSE(firstprivate)
+OPENMP_FOR_SIMD_CLAUSE(lastprivate)
+OPENMP_FOR_SIMD_CLAUSE(reduction)
+OPENMP_FOR_SIMD_CLAUSE(schedule)
+OPENMP_FOR_SIMD_CLAUSE(collapse)
+OPENMP_FOR_SIMD_CLAUSE(nowait)
+OPENMP_FOR_SIMD_CLAUSE(safelen)
+OPENMP_FOR_SIMD_CLAUSE(linear)
+OPENMP_FOR_SIMD_CLAUSE(aligned)
 
 // Clauses allowed for OpenMP directive 'parallel for'.
 OPENMP_PARALLEL_FOR_CLAUSE(if)
@@ -195,6 +241,7 @@ OPENMP_REDUCTION_OPERATOR(and, "&&")
 OPENMP_REDUCTION_OPERATOR(or, "||")
 OPENMP_REDUCTION_OPERATOR(min, "min")
 OPENMP_REDUCTION_OPERATOR(max, "max")
+OPENMP_REDUCTION_OPERATOR(custom, "/**/")
 
 // Static attributes for 'schedule' clause.
 OPENMP_SCHEDULE_KIND(static)
@@ -217,6 +264,7 @@ OPENMP_FLUSH_CLAUSE(flush)
 #undef OPENMP_DEFAULT_KIND
 #undef OPENMP_PROC_BIND_KIND
 #undef OPENMP_DIRECTIVE
+#undef OPENMP_DIRECTIVE_EXT
 #undef OPENMP_CLAUSE
 #undef OPENMP_ATOMIC_CLAUSE
 #undef OPENMP_FLUSH_CLAUSE
@@ -227,4 +275,6 @@ OPENMP_FLUSH_CLAUSE(flush)
 #undef OPENMP_PARALLEL_CLAUSE
 #undef OPENMP_PARALLEL_FOR_CLAUSE
 #undef OPENMP_FOR_CLAUSE
+#undef OPENMP_SIMD_CLAUSE
+#undef OPENMP_FOR_SIMD_CLAUSE
 #undef OPENMP_SCHEDULE_KIND

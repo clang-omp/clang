@@ -83,6 +83,7 @@ namespace {
     void VisitUsingDecl(UsingDecl *D);
     void VisitUsingShadowDecl(UsingShadowDecl *D);
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
+    void VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D);
 
     void PrintTemplateParameters(const TemplateParameterList *Params,
                                  const TemplateArgumentList *Args = 0);
@@ -292,7 +293,7 @@ void DeclPrinter::VisitDeclContext(DeclContext *DC, bool Indent) {
 
     // FIXME: Need to be able to tell the DeclPrinter when
     const char *Terminator = 0;
-    if (isa<OMPThreadPrivateDecl>(*D))
+    if (isa<OMPThreadPrivateDecl>(*D) || isa<OMPDeclareReductionDecl>(*D))
       Terminator = 0;
     else if (isa<FunctionDecl>(*D) &&
              cast<FunctionDecl>(*D)->isThisDeclarationADefinition())
@@ -1185,6 +1186,60 @@ void DeclPrinter::VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D) {
           << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
     }
     Out << ")";
+  }
+}
+
+void DeclPrinter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
+  if (!D->datalist_empty()) {
+    for (OMPDeclareReductionDecl::datalist_iterator I = D->datalist_begin(),
+                                                    E = D->datalist_end();
+         I != E; ++I) {
+      Out << "#pragma omp declare reduction (";
+      D->printName(Out);
+      Out << " : ";
+      I->QTy.print(Out, Policy);
+      Out << " : ";
+      FunctionDecl *CF =
+        cast<FunctionDecl>(cast<DeclRefExpr>(I->CombinerFunction)->getDecl());
+      CompoundStmt::body_iterator BI =
+        cast<CompoundStmt>(CF->getBody())->body_begin();
+      // Skip first 2 DeclStmts;
+      ++BI;
+      ++BI;
+      (*BI)->printPretty(Out, 0, Policy, 0);
+      Out << ")";
+      FunctionDecl *IF =
+        cast<FunctionDecl>(cast<DeclRefExpr>(I->InitFunction)->getDecl());
+      if (IF->getBody() == 0) continue;
+      BI = cast<CompoundStmt>(IF->getBody())->body_begin();
+      // Skip first 2 DeclStmts;
+      ++BI;
+      if (DeclStmt *DS = dyn_cast<DeclStmt>(*BI)) {
+        if (VarDecl *VD =
+              dyn_cast_or_null<VarDecl>(DS->getSingleDecl())) {
+          if (VD->hasInit() && VD->getInit()->getLocStart().isValid()) {
+            Out << " initializer(omp_priv ";
+            if (!Policy.LangOpts.CPlusPlus) {
+              Out << "= ";
+            }
+            VD->getInit()->printPretty(Out, 0, Policy, 0);
+            Out << ")\n";
+            return;
+          }
+        }
+        ++BI;
+      }
+      // Skip DeclStmt.
+      // Check if next stmt is explicit function call.
+      if (CallExpr *CE = dyn_cast_or_null<CallExpr>((*BI)->IgnoreImplicit())) {
+        if (CE->getLocStart().isValid()) {
+          Out << " initializer(";
+          CE->printPretty(Out, 0, Policy, 0);
+          Out << ")";
+        }
+      }
+      Out << "\n";
+    }
   }
 }
 

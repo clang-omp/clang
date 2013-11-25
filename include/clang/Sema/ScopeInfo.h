@@ -527,6 +527,8 @@ public:
   /// \brief A descriptive name for the kind of captured region this is.
   StringRef getRegionName() const {
     switch (CapRegionKind) {
+    case CR_SIMDFor:
+      return "simd for - like captured statement";
     case CR_Default:
       return "default captured statement";
     }
