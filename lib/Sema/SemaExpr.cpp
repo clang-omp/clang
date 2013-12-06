@@ -11214,8 +11214,107 @@ bool Sema::tryCaptureVariable(VarDecl *Var, SourceLocation Loc,
       return true;
     }
 
-    // Prohibit variably-modified types; they're difficult to deal with.
-    if (Var->getType()->isVariablyModifiedType()) {
+    if (Var->getType()->isVariablyModifiedType() && !IsBlock && !IsLambda) {
+      // We're going to walk down into the type and look for VLA
+      // expressions.
+      QualType type = Var->getType();
+      do {
+        const Type *ty = type.getTypePtr();
+        switch (ty->getTypeClass()) {
+
+#define TYPE(Class, Base)
+#define ABSTRACT_TYPE(Class, Base)
+#define NON_CANONICAL_TYPE(Class, Base)
+#define DEPENDENT_TYPE(Class, Base) case Type::Class:
+#define NON_CANONICAL_UNLESS_DEPENDENT_TYPE(Class, Base)
+#include "clang/AST/TypeNodes.def"
+          llvm_unreachable("unexpected dependent type!");
+
+        // These types are never variably-modified.
+        case Type::Builtin:
+        case Type::Complex:
+        case Type::Vector:
+        case Type::ExtVector:
+        case Type::Record:
+        case Type::Enum:
+        case Type::Elaborated:
+        case Type::TemplateSpecialization:
+        case Type::ObjCObject:
+        case Type::ObjCInterface:
+        case Type::ObjCObjectPointer:
+          llvm_unreachable("type class is never variably-modified!");
+
+        case Type::Pointer:
+          type = cast<PointerType>(ty)->getPointeeType();
+          break;
+
+        case Type::BlockPointer:
+          type = cast<BlockPointerType>(ty)->getPointeeType();
+          break;
+
+        case Type::LValueReference:
+        case Type::RValueReference:
+          type = cast<ReferenceType>(ty)->getPointeeType();
+          break;
+
+        case Type::MemberPointer:
+          type = cast<MemberPointerType>(ty)->getPointeeType();
+          break;
+
+        case Type::ConstantArray:
+        case Type::IncompleteArray:
+          // Losing element qualification here is fine.
+          type = cast<ArrayType>(ty)->getElementType();
+          break;
+
+        case Type::VariableArray: {
+          // Losing element qualification here is fine.
+          const VariableArrayType *vat = cast<VariableArrayType>(ty);
+
+          // Unknown size indication requires no size computation.
+          // Otherwise, evaluate and record it.
+          if (Expr *size = vat->getSizeExpr()) {
+            MarkDeclarationsReferencedInExpr(size);
+          }
+          type = vat->getElementType();
+          break;
+        }
+
+        case Type::FunctionProto:
+        case Type::FunctionNoProto:
+          type = cast<FunctionType>(ty)->getResultType();
+          break;
+
+        case Type::Paren:
+        case Type::TypeOf:
+        case Type::UnaryTransform:
+        case Type::Attributed:
+        case Type::SubstTemplateTypeParm:
+          // Keep walking after single level desugaring.
+          type = type.getSingleStepDesugaredType(getASTContext());
+          break;
+
+        case Type::Typedef:
+        case Type::Decltype:
+        case Type::Auto:
+          // Stop walking: nothing to do.
+          type = QualType();
+          break;;
+
+        case Type::TypeOfExpr:
+          type = cast<TypeOfExprType>(ty)->getUnderlyingExpr()->getType();
+          break;
+
+        case Type::Atomic:
+          type = cast<AtomicType>(ty)->getValueType();
+          break;
+        }
+      } while (type->isVariablyModifiedType());
+    }
+
+    // Prohibit variably-modified types in blocks and lambdas ;
+    // they're difficult to deal with.
+    if (Var->getType()->isVariablyModifiedType() && (IsBlock || IsLambda)) {
       if (BuildAndDiagnose) {
         if (IsBlock)
           Diag(Loc, diag::err_ref_vm_type);

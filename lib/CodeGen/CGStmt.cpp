@@ -1831,6 +1831,9 @@ LValue CodeGenFunction::InitCapturedStruct(const CapturedStmt &S) {
   for (CapturedStmt::capture_init_iterator I = S.capture_init_begin(),
                                            E = S.capture_init_end();
        I != E; ++I, ++CurField, ++CurVar) {
+    if ((*CurField)->getType()->isVariablyModifiedType()) {
+      EmitVariablyModifiedType((*CurField)->getType());
+    }
     LValue LV = EmitLValueForFieldInitialization(SlotLV, *CurField);
     EmitInitializerForField(*CurField, LV, *I, ArrayRef<VarDecl *>());
   }
@@ -2204,6 +2207,14 @@ void CodeGenFunction::EmitCapturedStmtInlined(const CapturedStmt &S,
   const CapturedDecl *CD = S.getCapturedDecl();
   const RecordDecl *RD = S.getCapturedRecordDecl();
   assert(CD->hasBody() && "missing CapturedDecl body");
+
+  for (RecordDecl::field_iterator I = RD->field_begin(),
+                                  E = RD->field_end();
+       I != E; ++I) {
+    if ((*I)->getType()->isVariablyModifiedType()) {
+      EmitVariablyModifiedType((*I)->getType());
+    }
+  }
 
   // Set the context parameter in CapturedStmtInfo.
   if (CapturedStmtInfo) {

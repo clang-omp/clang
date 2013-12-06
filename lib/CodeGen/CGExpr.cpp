@@ -2052,7 +2052,8 @@ LValue CodeGenFunction::EmitPredefinedLValue(const PredefinedExpr *E) {
       FnName = FnName.substr(1);
     GlobalVarName += FnName;
 
-    const Decl *CurDecl = CurCodeDecl;
+    const Decl *CurDecl =
+      OpenMPRoot ? OpenMPRoot->CurCodeDecl : CurCodeDecl;
     if (CurDecl == 0)
       CurDecl = getContext().getTranslationUnitDecl();
 

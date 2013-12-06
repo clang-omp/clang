@@ -720,6 +720,7 @@ void CodeGenFunction::EmitOMPParallelDirective(const OMPParallelDirective &S) {
   FnArgs.push_back(Arg2);
   FnArgs.push_back(Arg3);
   CGF.maybeInitializeDebugInfo();
+  CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
   CGF.StartFunction(FD, getContext().VoidTy, Fn, FI, FnArgs, SourceLocation());
   CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg1), ".__kmpc_global_thread_num.");
 
@@ -1373,6 +1374,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   FnArgs.push_back(Arg1);
   FnArgs.push_back(Arg2);
   CGF.maybeInitializeDebugInfo();
+  CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
   CGF.StartFunction(FD, getContext().IntTy, Fn, FI, FnArgs, SourceLocation());
   llvm::AllocaInst *GTid = CGF.CreateMemTemp(getContext().IntTy,
                                              ".__kmpc_global_thread_num.");
@@ -2346,10 +2348,13 @@ void CodeGenFunction::EmitPreOMPPrivateClause(
       Private = EmitLValueForField(MakeNaturalAlignAddrLValue(Base, PrivateQTy),
                                    CGM.OpenMPSupport.getTaskFields()[VD]).getAddress();
     } else {
-      Private = CreateMemTemp(QTy, CGM.getMangledName(VD) + ".private.");
+      LocalVarsDeclGuard Grd(*this, true);
+      AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
+      Private = Emission.getAllocatedAddress();
     }
     // CodeGen for classes with the default constructor.
-    if ((!PTask || CurFn != PTask) && !isTrivialInitializer(*InitIter)) {
+    if (((!PTask || CurFn != PTask) && !isTrivialInitializer(*InitIter)) ||
+        (MainTy->isVariablyModifiedType() && !MainTy->isPointerType())) {
       RunCleanupsScope InitBlock(*this);
       if (const ArrayType *ArrayTy = MainTy->getAsArrayTypeUnsafe()) {
         // Create array.
@@ -2489,11 +2494,14 @@ void CodeGenFunction::EmitPreOMPFirstPrivateClause(
       Private = EmitLValueForField(MakeNaturalAlignAddrLValue(Base, PrivateQTy),
                                    CGM.OpenMPSupport.getTaskFields()[VD]).getAddress();
     } else {
-      Private = CreateMemTemp(QTy, CGM.getMangledName(VD) + ".firstprivate.");
+      LocalVarsDeclGuard Grd(*this, true);
+      AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
+      Private = Emission.getAllocatedAddress();
     }
     // CodeGen for classes with the copy constructor.
     RunCleanupsScope InitBlock(*this);
-    if ((!PTask || CurFn != PTask) && !isTrivialInitializer(*InitIter)) {
+    if (((!PTask || CurFn != PTask) && !isTrivialInitializer(*InitIter)) ||
+        (MainTy->isVariablyModifiedType() && !MainTy->isPointerType())) {
       if (const ArrayType *ArrayTy = MainTy->getAsArrayTypeUnsafe()) {
         // Create array.
         QualType ElementTy;
@@ -2675,10 +2683,15 @@ void CodeGenFunction::EmitPreOMPLastPrivateClause(
     //  Ty = Ty->getArrayElementTypeNoTypeQual();
     //}
     //Ty = PrevTy;
-    llvm::AllocaInst *Private =
-             CreateMemTemp(QTy, CGM.getMangledName(VD) + ".lastprivate.");
+    llvm::Value *Private = 0;
+    {
+      LocalVarsDeclGuard Grd(*this, true);
+      AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
+      Private = Emission.getAllocatedAddress();
+    }
     // CodeGen for classes with the default constructor.
-    if (!isTrivialInitializer(*InitIter)) {
+    if (!isTrivialInitializer(*InitIter) ||
+        (MainTy->isVariablyModifiedType() && !MainTy->isPointerType())) {
       RunCleanupsScope InitBlock(*this);
       if (const ArrayType *ArrayTy = MainTy->getAsArrayTypeUnsafe()) {
         // Create array.
@@ -2985,8 +2998,13 @@ void CodeGenFunction::EmitPreOMPReductionClause(
     //  LocalDeclMap[VD] = CreateMemTemp(VD->getType(), CGM.getMangledName(VD));
     //}
     QualType QTy = (*I)->getType();
-    llvm::AllocaInst *Private =
-             CreateMemTemp(QTy, CGM.getMangledName(VD) + ".reduction.");
+    llvm::AllocaInst *Private = 0;
+    {
+      LocalVarsDeclGuard Grd(*this, true);
+      AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
+      Private = cast<llvm::AllocaInst>(Emission.getAllocatedAddress());
+    }
+    //         CreateMemTemp(QTy, CGM.getMangledName(VD) + ".reduction.");
 
     // CodeGen for classes with the constructor.
     //const Type *Ty = QTy.getTypePtr();

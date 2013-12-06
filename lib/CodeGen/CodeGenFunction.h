@@ -587,6 +587,9 @@ public:
   const Decl *CurFuncDecl;
   /// CurCodeDecl - This is the inner-most code context, which includes blocks.
   const Decl *CurCodeDecl;
+  /// Root CodeGenFunction for OpenMP context in which current CodeGenFunction
+  /// was created ().
+  CodeGenFunction *OpenMPRoot;
   const CGFunctionInfo *CurFnInfo;
   QualType FnRetTy;
   llvm::Function *CurFn;
@@ -1424,6 +1427,22 @@ private:
   SourceLocation LastStopPoint;
 
 public:
+  /// This class is used for instantiation of local variables, but restores
+  /// LocalDeclMap state after instantiation. If Empty is true, the LocalDeclMap
+  /// is cleared completely and then restored to original state upon
+  /// destruction.
+  class LocalVarsDeclGuard {
+  private:
+    CodeGenFunction &CGF;
+    DeclMapTy LocalDeclMap;
+  public:
+    LocalVarsDeclGuard(CodeGenFunction &CGF, bool Empty = false)
+      : CGF(CGF), LocalDeclMap(CGF.LocalDeclMap) {
+        if (Empty) CGF.LocalDeclMap.clear();
+      }
+    ~LocalVarsDeclGuard() { CGF.LocalDeclMap = LocalDeclMap; }
+  };
+
   /// A scope within which we are constructing the fields of an object which
   /// might use a CXXDefaultInitExpr. This stashes away a 'this' value to use
   /// if we need to evaluate a CXXDefaultInitExpr within the evaluation.

@@ -3661,6 +3661,7 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
     OpenMPClauseKind Kind = DSAStack->getTopDSA(VD, PrevRef);
     Type = Type.getNonReferenceType().getCanonicalType();
     bool IsConstant = Type.isConstant(Context);
+    bool IsArray = Type->isArrayType();
     while (Type->isArrayType()) {
       QualType ElemType = cast<ArrayType>(Type.getTypePtr())->getElementType();
       Type = ElemType.getNonReferenceType().getCanonicalType();
@@ -3795,7 +3796,8 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
     }
 
     Type = Type.getUnqualifiedType();
-    if (RD && !RD->isTriviallyCopyable()) {
+    if ((RD && !RD->isTriviallyCopyable()) ||
+        IsArray) {
       DeclRefExpr *PseudoDE = DE;
       IdentifierInfo *Id = &Context.Idents.get(".firstprivate.");
       TypeSourceInfo *TI = Context.getTrivialTypeSourceInfo(Type,
@@ -3908,6 +3910,7 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
     DeclRefExpr *PrevRef;
     OpenMPClauseKind Kind = DSAStack->getTopDSA(VD, PrevRef);
     Type = Type.getNonReferenceType().getCanonicalType();
+    bool IsArray = Type->isArrayType();
     while (Type->isArrayType()) {
       QualType ElemType = cast<ArrayType>(Type.getTypePtr())->getElementType();
       Type = ElemType.getNonReferenceType().getCanonicalType();
@@ -4021,7 +4024,8 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
                                                                 Type,
                                                                 VK_LValue,
                                                                 ELoc).take());
-    if (RD && !RD->isTriviallyCopyable()) {
+    if ((RD && !RD->isTriviallyCopyable()) ||
+        IsArray) {
       VarDecl *PseudoVar2 =
               VarDecl::Create(Context, Context.getTranslationUnitDecl(), SourceLocation(),
                               SourceLocation(), Id, Type, TI,
@@ -4176,6 +4180,7 @@ OMPClause *Sema::ActOnOpenMPCopyinClause(ArrayRef<Expr *> VarList,
     //  firstprivate clause requires an accesible, unambiguous copy assignment
     //  operator for the class type.
     Type = Type.getNonReferenceType().getCanonicalType();
+    bool IsArray = Type->isArrayType();
     while (Type->isArrayType()) {
       QualType ElemType = cast<ArrayType>(Type.getTypePtr())->getElementType();
       Type = ElemType.getNonReferenceType().getCanonicalType();
@@ -4214,7 +4219,8 @@ OMPClause *Sema::ActOnOpenMPCopyinClause(ArrayRef<Expr *> VarList,
                                                                 Type,
                                                                 VK_LValue,
                                                                 ELoc).take());
-    if (RD && !RD->isTriviallyCopyable()) {
+    if ((RD && !RD->isTriviallyCopyable()) ||
+        IsArray) {
       VarDecl *PseudoVar2 =
               VarDecl::Create(Context, Context.getTranslationUnitDecl(), SourceLocation(),
                               SourceLocation(), Id, Type, TI,
