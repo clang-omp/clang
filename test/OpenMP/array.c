@@ -1,8 +1,8 @@
 // RUN: %clang_cc1 -verify -fopenmp -S -emit-llvm -o - -Wno-sizeof-array-argument %s
 // expected-no-diagnostics
 
-#include <assert.h>
 int A[2][2] = {1, 2, 3, 4};
+void assert(int arg) { }
 void f(int n, int B[n][n], int C[])
 {
    int D[2][2] = {1, 2, 3, 4};
