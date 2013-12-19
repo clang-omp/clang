@@ -260,8 +260,7 @@ void Parser::ConsumeExtraSemi(ExtraSemiKind Kind, unsigned TST) {
 /// If SkipUntil finds the specified token, it returns true, otherwise it
 /// returns false.
 bool Parser::SkipUntil(ArrayRef<tok::TokenKind> Toks, bool StopAtSemi,
-                       bool DontConsume, bool StopAtCodeCompletion,
-                       bool NoCount) {
+                       bool DontConsume, bool StopAtCodeCompletion) {
   // We always want this function to skip at least one token if the first token
   // isn't T and if not at EOF.
   bool isFirstTokenSkipped = true;
@@ -279,6 +278,9 @@ bool Parser::SkipUntil(ArrayRef<tok::TokenKind> Toks, bool StopAtSemi,
     }
 
     switch (Tok.getKind()) {
+    case tok::annot_pragma_openmp_end:
+      // Stop before an OpenMP pragma boundary.
+      return false;
     case tok::eof:
       // Ran out of tokens.
       return false;
@@ -291,20 +293,17 @@ bool Parser::SkipUntil(ArrayRef<tok::TokenKind> Toks, bool StopAtSemi,
     case tok::l_paren:
       // Recursively skip properly-nested parens.
       ConsumeParen();
-      if (!NoCount)
-        SkipUntil(tok::r_paren, false, false, StopAtCodeCompletion);
+      SkipUntil(tok::r_paren, false, false, StopAtCodeCompletion);
       break;
     case tok::l_square:
       // Recursively skip properly-nested square brackets.
       ConsumeBracket();
-      if (!NoCount)
-        SkipUntil(tok::r_square, false, false, StopAtCodeCompletion);
+      SkipUntil(tok::r_square, false, false, StopAtCodeCompletion);
       break;
     case tok::l_brace:
       // Recursively skip properly-nested braces.
       ConsumeBrace();
-      if (!NoCount)
-        SkipUntil(tok::r_brace, false, false, StopAtCodeCompletion);
+      SkipUntil(tok::r_brace, false, false, StopAtCodeCompletion);
       break;
 
     // Okay, we found a ']' or '}' or ')', which we think should be balanced.
@@ -313,17 +312,17 @@ bool Parser::SkipUntil(ArrayRef<tok::TokenKind> Toks, bool StopAtSemi,
     // higher level, we will assume that this matches the unbalanced token
     // and return it.  Otherwise, this is a spurious RHS token, which we skip.
     case tok::r_paren:
-      if (!NoCount && ParenCount && !isFirstTokenSkipped)
+      if (ParenCount && !isFirstTokenSkipped)
         return false;  // Matches something.
       ConsumeParen();
       break;
     case tok::r_square:
-      if (!NoCount && BracketCount && !isFirstTokenSkipped)
+      if (BracketCount && !isFirstTokenSkipped)
         return false;  // Matches something.
       ConsumeBracket();
       break;
     case tok::r_brace:
-      if (!NoCount && BraceCount && !isFirstTokenSkipped)
+      if (BraceCount && !isFirstTokenSkipped)
         return false;  // Matches something.
       ConsumeBrace();
       break;
@@ -1900,8 +1899,7 @@ bool BalancedDelimiterTracker::diagnoseOverflow() {
   P.Diag(P.Tok, diag::err_bracket_depth_exceeded)
     << P.getLangOpts().BracketDepth;
   P.Diag(P.Tok, diag::note_bracket_depth);
-  P.SkipUntil(tok::eof, FinalToken, true, false, false,
-              FinalToken == tok::annot_pragma_openmp_end);
+  P.SkipUntil(tok::eof, FinalToken, true, false, false);
   return true;  
 }
 
@@ -1938,6 +1936,5 @@ bool BalancedDelimiterTracker::diagnoseMissingClose() {
 }
 
 void BalancedDelimiterTracker::skipToEnd() {
-  P.SkipUntil(Close, false, false, false,
-              FinalToken == tok::annot_pragma_openmp_end);
+  P.SkipUntil(Close, false, false, false);
 }

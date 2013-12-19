@@ -1821,8 +1821,8 @@ void OMPClauseWriter::VisitOMPCopyPrivateClause(OMPCopyPrivateClause *C) {
 void OMPClauseWriter::VisitOMPReductionClause(OMPReductionClause *C) {
   Record.push_back(C->varlist_size());
   Record.push_back(C->getOperator());
-  Writer->Writer.AddDeclarationName(C->getOpName(), Record);
-  Writer->Writer.AddSourceLocation(C->getOperatorLoc(), Record);
+  Writer->Writer.AddNestedNameSpecifierLoc(C->getSpec(), Record);
+  Writer->Writer.AddDeclarationNameInfo(C->getOpName(), Record);
   for (OMPVarList<OMPReductionClause>::varlist_iterator I = C->varlist_begin(),
                                                         E = C->varlist_end();
        I != E; ++I)

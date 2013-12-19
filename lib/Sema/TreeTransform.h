@@ -1451,11 +1451,11 @@ public:
                                        SourceLocation StartLoc,
                                        SourceLocation EndLoc,
                                        OpenMPReductionClauseOperator Op,
-                                       DeclarationName OpName,
-                                       SourceLocation OpLoc) {
+                                       CXXScopeSpec &SS,
+                                       DeclarationNameInfo OpName) {
     return getSema().ActOnOpenMPReductionClause(VarList,
                                                 StartLoc, EndLoc, Op,
-                                                OpName, OpLoc);
+                                                SS, OpName);
   }
 
   /// \brief Build a new OpenMP 'ordered' clause.
@@ -7013,12 +7013,15 @@ TreeTransform<Derived>::TransformOMPReductionClause(OMPReductionClause *C) {
       return 0;
     Vars.push_back(EVar.take());
   }
+  CXXScopeSpec SS;
+  SS.Adopt(C->getSpec());
+  DeclarationNameInfo DNI =
+    getDerived().TransformDeclarationNameInfo(C->getOpName());
   return getDerived().RebuildOMPReductionClause(Vars,
                                                 C->getLocStart(),
                                                 C->getLocEnd(),
                                                 C->getOperator(),
-                                                C->getOpName(),
-                                                C->getOperatorLoc());
+                                                SS, DNI);
 }
 
 template<typename Derived>

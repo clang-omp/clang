@@ -989,10 +989,10 @@ class OMPReductionClause : public OMPClause,
   friend class OMPClauseWriter;
   /// \brief An operator for the 'reduction' clause.
   OpenMPReductionClauseOperator Operator;
+  /// \brief Nested name specifier for C++.
+  NestedNameSpecifierLoc Spec;
   /// \brief Name of custom operator.
-  DeclarationName OperatorName;
-  /// \brief Start location of the kind in cource code.
-  SourceLocation OperatorLoc;
+  DeclarationNameInfo OperatorName;
 
   /// \brief Set operator for the clause.
   ///
@@ -1002,15 +1002,13 @@ class OMPReductionClause : public OMPClause,
 
   /// \brief Set operator name for the clause.
   ///
+  /// \param S Nested name specifier.
   /// \param Op Operator name for the clause.
   ///
-  void setOpName(DeclarationName OpName) { OperatorName = OpName; }
-
-  /// \brief Set operator location.
-  ///
-  /// \param OpLoc Operator location.
-  ///
-  void setOperatorLoc(SourceLocation OpLoc) { OperatorLoc = OpLoc; }
+  void setOpName(NestedNameSpecifierLoc S, DeclarationNameInfo OpName) {
+    Spec = S;
+    OperatorName = OpName;
+  }
 
   /// \brief Build clause with number of variables \a N and an operator \a Op.
   ///
@@ -1021,11 +1019,12 @@ class OMPReductionClause : public OMPClause,
   /// \param OpLoc Location of the operator.
   ///
   OMPReductionClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N,
-                     OpenMPReductionClauseOperator Op, DeclarationName OpName,
-                     SourceLocation OpLoc)
+                     OpenMPReductionClauseOperator Op,
+                     NestedNameSpecifierLoc Spec,
+                     DeclarationNameInfo OpName)
     : OMPClause(OMPC_reduction, StartLoc, EndLoc),
-      OMPVarList<OMPReductionClause>(N), Operator(Op), OperatorName(OpName),
-      OperatorLoc(OpLoc) { }
+      OMPVarList<OMPReductionClause>(N), Operator(Op), Spec(Spec),
+      OperatorName(OpName) { }
 
   /// \brief Build an empty clause.
   ///
@@ -1034,7 +1033,7 @@ class OMPReductionClause : public OMPClause,
   explicit OMPReductionClause(unsigned N)
     : OMPClause(OMPC_reduction, SourceLocation(), SourceLocation()),
       OMPVarList<OMPReductionClause>(N), Operator(OMPC_REDUCTION_unknown),
-      OperatorName(), OperatorLoc(SourceLocation()) { }
+      Spec(), OperatorName() { }
 
   /// \brief Sets the list of generated expresssions.
   void setOpExprs(ArrayRef<Expr *> OpExprs);
@@ -1076,7 +1075,8 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   /// \param Op reduction operator.
-  /// \param OpLoc Location of the operator.
+  /// \param S nested name specifier.
+  /// \param OpName Reduction identifier.
   ///
   static OMPReductionClause *Create(ASTContext &C,
                                     SourceLocation StartLoc,
@@ -1087,8 +1087,8 @@ public:
                                     ArrayRef<Expr *> HelperParams2,
                                     ArrayRef<Expr *> DefaultInits,
                                     OpenMPReductionClauseOperator Op,
-                                    DeclarationName OpName,
-                                    SourceLocation OpLoc);
+                                    NestedNameSpecifierLoc S,
+                                    DeclarationNameInfo OpName);
   /// \brief Creates an empty clause with the place for \a N variables.
   ///
   /// \param C AST context.
@@ -1099,11 +1099,11 @@ public:
   /// \brief Fetches operator for the clause.
   OpenMPReductionClauseOperator getOperator() const { return Operator; }
 
-  /// \brief Fetches operator name for the clause.
-  DeclarationName getOpName() const { return OperatorName; }
+  /// \brief Fetches nested name specifier for the clause.
+  NestedNameSpecifierLoc getSpec() const { return Spec; }
 
-  /// \brief Fetches location of clause operator.
-  SourceLocation getOperatorLoc() const { return OperatorLoc; }
+  /// \brief Fetches operator name for the clause.
+  DeclarationNameInfo getOpName() const { return OperatorName; }
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_reduction;

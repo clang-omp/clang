@@ -1965,8 +1965,11 @@ void OMPClauseReader::VisitOMPCopyPrivateClause(OMPCopyPrivateClause *C) {
 void OMPClauseReader::VisitOMPReductionClause(OMPReductionClause *C) {
   C->setOperator(
      static_cast<OpenMPReductionClauseOperator>(Record[Idx++]));
-  C->setOpName(Reader->Reader.ReadDeclarationName(Reader->F, Record, Idx));
-  C->setOperatorLoc(Reader->ReadSourceLocation(Record, Idx));
+  NestedNameSpecifierLoc NNSL =
+    Reader->Reader.ReadNestedNameSpecifierLoc(Reader->F, Record, Idx);
+  DeclarationNameInfo DNI;
+  Reader->Reader.ReadDeclarationNameInfo(Reader->F, DNI, Record, Idx);
+  C->setOpName(NNSL, DNI);
   unsigned NumVars = C->varlist_size();
   SmallVector<Expr *, 16> Vars;
   Vars.reserve(NumVars);

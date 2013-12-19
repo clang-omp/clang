@@ -32,6 +32,7 @@ using namespace clang;
 
 namespace  {
   class StmtPrinter : public StmtVisitor<StmtPrinter> {
+    friend class OMPClausePrinter;
     raw_ostream &OS;
     unsigned IndentLevel;
     clang::PrinterHelper* Helper;
@@ -705,7 +706,9 @@ void OMPClausePrinter::VisitOMPReductionClause(OMPReductionClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "reduction(";
     if (Node->getOperator() == OMPC_REDUCTION_custom) {
-      Node->getOpName().printName(OS);
+      if (NestedNameSpecifier *Qual = Node->getSpec().getNestedNameSpecifier())
+        Qual->print(OS, Printer->Policy);
+      OS << Node->getOpName();
     } else {
       OS << getOpenMPSimpleClauseTypeName(OMPC_reduction, Node->getOperator());
     }

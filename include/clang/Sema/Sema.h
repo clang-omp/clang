@@ -6995,7 +6995,8 @@ public:
                                       SourceLocation EndLoc,
                                       unsigned Op,
                                       Expr *TailExpr,
-                                      DeclarationName OpName,
+                                      CXXScopeSpec &SS,
+                                      const UnqualifiedId &OpName,
                                       SourceLocation OpLoc);
 
   /// \brief Called on well-formed 'private' clause.
@@ -7027,8 +7028,8 @@ public:
                                         SourceLocation StartLoc,
                                         SourceLocation EndLoc,
                                         OpenMPReductionClauseOperator Op,
-                                        DeclarationName OpName,
-                                        SourceLocation OpLoc);
+                                        CXXScopeSpec &SS,
+                                        DeclarationNameInfo OpName);
   /// \brief Called on well-formed 'flush' clause.
   OMPClause *ActOnOpenMPFlushClause(ArrayRef<Expr *> VarList,
                                     SourceLocation StartLoc,

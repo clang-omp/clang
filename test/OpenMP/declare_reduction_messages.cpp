@@ -39,7 +39,9 @@ class Class1 {
 Class1<char &> e; // expected-note {{in instantiation of template class 'Class1<char &>' requested here}}
 
 template <class T>
-class Class2 { };
+class Class2 {
+#pragma omp declare reduction (fun : T : omp_out += omp_in ) // expected-note {{implicitly declared private here}}
+};
 
 #pragma omp declare reduction (fun : long : omp_out += omp_in ) // expected-error {{previous declaration with type 'long' is found}}
 #pragma omp declare reduction (fun1 : long : omp_out += omp_in ) initializer // expected-error {{expected '(' after 'initializer'}} expected-error {{expected expression}}
@@ -65,5 +67,16 @@ T fun(T arg) {
 }
 
 int main() {
+  Class1<int> c1;
+  int i;
+  #pragma omp parallel reduction (::fun : c1) // expected-error {{no member named 'fun' in the global namespace}}
+  {
+  }
+  #pragma omp parallel reduction (::Class1<int>::fun : c1) // expected-error {{no member named 'fun' in 'Class1<int>'}}
+  {
+  }
+  #pragma omp parallel reduction (::Class2<int>::fun : i) // expected-error {{'fun' is a private member of 'Class2<int>'}}
+  {
+  }
   return fun(15);
 }

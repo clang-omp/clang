@@ -74,19 +74,19 @@ int main(int argc, char **argv) {
   #pragma omp parallel
   #pragma omp for reduction(+ : r) // expected-error {{const-qualified variable cannot be reduction}}
   for (int x = 0; x < 10; ++x) foo();
-  #pragma omp for reduction // expected-error {{expected '(' after 'reduction'}} expected-error {{expected reduction identifier}}
+  #pragma omp for reduction // expected-error {{expected '(' after 'reduction'}} expected-error {{expected unqualified-id}} expected-error {{expected ':' in 'reduction' clause}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp for reduction + // expected-error {{expected '(' after 'reduction'}} expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}}
   for (i = 0; i < 10; ++i) foo();
-  #pragma omp for reduction ( // expected-error {{expected reduction identifier}} expected-error {{expected ')'}} expected-note {{to match this '('}}
+  #pragma omp for reduction ( // expected-error {{expected unqualified-id}} expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected ')'}} expected-note {{to match this '('}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp for reduction (- // expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}} expected-error {{expected ')'}} expected-note {{to match this '('}}
   for (i = 0; i < 10; ++i) foo();
-  #pragma omp for reduction () // expected-error {{expected reduction identifier}}
+  #pragma omp for reduction () // expected-error {{expected unqualified-id}} expected-error {{expected ':' in 'reduction' clause}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp for reduction (*) // expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}}
   for (i = 0; i < 10; ++i) foo();
-  #pragma omp for reduction (\) // expected-error {{expected reduction identifier}} expected-error {{expected ':' in 'reduction' clause}}
+  #pragma omp for reduction (\) // expected-error {{expected unqualified-id}} expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp parallel
   #pragma omp for reduction (&: argc // expected-error {{expected ')'}} expected-note {{to match this '('}}
@@ -139,6 +139,7 @@ int main(int argc, char **argv) {
   #pragma omp parallel
   #pragma omp for reduction(+ : o) // expected-error {{no viable overloaded '+='}}
   for (i = 0; i < 10; ++i) foo();
+  #pragma omp parallel private(i)
   #pragma omp parallel shared(i, j, q)
   #pragma omp for reduction(|| : i), reduction(+ : j), reduction(+:q) // expected-error 2 {{argument of OpenMP clause 'reduction' must reference the same object in all threads}}
   for (int x = 0; x < 10; ++x) foo();

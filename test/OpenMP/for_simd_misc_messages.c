@@ -259,24 +259,26 @@ void test_lastprivate()
 void test_reduction()
 {
   int i, x, y;
-  // expected-error@+2 {{expected ')'}} expected-note@+2 {{to match this '('}}
-  /* expected-error@+1 {{expected reduction identifier}} */
+  // expected-error@+3 {{expected ')'}} expected-note@+3 {{to match this '('}}
+  /* expected-error@+2 {{expected identifier}} */
+  /* expected-error@+1 {{expected ':' in 'reduction' clause}} */
   #pragma omp for simd reduction(
   for (i = 0; i < 16; ++i) ;
-  /* expected-error@+1 {{expected reduction identifier}} */
+  /* expected-error@+2 {{expected identifier}} */
+  /* expected-error@+1 {{expected ':' in 'reduction' clause}} */
   #pragma omp for simd reduction()
   for (i = 0; i < 16; ++i) ;
   /* expected-error@+2 {{expected expression}} */
   /* expected-error@+1 {{expected ':' in 'reduction' clause}} */
   #pragma omp for simd reduction(x)
   for (i = 0; i < 16; ++i) ;
-  /* expected-error@+2 {{expected reduction identifier}} */
-  /* expected-error@+1 {{expected ':' in 'reduction' clause}} */
+  /* expected-error@+1 {{expected identifier}} */
   #pragma omp for simd reduction(:x)
   for (i = 0; i < 16; ++i) ;
-  // expected-error@+3 {{expected ')'}} expected-note@+3 {{to match this '('}}
-  /* expected-error@+2 {{expected reduction identifier}} */
-  /* expected-error@+1 {{expected ':' in 'reduction' clause}} */
+  // expected-error@+4 {{expected ')'}} expected-note@+4 {{to match this '('}}
+  /* expected-error@+3 {{expected identifier}} */
+  /* expected-error@+2 {{expected ':' in 'reduction' clause}} */
+  /* expected-error@+1 2 {{expected expression}} */
   #pragma omp for simd reduction(,
   for (i = 0; i < 16; ++i) ;
   // expected-error@+3 {{expected ')'}} expected-note@+3 {{to match this '('}}
@@ -299,8 +301,9 @@ void test_reduction()
   /* expected-error@+1 {{expected expression}} */
   #pragma omp for simd reduction(+:x,+:y)
   for (i = 0; i < 16; ++i) ;
-  /* expected-error@+2 {{expected reduction identifier}} */
-  /* expected-error@+1 {{expected ':' in 'reduction' clause}} */
+  /* expected-error@+3 {{expected identifier}} */
+  /* expected-error@+2 {{expected ':' in 'reduction' clause}} */
+  /* expected-error@+1 {{expected expression}} */
   #pragma omp for simd reduction(%:x)
   for (i = 0; i < 16; ++i) ;
 

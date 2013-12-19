@@ -1297,8 +1297,8 @@ OMPReductionClause *OMPReductionClause::Create(ASTContext &C,
                                                ArrayRef<Expr *> HelperParams2,
                                                ArrayRef<Expr *> DefaultInits,
                                                OpenMPReductionClauseOperator Op,
-                                               DeclarationName OpName,
-                                               SourceLocation OpLoc) {
+                                               NestedNameSpecifierLoc S,
+                                               DeclarationNameInfo OpName) {
   assert (VL.size() == OpExprs.size() &&
           "Number of expressions is not the same as number of variables!");
   void *Mem = C.Allocate(sizeof(OMPReductionClause) +
@@ -1306,7 +1306,7 @@ OMPReductionClause *OMPReductionClause::Create(ASTContext &C,
                          llvm::alignOf<OMPReductionClause>());
   OMPReductionClause *Clause = new (Mem) OMPReductionClause(StartLoc, EndLoc,
                                                             VL.size(),
-                                                            Op, OpName, OpLoc);
+                                                            Op, S, OpName);
   Clause->setVars(VL);
   Clause->setOpExprs(OpExprs);
   Clause->setHelperParameters1st(HelperParams1);

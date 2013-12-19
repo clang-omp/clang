@@ -72,19 +72,19 @@ int main(int argc, char **argv) {
   int &q = qa[i]; // expected-note {{'q' defined here}}
   #pragma omp simd reduction(+ : r) // expected-error {{const-qualified variable cannot be reduction}}
   for (int x = 0; x < 10; ++x) foo();
-  #pragma omp simd reduction // expected-error {{expected '(' after 'reduction'}} expected-error {{expected reduction identifier}}
+  #pragma omp simd reduction // expected-error {{expected '(' after 'reduction'}} expected-error {{expected unqualified-id}} expected-error {{expected ':' in 'reduction' clause}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp simd reduction + // expected-error {{expected '(' after 'reduction'}} expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}}
   for (i = 0; i < 10; ++i) foo();
-  #pragma omp simd reduction ( // expected-error {{expected reduction identifier}} expected-error {{expected ')'}} expected-note {{to match this '('}}
+  #pragma omp simd reduction ( // expected-error {{expected unqualified-id}} expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected ')'}} expected-note {{to match this '('}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp simd reduction (- // expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}} expected-error {{expected ')'}} expected-note {{to match this '('}}
   for (i = 0; i < 10; ++i) foo();
-  #pragma omp simd reduction () // expected-error {{expected reduction identifier}}
+  #pragma omp simd reduction () // expected-error {{expected unqualified-id}} expected-error {{expected ':' in 'reduction' clause}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp simd reduction (*) // expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}}
   for (i = 0; i < 10; ++i) foo();
-  #pragma omp simd reduction (\) // expected-error {{expected reduction identifier}} expected-error {{expected ':' in 'reduction' clause}}
+  #pragma omp simd reduction (\) // expected-error {{expected unqualified-id}} expected-error {{expected ':' in 'reduction' clause}} expected-error {{expected expression}}
   for (i = 0; i < 10; ++i) foo();
   #pragma omp simd reduction (&: argc // expected-error {{expected ')'}} expected-note {{to match this '('}}
   for (i = 0; i < 10; ++i) foo();
