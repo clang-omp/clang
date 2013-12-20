@@ -1156,7 +1156,8 @@ Sema::DeclGroupPtrTy Sema::ActOnOpenMPDeclareReductionDirective(
                                                     EE = DRI->datalist_end();
          II != EE; ++II) {
       ArrayRef<SourceRange>::iterator IR = TyRanges.begin();
-      for (ArrayRef<QualType>::iterator IT = Types.begin(), IE = Types.end();
+      for (ArrayRef<QualType>::iterator IT = Types.begin(),
+                                        IE = Types.end();
            IT != IE; ++IT, ++IR) {
         if (!II->QTy.isNull() && Context.hasSameType(II->QTy, *IT)) {
           Diag(IR->getBegin(), diag::err_omp_reduction_redeclared) << II->QTy
@@ -1172,8 +1173,9 @@ Sema::DeclGroupPtrTy Sema::ActOnOpenMPDeclareReductionDirective(
   if (!D->isInvalidDecl()) {
     CompleteOMPDeclareReductionDecl(DR, Types, TyRanges, Combiners, Inits);
     PushOnScopeChains(DR, CurScope, false);
+    return DeclGroupPtrTy::make(DeclGroupRef(DR));
   }
-  return DeclGroupPtrTy::make(DeclGroupRef(DR));
+  return DeclGroupPtrTy();
 }
 
 void Sema::CompleteOMPDeclareReductionDecl(OMPDeclareReductionDecl *D,
@@ -4456,12 +4458,14 @@ public:
   virtual bool ValidateCandidate(const TypoCorrection &Candidate) {
     if (OMPDeclareReductionDecl *D =
           dyn_cast_or_null<OMPDeclareReductionDecl>(Candidate.getCorrectionDecl())) {
+      if (D->isInvalidDecl()) return false;
       bool Found = false;
       for (OMPDeclareReductionDecl::datalist_iterator IT = D->datalist_begin(),
                                                       ET = D->datalist_end();
            IT != ET; ++IT) {
         if (!IT->QTy.isNull() &&
-            Actions.Context.hasSameUnqualifiedType(IT->QTy, QTy)) {
+            (Actions.Context.hasSameUnqualifiedType(IT->QTy, QTy) ||
+             Actions.IsDerivedFrom(QTy, IT->QTy))) {
           Found = true;
           FoundData = IT;
         }
@@ -4492,14 +4496,27 @@ TryToFindDeclareReductionDecl(Sema &SemaRef,
     while (Filter.hasNext()) {
       OMPDeclareReductionDecl *D = cast<OMPDeclareReductionDecl>(Filter.next());
       bool Remove = true;
-      for (OMPDeclareReductionDecl::datalist_iterator IT = D->datalist_begin(),
-                                                      ET = D->datalist_end();
-           IT != ET; ++IT) {
-        if (!IT->QTy.isNull() &&
-            SemaRef.Context.hasSameUnqualifiedType(IT->QTy, QTy)) {
-          Found.push_back(IT);
-          FoundDecl.push_back(D);
-          Remove = false;
+      if (!D->isInvalidDecl()) {
+        for (OMPDeclareReductionDecl::datalist_iterator IT = D->datalist_begin(),
+                                                        ET = D->datalist_end();
+             IT != ET; ++IT) {
+          if (!IT->QTy.isNull() &&
+              SemaRef.Context.hasSameUnqualifiedType(IT->QTy, QTy)) {
+            Found.push_back(IT);
+            FoundDecl.push_back(D);
+            Remove = false;
+          }
+        }
+        if (Found.empty()) {
+          for (OMPDeclareReductionDecl::datalist_iterator IT = D->datalist_begin(),
+                                                          ET = D->datalist_end();
+               IT != ET; ++IT) {
+            if (!IT->QTy.isNull() && SemaRef.IsDerivedFrom(QTy, IT->QTy)) {
+              Found.push_back(IT);
+              FoundDecl.push_back(D);
+              Remove = false;
+            }
+          }
         }
       }
       if (Remove) Filter.erase();

@@ -1190,7 +1190,7 @@ void DeclPrinter::VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D) {
 }
 
 void DeclPrinter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
-  if (!D->datalist_empty()) {
+  if (!D->isInvalidDecl() && !D->datalist_empty()) {
     for (OMPDeclareReductionDecl::datalist_iterator I = D->datalist_begin(),
                                                     E = D->datalist_end();
          I != E; ++I) {

@@ -905,6 +905,21 @@ private:
     CachedTokens *ExceptionSpecTokens;
   };
 
+  /// LateParsedOpenMPDeclaration - An OpenMP declaration inside a class.
+  struct LateParsedOpenMPDeclaration : public LateParsedDeclaration {
+    explicit LateParsedOpenMPDeclaration(Parser *P, AccessSpecifier AS)
+      : Self(P), AS(AS) { }
+
+    virtual void ParseLexedMethodDeclarations();
+
+    Parser* Self;
+    AccessSpecifier AS;
+
+    /// \brief The set of tokens that make up an exception-specification that
+    /// has not yet been parsed.
+    CachedTokens Tokens;
+  };
+
   /// LateParsedMemberInitializer - An initializer for a non-static class data
   /// member whose parsing must to be delayed until the class is completely
   /// defined (C++11 [class.mem]p2).
@@ -2141,6 +2156,9 @@ private:
   // OpenMP: Directives and clauses.
   /// \brief Parses declarative OpenMP directives.
   DeclGroupPtrTy ParseOpenMPDeclarativeDirective(AccessSpecifier AS);
+  /// \brief Late parsing of declarative OpenMP directives.
+  void LateParseOpenMPDeclarativeDirective(AccessSpecifier AS);
+
   /// \brief Parses simple list of variables.
   ///
   /// \param Kind Kind of the directive.

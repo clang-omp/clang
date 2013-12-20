@@ -122,6 +122,75 @@ Parser::DeclGroupPtrTy Parser::ParseOpenMPDeclarativeDirective(AccessSpecifier A
   return DeclGroupPtrTy();
 }
 
+/// \brief Late parsing of declarative OpenMP directives.
+///
+///       threadprivate-directive:
+///         annot_pragma_openmp 'threadprivate' simple-variable-list
+///         annot_pragma_openmp_end
+///
+void Parser::LateParseOpenMPDeclarativeDirective(AccessSpecifier AS) {
+  assert(Tok.is(tok::annot_pragma_openmp) && "Not an OpenMP directive!");
+  LateParsedOpenMPDeclaration *Decl =
+    new LateParsedOpenMPDeclaration(this, AS);
+  getCurrentClass().LateParsedDeclarations.push_back(Decl);
+  while (Tok.isNot(tok::annot_pragma_openmp_end) &&
+         Tok.isNot(tok::eof)) {
+    Decl->Tokens.push_back(Tok);
+    ConsumeAnyToken();
+  }
+  Decl->Tokens.push_back(Tok);
+  ConsumeAnyToken();
+
+  if (Decl->Tokens.size() > 3) {
+    Token SavedToken = Decl->Tokens[1];
+    if (!SavedToken.isAnnotation()) {
+      StringRef Spelling = PP.getSpelling(SavedToken);
+      if (Spelling == "declare") {
+        SavedToken = Decl->Tokens[2];
+        if (!SavedToken.isAnnotation()) {
+          Spelling = PP.getSpelling(SavedToken);
+          if (Spelling == "simd") {
+            if (Tok.isNot(tok::annot_pragma_openmp)) {
+              LexTemplateFunctionForLateParsing(Decl->Tokens);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+/// \brief Actual parsing of late OpenMP declaration.
+void Parser::LateParsedOpenMPDeclaration::ParseLexedMethodDeclarations() {
+  // Save the current token position.
+  SourceLocation origLoc = Self->Tok.getLocation();
+
+  assert(!Tokens.empty() && "Empty body!");
+  // Append the current token at the end of the new token stream so that it
+  // doesn't get lost.
+  Tokens.push_back(Self->Tok);
+  Self->PP.EnterTokenStream(Tokens.data(), Tokens.size(), true, false);
+
+  // Consume the previously pushed token.
+  Self->ConsumeAnyToken(/*ConsumeCodeCompletionTok=*/true);
+
+  Self->ParseOpenMPDeclarativeDirective(this->AS);
+
+  if (Self->Tok.getLocation() != origLoc) {
+    // Due to parsing error, we either went over the cached tokens or
+    // there are still cached tokens left. If it's the latter case skip the
+    // leftover tokens.
+    // Since this is an uncommon situation that should be avoided, use the
+    // expensive isBeforeInTranslationUnit call.
+    if (Self->PP.getSourceManager().isBeforeInTranslationUnit(
+                                                      Self->Tok.getLocation(),
+                                                      origLoc))
+      while (Self->Tok.getLocation() != origLoc && Self->Tok.isNot(tok::eof))
+        Self->ConsumeAnyToken();
+  }
+
+}
+
 /// \brief Parsing of declarative or executable OpenMP directives.
 ///
 ///       threadprivate-directive:
