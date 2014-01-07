@@ -2871,9 +2871,9 @@ OMPClause *Sema::ActOnOpenMPNumThreadsClause(Expr *NumThreads,
   if (!NumThreads)
     return 0;
 
-  QualType Type = NumThreads->getType();
   Expr *ValExpr = NumThreads;
-  if (!Type->isDependentType() && !Type->isInstantiationDependentType()) {
+  if (!ValExpr->isTypeDependent() && !ValExpr->isValueDependent() &&
+      !ValExpr->isInstantiationDependent()) {
     SourceLocation Loc = NumThreads->getExprLoc();
     ExprResult Value = ConvertToIntegralOrEnumerationType(Loc,
                                                           NumThreads,
@@ -3219,18 +3219,21 @@ OMPClause *Sema::ActOnOpenMPScheduleClause(OpenMPScheduleClauseKind Kind,
   }
   ExprResult Value;
   if (ChunkSize) {
-    SourceLocation Loc = ChunkSize->getExprLoc();
-    Value = ConvertToIntegralOrEnumerationType(Loc, ChunkSize,
-                                               ConvertDiagnoser, true);
-    if (Value.isInvalid())
-      return 0;
+    if (!ChunkSize->isTypeDependent() && !ChunkSize->isValueDependent() &&
+        !ChunkSize->isInstantiationDependent()) {
+      SourceLocation Loc = ChunkSize->getExprLoc();
+      Value = ConvertToIntegralOrEnumerationType(Loc, ChunkSize,
+                                                 ConvertDiagnoser, true);
+      if (Value.isInvalid())
+        return 0;
 
-    llvm::APSInt Result;
-    if (Value.get()->isIntegerConstantExpr(Result, Context) &&
-        !Result.isStrictlyPositive()) {
-      Diag(Loc, diag::err_negative_expression_in_clause)
-        << ChunkSize->getSourceRange();
-      return 0;
+      llvm::APSInt Result;
+      if (Value.get()->isIntegerConstantExpr(Result, Context) &&
+          !Result.isStrictlyPositive()) {
+        Diag(Loc, diag::err_negative_expression_in_clause)
+          << ChunkSize->getSourceRange();
+        return 0;
+      }
     }
   } else {
     // OpenMP [2.5.1, Loop Construct, Description, Table 2-1]
@@ -3338,18 +3341,21 @@ OMPClause *Sema::ActOnOpenMPDistScheduleClause(OpenMPScheduleClauseKind Kind,
   }
   ExprResult Value;
   if (ChunkSize) {
-    SourceLocation Loc = ChunkSize->getExprLoc();
-    Value = ConvertToIntegralOrEnumerationType(Loc, ChunkSize,
-                                               ConvertDiagnoser, true);
-    if (Value.isInvalid())
-      return 0;
+    if (!ChunkSize->isTypeDependent() && !ChunkSize->isValueDependent() &&
+        !ChunkSize->isInstantiationDependent()) {
+      SourceLocation Loc = ChunkSize->getExprLoc();
+      Value = ConvertToIntegralOrEnumerationType(Loc, ChunkSize,
+                                                 ConvertDiagnoser, true);
+      if (Value.isInvalid())
+        return 0;
 
-    llvm::APSInt Result;
-    if (Value.get()->isIntegerConstantExpr(Result, Context) &&
-        !Result.isStrictlyPositive()) {
-      Diag(Loc, diag::err_negative_expression_in_clause)
-        << ChunkSize->getSourceRange();
-      return 0;
+      llvm::APSInt Result;
+      if (Value.get()->isIntegerConstantExpr(Result, Context) &&
+          !Result.isStrictlyPositive()) {
+        Diag(Loc, diag::err_negative_expression_in_clause)
+          << ChunkSize->getSourceRange();
+        return 0;
+      }
     }
   } else {
     Value = ExprEmpty();
@@ -5714,8 +5720,12 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
   }
   if (Diff.isInvalid() ||
       !Diff.get()->getType()->isIntegerType()) {
-    Diag(S->getLocStart(), diag::err_omp_for_wrong_count);
-    return true;
+    NewEnd = Diff.get();
+    if (!NewEnd->isTypeDependent() && !NewEnd->isValueDependent() &&
+        !NewEnd->isInstantiationDependent()) {
+      Diag(S->getLocStart(), diag::err_omp_for_wrong_count);
+      return true;
+    }
   }
   NewEnd = Diff.take();
   NewIncr = Step;
