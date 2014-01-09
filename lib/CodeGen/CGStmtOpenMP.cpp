@@ -3620,9 +3620,11 @@ void CodeGenFunction::EmitOMPAtomicDirective(const OMPAtomicDirective &S) {
     case OMPC_write: {
       QualType QTy = S.getX()->getType();
       QualType AQTy = getAtomicType(*this, QTy);
+      QualType QTyIn = S.getExpr()->getType();
       llvm::Value *AtomicFunc = AQTy.isNull() ? 0 :
         OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTy, AQTy, OMP_Atomic_wr, false, false);
-      if (X.isSimple() && AtomicFunc) {
+      if (X.isSimple() && AtomicFunc && QTyIn->isScalarType() &&
+          !QTyIn->isAnyComplexType()) {
         llvm::Type *ATy = ConvertTypeForMem(AQTy);
         llvm::SmallVector<llvm::Value *, 5> Args;
         // __kmpc_atomic_..._wr(&loc, global_tid, &x, expr);
@@ -3685,7 +3687,8 @@ void CodeGenFunction::EmitOMPAtomicDirective(const OMPAtomicDirective &S) {
       llvm::Value *AtomicFunc = (AQTyRes.isNull() || AQTyIn.isNull()) ? 0 :
         OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTyRes, AQTyIn, Aop, false,
                                       S.isReversed());
-      if (X.isSimple() && AtomicFunc) {
+      if (X.isSimple() && AtomicFunc && QTyIn->isScalarType() &&
+          !QTyIn->isAnyComplexType()) {
         llvm::Type *ATyRes = ConvertTypeForMem(AQTyRes);
         llvm::SmallVector<llvm::Value *, 5> Args;
         // __kmpc_atomic_..._op(&loc, global_tid, &x, expr);
@@ -3750,7 +3753,8 @@ void CodeGenFunction::EmitOMPAtomicDirective(const OMPAtomicDirective &S) {
       llvm::Value *AtomicFunc = (AQTyRes.isNull() || AQTyIn.isNull()) ? 0 :
         OPENMPRTL_ATOMIC_FUNC_GENERAL(AQTyRes, AQTyIn, Aop, true,
                                       S.isReversed());
-      if (X.isSimple() && AtomicFunc) {
+      if (X.isSimple() && AtomicFunc && QTyIn->isScalarType() &&
+          !QTyIn->isAnyComplexType()) {
         llvm::Type *ATy = ConvertTypeForMem(AQTyRes);
         llvm::SmallVector<llvm::Value *, 5> Args;
         // __kmpc_atomic_..._op(&loc, global_tid, &x, expr);
