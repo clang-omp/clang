@@ -203,12 +203,10 @@ OpenMPClauseKind DSAStackTy::getDSA(StackTy::reverse_iterator Iter,
   // Variables with automatic storage duration that are declared in a scope
   // inside the construct are private.
   Kind = Iter->Directive;
-  if (Kind != OMPD_parallel && Kind != OMPD_task) {
-    if (isOpenMPLocal(D, Iter) && D->isLocalVarDecl() &&
-        (D->getStorageClass() == SC_Auto ||
-         D->getStorageClass() == SC_None))
-      return OMPC_private;
-  }
+  if (isOpenMPLocal(D, Iter) && D->isLocalVarDecl() &&
+      (D->getStorageClass() == SC_Auto ||
+       D->getStorageClass() == SC_None))
+    return OMPC_private;
   // Explicitly specified attributes and local variables with predetermined
   // attributes.
   if (Iter->SharingMap.count(D)) {
