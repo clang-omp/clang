@@ -11218,6 +11218,8 @@ bool Sema::tryCaptureVariable(VarDecl *Var, SourceLocation Loc,
       // We're going to walk down into the type and look for VLA
       // expressions.
       QualType type = Var->getType();
+      if (ParmVarDecl *PVD = dyn_cast_or_null<ParmVarDecl>(Var))
+        type = PVD->getOriginalType();
       do {
         const Type *ty = type.getTypePtr();
         switch (ty->getTypeClass()) {
