@@ -87,6 +87,7 @@ protected:
     *reinterpret_cast<Stmt **>(&Clauses[NumClauses]) = S;
   }
 
+  OMPClause ** getClausesStorage() const { return Clauses; }
 public:
   /// \brief Return starting location of directive kind.
   SourceLocation getLocStart() const { return StartLoc; }
@@ -177,7 +178,10 @@ class OMPParallelDirective : public OMPExecutableDirective {
                        unsigned N)
     : OMPExecutableDirective(OMPParallelDirectiveClass, OMPD_parallel,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPParallelDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
 
   /// \brief Build an empty directive.
   ///
@@ -186,7 +190,10 @@ class OMPParallelDirective : public OMPExecutableDirective {
   explicit OMPParallelDirective(unsigned N)
     : OMPExecutableDirective(OMPParallelDirectiveClass, OMPD_parallel,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPParallelDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
 public:
   /// \brief Creates directive with a list of \a Clauses.
   ///
@@ -237,7 +244,10 @@ class OMPForDirective : public OMPExecutableDirective {
                   unsigned CollapsedNum, unsigned N)
     : OMPExecutableDirective(OMPForDirectiveClass, OMPD_for,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), true,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPForDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true,
                              5 + CollapsedNum),
       CollapsedNum(CollapsedNum) { }
 
@@ -248,28 +258,30 @@ class OMPForDirective : public OMPExecutableDirective {
   explicit OMPForDirective(unsigned CollapsedNum, unsigned N)
     : OMPExecutableDirective(OMPForDirectiveClass, OMPD_for,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1),
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPForDirective),
+                                                                                     sizeof(OMPClause *))),
                              true, 5 + CollapsedNum),
                              CollapsedNum(CollapsedNum) { }
   // 5 is for AssociatedStmt, NewIterVar, NewIterEnd, Init, Final
   // and CollapsedNum is for Counters.
   void setNewIterVar(Expr *V) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[1] = V;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
   }
   void setNewIterEnd(Expr *E) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[2] = E;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
   }
   void setInit(Expr *I) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3] = I;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
   }
   void setFinal(Expr *F) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4] = F;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
   }
   void setCounters(ArrayRef<Expr *> VL) {
     assert(VL.size() == CollapsedNum &&
            "Number of variables is not the same as the number of collapsed loops.");
     std::copy(VL.begin(), VL.end(),
-              &(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[5]));
+              &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
   }
 public:
   /// \brief Creates directive with a list of \a Clauses.
@@ -297,33 +309,33 @@ public:
                                       unsigned N, EmptyShell);
 
   Expr *getNewIterVar() const {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt * const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[1]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt * const *>(&getClausesStorage()[getNumClauses()])[1]);
   }
   Expr *getNewIterEnd() const {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[2]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&getClausesStorage()[getNumClauses()])[2]);
   }
   Expr *getInit() const {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[3]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&getClausesStorage()[getNumClauses()])[3]);
   }
   Expr *getFinal() const {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[4]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&getClausesStorage()[getNumClauses()])[4]);
   }
   ArrayRef<Expr *> getCounters() const {
-    return llvm::makeArrayRef(reinterpret_cast<Expr * const *>(&(reinterpret_cast<Stmt * const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[5])),
+    return llvm::makeArrayRef(reinterpret_cast<Expr * const *>(&(reinterpret_cast<Stmt * const *>(&getClausesStorage()[getNumClauses()])[5])),
                               CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[1]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
   }
   Expr *getNewIterEnd() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[2]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
   }
   Expr *getInit() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
   }
   Expr *getFinal() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
   }
 
   static bool classof(const Stmt *T) {
@@ -353,7 +365,10 @@ class OMPSimdDirective : public OMPExecutableDirective {
                   unsigned CollapsedNum, unsigned N)
     : OMPExecutableDirective(OMPSimdDirectiveClass, OMPD_simd,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), true,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPSimdDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true,
                              5 + CollapsedNum),
       CollapsedNum(CollapsedNum) { }
 
@@ -364,26 +379,28 @@ class OMPSimdDirective : public OMPExecutableDirective {
   explicit OMPSimdDirective(unsigned CollapsedNum, unsigned N)
     : OMPExecutableDirective(OMPSimdDirectiveClass, OMPD_simd,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1),
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPSimdDirective),
+                                                                                     sizeof(OMPClause *))),
                              true, 5 + CollapsedNum),
                              CollapsedNum(CollapsedNum) { }
   void setNewIterVar(Expr *V) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[1] = V;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
   }
   void setNewIterEnd(Expr *E) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[2] = E;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
   }
   void setInit(Expr *I) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3] = I;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
   }
   void setFinal(Expr *F) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4] = F;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
   }
   void setCounters(ArrayRef<Expr *> VL) {
     assert(VL.size() == CollapsedNum &&
            "Number of variables is not the same as the number of collapsed loops.");
     std::copy(VL.begin(), VL.end(),
-              &(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[5]));
+              &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
   }
 public:
   /// \brief Creates directive with a list of \a Clauses.
@@ -428,16 +445,16 @@ public:
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[1]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
   }
   Expr *getNewIterEnd() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[2]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
   }
   Expr *getInit() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
   }
   Expr *getFinal() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
   }
 
   static bool classof(const Stmt *T) {
@@ -467,7 +484,10 @@ class OMPForSimdDirective : public OMPExecutableDirective {
                       unsigned CollapsedNum, unsigned N)
     : OMPExecutableDirective(OMPForSimdDirectiveClass, OMPD_for_simd,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), true,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPForSimdDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true,
                              5 + CollapsedNum),
       CollapsedNum(CollapsedNum) { }
 
@@ -478,26 +498,28 @@ class OMPForSimdDirective : public OMPExecutableDirective {
   explicit OMPForSimdDirective(unsigned CollapsedNum, unsigned N)
     : OMPExecutableDirective(OMPForSimdDirectiveClass, OMPD_for_simd,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1),
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPForSimdDirective),
+                                                                                     sizeof(OMPClause *))),
                              true, 5 + CollapsedNum),
                              CollapsedNum(CollapsedNum) { }
   void setNewIterVar(Expr *V) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[1] = V;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
   }
   void setNewIterEnd(Expr *E) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[2] = E;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
   }
   void setInit(Expr *I) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3] = I;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
   }
   void setFinal(Expr *F) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4] = F;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
   }
   void setCounters(ArrayRef<Expr *> VL) {
     assert(VL.size() == CollapsedNum &&
            "Number of variables is not the same as the number of collapsed loops.");
     std::copy(VL.begin(), VL.end(),
-              &(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[5]));
+              &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
   }
 public:
   /// \brief Creates directive with a list of \a Clauses.
@@ -542,16 +564,16 @@ public:
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[1]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
   }
   Expr *getNewIterEnd() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[2]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
   }
   Expr *getInit() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
   }
   Expr *getFinal() {
-    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[4]);
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
   }
 
   static bool classof(const Stmt *T) {
@@ -579,7 +601,10 @@ class OMPSectionsDirective : public OMPExecutableDirective {
                        unsigned N)
     : OMPExecutableDirective(OMPSectionsDirectiveClass, OMPD_sections,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPSectionsDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
 
   /// \brief Build an empty directive.
   ///
@@ -588,7 +613,10 @@ class OMPSectionsDirective : public OMPExecutableDirective {
   explicit OMPSectionsDirective(unsigned N)
     : OMPExecutableDirective(OMPSectionsDirectiveClass, OMPD_sections,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPSectionsDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
 public:
   /// \brief Creates directive with a list of \a Clauses.
   ///
@@ -633,14 +661,20 @@ class OMPSectionDirective : public OMPExecutableDirective {
   OMPSectionDirective(SourceLocation StartLoc, SourceLocation EndLoc)
     : OMPExecutableDirective(OMPSectionDirectiveClass, OMPD_section,
                              StartLoc, EndLoc, 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPSectionDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1) { }
 
   /// \brief Build an empty directive.
   ///
   explicit OMPSectionDirective()
     : OMPExecutableDirective(OMPSectionDirectiveClass, OMPD_section,
                              SourceLocation(), SourceLocation(), 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPSectionDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1) { }
 public:
   /// \brief Creates directive with a list of \a Clauses.
   ///
@@ -685,7 +719,10 @@ class OMPSingleDirective : public OMPExecutableDirective {
                      unsigned N)
     : OMPExecutableDirective(OMPSingleDirectiveClass, OMPD_single,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPSingleDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
 
   /// \brief Build an empty directive.
   ///
@@ -694,7 +731,10 @@ class OMPSingleDirective : public OMPExecutableDirective {
   explicit OMPSingleDirective(unsigned N)
     : OMPExecutableDirective(OMPSingleDirectiveClass, OMPD_single,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPSingleDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
 public:
   /// \brief Creates directive with a list of \a Clauses.
   ///
@@ -742,7 +782,10 @@ class OMPTaskDirective : public OMPExecutableDirective {
                    unsigned N)
     : OMPExecutableDirective(OMPTaskDirectiveClass, OMPD_task,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPTaskDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
 
   /// \brief Build an empty directive.
   ///
@@ -751,7 +794,10 @@ class OMPTaskDirective : public OMPExecutableDirective {
   explicit OMPTaskDirective(unsigned N)
     : OMPExecutableDirective(OMPTaskDirectiveClass, OMPD_task,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPTaskDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
 public:
   /// \brief Creates directive with a list of \a Clauses.
   ///
@@ -841,14 +887,20 @@ class OMPMasterDirective : public OMPExecutableDirective {
   OMPMasterDirective(SourceLocation StartLoc, SourceLocation EndLoc)
     : OMPExecutableDirective(OMPMasterDirectiveClass, OMPD_master,
                              StartLoc, EndLoc, 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPMasterDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1) { }
 
   /// \brief Build an empty directive.
   ///
   explicit OMPMasterDirective()
     : OMPExecutableDirective(OMPMasterDirectiveClass, OMPD_master,
                              SourceLocation(), SourceLocation(), 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPMasterDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1) { }
 public:
   /// \brief Creates directive.
   ///
@@ -894,7 +946,10 @@ class OMPCriticalDirective : public OMPExecutableDirective {
                        SourceLocation EndLoc)
     : OMPExecutableDirective(OMPCriticalDirectiveClass, OMPD_critical,
                              StartLoc, EndLoc, 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1),
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPCriticalDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1),
                              DirName(Name) { }
 
   /// \brief Build an empty directive.
@@ -902,7 +957,10 @@ class OMPCriticalDirective : public OMPExecutableDirective {
   explicit OMPCriticalDirective()
     : OMPExecutableDirective(OMPCriticalDirectiveClass, OMPD_critical,
                              SourceLocation(), SourceLocation(), 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1),
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPCriticalDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1),
       DirName() { }
   /// \brief Set name of the directive.
   ///
@@ -1046,14 +1104,20 @@ class OMPTaskgroupDirective : public OMPExecutableDirective {
   OMPTaskgroupDirective(SourceLocation StartLoc, SourceLocation EndLoc)
     : OMPExecutableDirective(OMPTaskgroupDirectiveClass, OMPD_taskgroup,
                              StartLoc, EndLoc, 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPTaskgroupDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1) { }
 
   /// \brief Build an empty directive.
   ///
   explicit OMPTaskgroupDirective()
     : OMPExecutableDirective(OMPTaskgroupDirectiveClass, OMPD_taskgroup,
                              SourceLocation(), SourceLocation(), 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPTaskgroupDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1) { }
 public:
   /// \brief Creates directive.
   ///
@@ -1105,7 +1169,10 @@ class OMPAtomicDirective : public OMPExecutableDirective {
                      unsigned N)
     : OMPExecutableDirective(OMPAtomicDirectiveClass, OMPD_atomic,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 4),
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPAtomicDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 4),
       BinOp(BO_Assign), CaptureAfter(false), Reversed(false) { }
 
   /// \brief Build an empty directive.
@@ -1115,7 +1182,10 @@ class OMPAtomicDirective : public OMPExecutableDirective {
   explicit OMPAtomicDirective(unsigned N)
     : OMPExecutableDirective(OMPAtomicDirectiveClass, OMPD_atomic,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 4),
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPAtomicDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 4),
       BinOp(BO_Assign), CaptureAfter(false), Reversed(false) { }
 
   /// \brief Sets binary operator for atomic.
@@ -1123,17 +1193,17 @@ class OMPAtomicDirective : public OMPExecutableDirective {
 
   /// \brief Sets 'v' parameter for atomic.
   void setV(Expr *V) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[1] = V;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
   }
 
   /// \brief Sets 'x' parameter for atomic.
   void setX(Expr *X) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[2] = X;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = X;
   }
 
   /// \brief Sets 'expr' parameter for atomic.
   void setExpr(Expr *OpExpr) {
-    reinterpret_cast<Stmt **>(&reinterpret_cast<OMPClause **>(this + 1)[getNumClauses()])[3] = OpExpr;
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = OpExpr;
   }
 
   /// \brief Sets capture kind parameter for atomic.
@@ -1220,7 +1290,10 @@ class OMPFlushDirective : public OMPExecutableDirective {
                     unsigned N)
     : OMPExecutableDirective(OMPFlushDirectiveClass, OMPD_flush,
                              StartLoc, EndLoc, N,
-                             reinterpret_cast<OMPClause **>(this + 1), false, 0) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPFlushDirective),
+                                                                                     sizeof(OMPClause *))),
+                             false, 0) { }
 
   /// \brief Build an empty directive.
   ///
@@ -1229,7 +1302,10 @@ class OMPFlushDirective : public OMPExecutableDirective {
   explicit OMPFlushDirective(unsigned N)
     : OMPExecutableDirective(OMPFlushDirectiveClass, OMPD_flush,
                              SourceLocation(), SourceLocation(), N,
-                             reinterpret_cast<OMPClause **>(this + 1), false, 0) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPFlushDirective),
+                                                                                     sizeof(OMPClause *))),
+                             false, 0) { }
 public:
   /// \brief Creates directive with a list of \a Clauses.
   ///
@@ -1270,14 +1346,20 @@ class OMPOrderedDirective : public OMPExecutableDirective {
   OMPOrderedDirective(SourceLocation StartLoc, SourceLocation EndLoc)
     : OMPExecutableDirective(OMPOrderedDirectiveClass, OMPD_ordered,
                              StartLoc, EndLoc, 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPOrderedDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1) { }
 
   /// \brief Build an empty directive.
   ///
   explicit OMPOrderedDirective()
     : OMPExecutableDirective(OMPOrderedDirectiveClass, OMPD_ordered,
                              SourceLocation(), SourceLocation(), 0,
-                             reinterpret_cast<OMPClause **>(this + 1), true, 1) { }
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPOrderedDirective),
+                                                                                     sizeof(Stmt *))),
+                             true, 1) { }
 public:
   /// \brief Creates directive.
   ///

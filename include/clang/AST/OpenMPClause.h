@@ -72,15 +72,18 @@ public:
 /// 'firstprivate', 'copyin', 'shared', 'reduction' or 'flush' clauses in the
 /// '#pragma omp ...' directives.
 template <class T>
-class OMPVarList {
+class OMPVarListClause : public OMPClause {
   friend class OMPClauseReader;
+  friend class TemplateDeclInstantiator;
   /// \brief Number of variables in the list.
   unsigned NumVars;
 protected:
   /// \brief Fetches the list of variables associated with this clause.
   llvm::MutableArrayRef<Expr *> getVars() {
     return llvm::MutableArrayRef<Expr *>(
-                         reinterpret_cast<Expr **>(static_cast<T *>(this) + 1),
+                         reinterpret_cast<Expr **>(reinterpret_cast<char *>(this) +
+                                                   llvm::RoundUpToAlignment(sizeof(T),
+                                                                            sizeof(Expr *))),
                          NumVars);
   }
 
@@ -89,14 +92,18 @@ protected:
     assert(VL.size() == NumVars &&
            "Number of variables is not the same as the preallocated buffer");
     std::copy(VL.begin(), VL.end(),
-              reinterpret_cast<Expr **>(static_cast<T *>(this) + 1));
+              reinterpret_cast<Expr **>(reinterpret_cast<char *>(this) +
+                                        llvm::RoundUpToAlignment(sizeof(T),
+                                                                 sizeof(Expr *))));
   }
 
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param N Number of the variables in the clause.
   ///
-  OMPVarList(unsigned N) : NumVars(N) { }
+  OMPVarListClause(OpenMPClauseKind K, SourceLocation StartLoc,
+                   SourceLocation EndLoc, unsigned N) :
+    OMPClause(K, StartLoc, EndLoc), NumVars(N) { }
 public:
   typedef llvm::MutableArrayRef<Expr *>::iterator varlist_iterator;
   typedef ArrayRef<const Expr *>::iterator varlist_const_iterator;
@@ -112,7 +119,9 @@ public:
   /// \brief Return the list of all variables in the clause.
   ArrayRef<const Expr *> getVars() const {
     return ArrayRef<const Expr *>(
-              reinterpret_cast<const Expr *const *>(static_cast<const T *>(this) + 1),
+              reinterpret_cast<const Expr *const *>(reinterpret_cast<const char *>(this) +
+                                                    llvm::RoundUpToAlignment(sizeof(T),
+                                                                             sizeof(Expr *))),
               NumVars);
   }
 };
@@ -440,7 +449,7 @@ public:
 /// In this example directive '#pragma omp parallel' has clause 'private'
 /// with the variables 'a' and 'b'.
 ///
-class OMPPrivateClause : public OMPClause, public OMPVarList<OMPPrivateClause> {
+class OMPPrivateClause : public OMPVarListClause<OMPPrivateClause> {
   friend class OMPClauseReader;
   friend class OMPClauseWriter;
   /// \brief Build clause with number of variables \a N.
@@ -450,16 +459,15 @@ class OMPPrivateClause : public OMPClause, public OMPVarList<OMPPrivateClause> {
   /// \param N Number of the variables in the clause.
   ///
   OMPPrivateClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N)
-    : OMPClause(OMPC_private, StartLoc, EndLoc),
-      OMPVarList<OMPPrivateClause>(N) { }
+    : OMPVarListClause<OMPPrivateClause>(OMPC_private, StartLoc, EndLoc, N) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPPrivateClause(unsigned N)
-    : OMPClause(OMPC_private, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPPrivateClause>(N) { }
+    : OMPVarListClause<OMPPrivateClause>(OMPC_private, SourceLocation(),
+                                         SourceLocation(), N) { }
 
   /// \brief Sets the list of generated default inits.
   void setDefaultInits(ArrayRef<Expr *> DefaultInits);
@@ -514,8 +522,7 @@ public:
 /// In this example directive '#pragma omp parallel' has clause 'firstprivate'
 /// with the variables 'a' and 'b'.
 ///
-class OMPFirstPrivateClause : public OMPClause,
-                              public OMPVarList<OMPFirstPrivateClause> {
+class OMPFirstPrivateClause : public OMPVarListClause<OMPFirstPrivateClause> {
   friend class OMPClauseReader;
   friend class OMPClauseWriter;
   /// \brief Build clause with number of variables \a N.
@@ -526,16 +533,17 @@ class OMPFirstPrivateClause : public OMPClause,
   ///
   OMPFirstPrivateClause(SourceLocation StartLoc, SourceLocation EndLoc,
                         unsigned N)
-    : OMPClause(OMPC_firstprivate, StartLoc, EndLoc),
-      OMPVarList<OMPFirstPrivateClause>(N) { }
+    : OMPVarListClause<OMPFirstPrivateClause>(OMPC_firstprivate, StartLoc,
+                                              EndLoc, N) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPFirstPrivateClause(unsigned N)
-    : OMPClause(OMPC_firstprivate, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPFirstPrivateClause>(N) { }
+    : OMPVarListClause<OMPFirstPrivateClause>(OMPC_firstprivate,
+                                              SourceLocation(),
+                                              SourceLocation(), N) { }
 
   /// \brief Sets the list of pseudo vars.
   void setPseudoVars(ArrayRef<DeclRefExpr *> PseudoVars);
@@ -604,8 +612,7 @@ public:
 /// In this example directive '#pragma omp for' has clause 'lastprivate'
 /// with the variables 'a' and 'b'.
 ///
-class OMPLastPrivateClause : public OMPClause,
-                             public OMPVarList<OMPLastPrivateClause> {
+class OMPLastPrivateClause : public OMPVarListClause<OMPLastPrivateClause> {
   friend class OMPClauseReader;
   friend class OMPClauseWriter;
   friend class Sema;
@@ -617,16 +624,16 @@ class OMPLastPrivateClause : public OMPClause,
   ///
   explicit OMPLastPrivateClause(SourceLocation StartLoc, SourceLocation EndLoc,
                        unsigned N)
-    : OMPClause(OMPC_lastprivate, StartLoc, EndLoc),
-      OMPVarList<OMPLastPrivateClause>(N) { }
+    : OMPVarListClause<OMPLastPrivateClause>(OMPC_lastprivate, StartLoc,
+                                             EndLoc, N) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPLastPrivateClause(unsigned N)
-    : OMPClause(OMPC_lastprivate, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPLastPrivateClause>(N) { }
+    : OMPVarListClause<OMPLastPrivateClause>(OMPC_lastprivate, SourceLocation(),
+                                             SourceLocation(), N) { }
 
   /// \brief Sets the list of pseudo vars.
   void setPseudoVars1(ArrayRef<DeclRefExpr *> PseudoVars);
@@ -719,8 +726,7 @@ public:
 /// In this example directive '#pragma omp parallel' has clause 'shared'
 /// with the variables 'a' and 'b'.
 ///
-class OMPSharedClause : public OMPClause,
-                        public OMPVarList<OMPSharedClause> {
+class OMPSharedClause : public OMPVarListClause<OMPSharedClause> {
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param StartLoc Starting location of the clause.
@@ -728,16 +734,15 @@ class OMPSharedClause : public OMPClause,
   /// \param N Number of the variables in the clause.
   ///
   OMPSharedClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N)
-    : OMPClause(OMPC_shared, StartLoc, EndLoc),
-      OMPVarList<OMPSharedClause>(N) { }
+    : OMPVarListClause<OMPSharedClause>(OMPC_shared, StartLoc, EndLoc, N) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPSharedClause(unsigned N)
-    : OMPClause(OMPC_shared, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPSharedClause>(N) { }
+    : OMPVarListClause<OMPSharedClause>(OMPC_shared, SourceLocation(),
+                                        SourceLocation(), N) { }
 public:
   /// \brief Creates clause with a list of variables \a VL.
   ///
@@ -776,8 +781,7 @@ public:
 /// In this example directive '#pragma omp parallel' has clause 'copyin'
 /// with the variables 'a' and 'b'.
 ///
-class OMPCopyinClause : public OMPClause,
-                        public OMPVarList<OMPCopyinClause> {
+class OMPCopyinClause : public OMPVarListClause<OMPCopyinClause> {
   friend class OMPClauseReader;
   friend class OMPClauseWriter;
   /// \brief Build clause with number of variables \a N.
@@ -787,16 +791,15 @@ class OMPCopyinClause : public OMPClause,
   /// \param N Number of the variables in the clause.
   ///
   OMPCopyinClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N)
-    : OMPClause(OMPC_copyin, StartLoc, EndLoc),
-      OMPVarList<OMPCopyinClause>(N) { }
+    : OMPVarListClause<OMPCopyinClause>(OMPC_copyin, StartLoc, EndLoc, N) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPCopyinClause(unsigned N)
-    : OMPClause(OMPC_copyin, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPCopyinClause>(N) { }
+    : OMPVarListClause<OMPCopyinClause>(OMPC_copyin, SourceLocation(),
+                                        SourceLocation(), N) { }
 
   /// \brief Sets the list of pseudo vars.
   void setPseudoVars1(ArrayRef<DeclRefExpr *> PseudoVars);
@@ -879,8 +882,7 @@ public:
 /// In this example directive '#pragma omp single' has clause 'copyprivate'
 /// with the variables 'a' and 'b'.
 ///
-class OMPCopyPrivateClause : public OMPClause,
-                             public OMPVarList<OMPCopyPrivateClause> {
+class OMPCopyPrivateClause : public OMPVarListClause<OMPCopyPrivateClause> {
   friend class OMPClauseReader;
   friend class OMPClauseWriter;
   /// \brief Build clause with number of variables \a N.
@@ -891,16 +893,15 @@ class OMPCopyPrivateClause : public OMPClause,
   ///
   OMPCopyPrivateClause(SourceLocation StartLoc, SourceLocation EndLoc,
                        unsigned N)
-    : OMPClause(OMPC_copyprivate, StartLoc, EndLoc),
-      OMPVarList<OMPCopyPrivateClause>(N) { }
+    : OMPVarListClause<OMPCopyPrivateClause>(OMPC_copyprivate, StartLoc, EndLoc, N) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPCopyPrivateClause(unsigned N)
-    : OMPClause(OMPC_copyprivate, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPCopyPrivateClause>(N) { }
+    : OMPVarListClause<OMPCopyPrivateClause>(OMPC_copyprivate, SourceLocation(),
+                                             SourceLocation(), N) { }
 
   /// \brief Sets the list of pseudo vars.
   void setPseudoVars1(ArrayRef<DeclRefExpr *> PseudoVars);
@@ -983,8 +984,7 @@ public:
 /// In this example directive '#pragma omp parallel' has clause 'reduction'
 /// with operator '+' and variables 'a' and 'b'.
 ///
-class OMPReductionClause : public OMPClause,
-                           public OMPVarList<OMPReductionClause> {
+class OMPReductionClause : public OMPVarListClause<OMPReductionClause> {
   friend class OMPClauseReader;
   friend class OMPClauseWriter;
   /// \brief An operator for the 'reduction' clause.
@@ -1022,18 +1022,17 @@ class OMPReductionClause : public OMPClause,
                      OpenMPReductionClauseOperator Op,
                      NestedNameSpecifierLoc Spec,
                      DeclarationNameInfo OpName)
-    : OMPClause(OMPC_reduction, StartLoc, EndLoc),
-      OMPVarList<OMPReductionClause>(N), Operator(Op), Spec(Spec),
-      OperatorName(OpName) { }
+    : OMPVarListClause<OMPReductionClause>(OMPC_reduction, StartLoc, EndLoc, N),
+      Operator(Op), Spec(Spec), OperatorName(OpName) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPReductionClause(unsigned N)
-    : OMPClause(OMPC_reduction, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPReductionClause>(N), Operator(OMPC_REDUCTION_unknown),
-      Spec(), OperatorName() { }
+    : OMPVarListClause<OMPReductionClause>(OMPC_reduction, SourceLocation(),
+                                           SourceLocation(), N),
+      Operator(OMPC_REDUCTION_unknown), Spec(), OperatorName() { }
 
   /// \brief Sets the list of generated expresssions.
   void setOpExprs(ArrayRef<Expr *> OpExprs);
@@ -1646,8 +1645,7 @@ public:
 /// In this example directive '#pragma omp flush' has pseudo clause 'flush'
 /// with the variables 'a' and 'b'.
 ///
-class OMPFlushClause : public OMPClause,
-                       public OMPVarList<OMPFlushClause> {
+class OMPFlushClause : public OMPVarListClause<OMPFlushClause> {
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param StartLoc Starting location of the clause.
@@ -1655,15 +1653,15 @@ class OMPFlushClause : public OMPClause,
   /// \param N Number of the variables in the clause.
   ///
   OMPFlushClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N)
-    : OMPClause(OMPC_flush, StartLoc, EndLoc), OMPVarList<OMPFlushClause>(N) { }
+    : OMPVarListClause<OMPFlushClause>(OMPC_flush, StartLoc, EndLoc, N) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPFlushClause(unsigned N)
-    : OMPClause(OMPC_flush, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPFlushClause>(N) { }
+    : OMPVarListClause<OMPFlushClause>(OMPC_flush, SourceLocation(),
+                                       SourceLocation(), N) { }
 public:
   /// \brief Creates clause with a list of variables \a VL.
   ///
@@ -1701,8 +1699,7 @@ public:
 /// In this example directive '#pragma omp declare simd' has clause 'uniform'
 /// with the variables 'a' and 'b'.
 ///
-class OMPUniformClause : public OMPClause,
-                         public OMPVarList<OMPUniformClause> {
+class OMPUniformClause : public OMPVarListClause<OMPUniformClause> {
   /// \brief Build clause with number of variables \a N.
   ///
   /// \param StartLoc Starting location of the clause.
@@ -1710,15 +1707,15 @@ class OMPUniformClause : public OMPClause,
   /// \param N Number of the variables in the clause.
   ///
   OMPUniformClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N)
-    : OMPClause(OMPC_uniform, StartLoc, EndLoc), OMPVarList<OMPUniformClause>(N) { }
+    : OMPVarListClause<OMPUniformClause>(OMPC_uniform, StartLoc, EndLoc, N) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPUniformClause(unsigned N)
-    : OMPClause(OMPC_uniform, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPUniformClause>(N) { }
+    : OMPVarListClause<OMPUniformClause>(OMPC_uniform, SourceLocation(),
+                                         SourceLocation(), N) { }
 public:
   /// \brief Creates clause with a list of variables \a VL.
   ///
@@ -1949,8 +1946,7 @@ public:
 /// In this example directive '#pragma omp simd' has clause 'linear'
 /// with variables 'a', 'b' and linear step '2'.
 ///
-class OMPLinearClause : public OMPClause,
-                        public OMPVarList<OMPLinearClause> {
+class OMPLinearClause : public OMPVarListClause<OMPLinearClause> {
   friend class OMPClauseReader;
   friend class OMPClauseWriter;
 
@@ -1980,16 +1976,16 @@ class OMPLinearClause : public OMPClause,
   ///
   OMPLinearClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N,
                   SourceLocation StLoc)
-    : OMPClause(OMPC_linear, StartLoc, EndLoc),
-      OMPVarList<OMPLinearClause>(N), StepLoc(StLoc) { }
+    : OMPVarListClause<OMPLinearClause>(OMPC_linear, StartLoc, EndLoc, N),
+      StepLoc(StLoc) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPLinearClause(unsigned N)
-    : OMPClause(OMPC_linear, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPLinearClause>(N),
+    : OMPVarListClause<OMPLinearClause>(OMPC_linear, SourceLocation(),
+                                        SourceLocation(), N),
       StepLoc(SourceLocation()) { }
 
 public:
@@ -2043,8 +2039,7 @@ public:
 /// In this example directive '#pragma omp simd' has clause 'aligned'
 /// with variables 'a', 'b' and alignment '8'.
 ///
-class OMPAlignedClause : public OMPClause,
-                         public OMPVarList<OMPAlignedClause> {
+class OMPAlignedClause : public OMPVarListClause<OMPAlignedClause> {
   friend class OMPClauseReader;
   friend class OMPClauseWriter;
 
@@ -2074,16 +2069,16 @@ class OMPAlignedClause : public OMPClause,
   ///
   OMPAlignedClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N,
                    SourceLocation ALoc)
-    : OMPClause(OMPC_aligned, StartLoc, EndLoc),
-      OMPVarList<OMPAlignedClause>(N), AlignmentLoc(ALoc) { }
+    : OMPVarListClause<OMPAlignedClause>(OMPC_aligned, StartLoc, EndLoc, N),
+      AlignmentLoc(ALoc) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
   explicit OMPAlignedClause(unsigned N)
-    : OMPClause(OMPC_aligned, SourceLocation(), SourceLocation()),
-      OMPVarList<OMPAlignedClause>(N),
+    : OMPVarListClause<OMPAlignedClause>(OMPC_aligned, SourceLocation(),
+                                         SourceLocation(), N),
       AlignmentLoc(SourceLocation()) { }
 
 public:

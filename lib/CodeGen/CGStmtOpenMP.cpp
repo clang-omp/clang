@@ -4352,8 +4352,9 @@ bool CodeGenFunction::CGPragmaOmpSimd::walkLocalVariablesToEmit(
               ARVal.getScalarVal());
           assert(AVal);
           // Walk the list and push each var's alignment into metadata.
-          for (OMPVarList<OMPAlignedClause>::varlist_iterator
-              J = A->varlist_begin(), F = A->varlist_end(); J != F; ++J) {
+          for (OMPAlignedClause::varlist_iterator J = A->varlist_begin(),
+                                                  F = A->varlist_end();
+               J != F; ++J) {
             LValue LVal = CGF->EmitLValue(*J);
             CGF->LoopStack.AddAligned(LVal.getAddress(),
                                       (int)(AVal->getZExtValue()));

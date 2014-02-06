@@ -635,9 +635,8 @@ void OMPClausePrinter::VisitOMPProcBindClause(OMPProcBindClause *Node) {
 void OMPClausePrinter::VisitOMPPrivateClause(OMPPrivateClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "private";
-    for (OMPVarList<OMPPrivateClause>::varlist_iterator
-                                              I = Node->varlist_begin(),
-                                              E = Node->varlist_end();
+    for (OMPPrivateClause::varlist_iterator I = Node->varlist_begin(),
+                                            E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
@@ -649,9 +648,8 @@ void OMPClausePrinter::VisitOMPPrivateClause(OMPPrivateClause *Node) {
 void OMPClausePrinter::VisitOMPFirstPrivateClause(OMPFirstPrivateClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "firstprivate";
-    for (OMPVarList<OMPFirstPrivateClause>::varlist_iterator
-                                                I = Node->varlist_begin(),
-                                                E = Node->varlist_end();
+    for (OMPFirstPrivateClause::varlist_iterator I = Node->varlist_begin(),
+                                                 E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
@@ -663,9 +661,8 @@ void OMPClausePrinter::VisitOMPFirstPrivateClause(OMPFirstPrivateClause *Node) {
 void OMPClausePrinter::VisitOMPSharedClause(OMPSharedClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "shared";
-    for (OMPVarList<OMPSharedClause>::varlist_iterator
-                                            I = Node->varlist_begin(),
-                                            E = Node->varlist_end();
+    for (OMPSharedClause::varlist_iterator I = Node->varlist_begin(),
+                                           E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
@@ -677,8 +674,7 @@ void OMPClausePrinter::VisitOMPSharedClause(OMPSharedClause *Node) {
 void OMPClausePrinter::VisitOMPCopyinClause(OMPCopyinClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "copyin";
-    for (OMPVarList<OMPCopyinClause>::varlist_iterator
-                                           I = Node->varlist_begin(),
+    for (OMPCopyinClause::varlist_iterator I = Node->varlist_begin(),
                                            E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
@@ -691,8 +687,7 @@ void OMPClausePrinter::VisitOMPCopyinClause(OMPCopyinClause *Node) {
 void OMPClausePrinter::VisitOMPCopyPrivateClause(OMPCopyPrivateClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "copyprivate";
-    for (OMPVarList<OMPCopyinClause>::varlist_iterator
-                                           I = Node->varlist_begin(),
+    for (OMPCopyinClause::varlist_iterator I = Node->varlist_begin(),
                                            E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
@@ -714,9 +709,8 @@ void OMPClausePrinter::VisitOMPReductionClause(OMPReductionClause *Node) {
     }
     OS << ':';
 
-    for (OMPVarList<OMPReductionClause>::varlist_iterator
-                                             I = Node->varlist_begin(),
-                                             E = Node->varlist_end();
+    for (OMPReductionClause::varlist_iterator I = Node->varlist_begin(),
+                                              E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? ' ' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
@@ -728,9 +722,8 @@ void OMPClausePrinter::VisitOMPReductionClause(OMPReductionClause *Node) {
 void OMPClausePrinter::VisitOMPLastPrivateClause(OMPLastPrivateClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "lastprivate";
-    for (OMPVarList<OMPCopyinClause>::varlist_iterator
-                                           I = Node->varlist_begin(),
-                                           E = Node->varlist_end();
+    for (OMPLastPrivateClause::varlist_iterator I = Node->varlist_begin(),
+                                                E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
@@ -805,9 +798,8 @@ void OMPClausePrinter::VisitOMPNotInBranchClause(OMPNotInBranchClause *Node) {
 
 void OMPClausePrinter::VisitOMPFlushClause(OMPFlushClause *Node) {
   if (!Node->varlist_empty()) {
-    for (OMPVarList<OMPFlushClause>::varlist_iterator
-                                                I = Node->varlist_begin(),
-                                                E = Node->varlist_end();
+    for (OMPFlushClause::varlist_iterator I = Node->varlist_begin(),
+                                          E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
@@ -819,9 +811,8 @@ void OMPClausePrinter::VisitOMPFlushClause(OMPFlushClause *Node) {
 void OMPClausePrinter::VisitOMPUniformClause(OMPUniformClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "uniform";
-    for (OMPVarList<OMPUniformClause>::varlist_iterator
-                                             I = Node->varlist_begin(),
-                                             E = Node->varlist_end();
+    for (OMPUniformClause::varlist_iterator I = Node->varlist_begin(),
+                                            E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
@@ -857,9 +848,8 @@ void OMPClausePrinter::VisitOMPThreadLimitClause(OMPThreadLimitClause *Node) {
 void OMPClausePrinter::VisitOMPLinearClause(OMPLinearClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "linear";
-    for (OMPVarList<OMPLinearClause>::varlist_iterator
-                                             I = Node->varlist_begin(),
-                                             E = Node->varlist_end();
+    for (OMPLinearClause::varlist_iterator I = Node->varlist_begin(),
+                                           E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
@@ -875,9 +865,8 @@ void OMPClausePrinter::VisitOMPLinearClause(OMPLinearClause *Node) {
 void OMPClausePrinter::VisitOMPAlignedClause(OMPAlignedClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "aligned";
-    for (OMPVarList<OMPAlignedClause>::varlist_iterator
-                                             I = Node->varlist_begin(),
-                                             E = Node->varlist_end();
+    for (OMPAlignedClause::varlist_iterator I = Node->varlist_begin(),
+                                            E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? '(' : ',')
          << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
