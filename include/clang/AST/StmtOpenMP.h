@@ -1236,8 +1236,6 @@ public:
   /// \param C AST context.
   /// \param StartLoc Starting location of the directive kind.
   /// \param EndLoc Ending Location of the directive.
-  /// \param Clauses List of clauses.
-  ///
   static OMPFlushDirective *Create(ASTContext &C,
                                    SourceLocation StartLoc,
                                    SourceLocation EndLoc,

@@ -6,9 +6,10 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-//  This file implements serialization for Statements and Expressions.
-//
+///
+/// \file
+/// \brief Implements serialization for Statements and Expressions.
+///
 //===----------------------------------------------------------------------===//
 
 #include "clang/Serialization/ASTWriter.h"
@@ -26,6 +27,7 @@ using namespace clang;
 //===----------------------------------------------------------------------===//
 
 namespace clang {
+
   class ASTStmtWriter : public StmtVisitor<ASTStmtWriter, void> {
     friend class OMPClauseWriter;
     ASTWriter &Writer;
@@ -684,7 +686,6 @@ void ASTStmtWriter::VisitInitListExpr(InitListExpr *E) {
   else
     Writer.AddDeclRef(E->getInitializedFieldInUnion(), Record);
   Record.push_back(E->hadArrayRangeDesignator());
-  Record.push_back(E->initializesStdInitializerList());
   Record.push_back(E->getNumInits());
   if (isArrayFiller) {
     // ArrayFiller may have filled "holes" due to designated initializer.
@@ -773,6 +774,7 @@ void ASTStmtWriter::VisitChooseExpr(ChooseExpr *E) {
   Writer.AddStmt(E->getRHS());
   Writer.AddSourceLocation(E->getBuiltinLoc(), Record);
   Writer.AddSourceLocation(E->getRParenLoc(), Record);
+  Record.push_back(E->isConditionDependent() ? false : E->isConditionTrue());
   Code = serialization::EXPR_CHOOSE;
 }
 
@@ -790,6 +792,15 @@ void ASTStmtWriter::VisitShuffleVectorExpr(ShuffleVectorExpr *E) {
   Writer.AddSourceLocation(E->getBuiltinLoc(), Record);
   Writer.AddSourceLocation(E->getRParenLoc(), Record);
   Code = serialization::EXPR_SHUFFLE_VECTOR;
+}
+
+void ASTStmtWriter::VisitConvertVectorExpr(ConvertVectorExpr *E) {
+  VisitExpr(E);
+  Writer.AddSourceLocation(E->getBuiltinLoc(), Record);
+  Writer.AddSourceLocation(E->getRParenLoc(), Record);
+  Writer.AddTypeSourceInfo(E->getTypeSourceInfo(), Record);
+  Writer.AddStmt(E->getSrcExpr());
+  Code = serialization::EXPR_CONVERT_VECTOR;
 }
 
 void ASTStmtWriter::VisitBlockExpr(BlockExpr *E) {
@@ -1146,7 +1157,7 @@ void ASTStmtWriter::VisitCXXConstructExpr(CXXConstructExpr *E) {
   Record.push_back(E->isListInitialization());
   Record.push_back(E->requiresZeroInitialization());
   Record.push_back(E->getConstructionKind()); // FIXME: stable encoding
-  Writer.AddSourceRange(E->getParenRange(), Record);
+  Writer.AddSourceRange(E->getParenOrBraceRange(), Record);
   Code = serialization::EXPR_CXX_CONSTRUCT;
 }
 
@@ -1165,6 +1176,7 @@ void ASTStmtWriter::VisitLambdaExpr(LambdaExpr *E) {
   Record.push_back(NumArrayIndexVars);
   Writer.AddSourceRange(E->IntroducerRange, Record);
   Record.push_back(E->CaptureDefault); // FIXME: stable encoding
+  Writer.AddSourceLocation(E->CaptureDefaultLoc, Record);
   Record.push_back(E->ExplicitParams);
   Record.push_back(E->ExplicitResultType);
   Writer.AddSourceLocation(E->ClosingBrace, Record);
@@ -1186,6 +1198,12 @@ void ASTStmtWriter::VisitLambdaExpr(LambdaExpr *E) {
   }
   
   Code = serialization::EXPR_LAMBDA;
+}
+
+void ASTStmtWriter::VisitCXXStdInitializerListExpr(CXXStdInitializerListExpr *E) {
+  VisitExpr(E);
+  Writer.AddStmt(E->getSubExpr());
+  Code = serialization::EXPR_CXX_STD_INITIALIZER_LIST;
 }
 
 void ASTStmtWriter::VisitCXXNamedCastExpr(CXXNamedCastExpr *E) {
@@ -1217,7 +1235,7 @@ void ASTStmtWriter::VisitCXXConstCastExpr(CXXConstCastExpr *E) {
 
 void ASTStmtWriter::VisitCXXFunctionalCastExpr(CXXFunctionalCastExpr *E) {
   VisitExplicitCastExpr(E);
-  Writer.AddSourceLocation(E->getTypeBeginLoc(), Record);
+  Writer.AddSourceLocation(E->getLParenLoc(), Record);
   Writer.AddSourceLocation(E->getRParenLoc(), Record);
   Code = serialization::EXPR_CXX_FUNCTIONAL_CAST;
 }
@@ -1573,6 +1591,7 @@ void ASTStmtWriter::VisitFunctionParmPackExpr(FunctionParmPackExpr *E) {
 void ASTStmtWriter::VisitMaterializeTemporaryExpr(MaterializeTemporaryExpr *E) {
   VisitExpr(E);
   Writer.AddStmt(E->Temporary);
+  Writer.AddDeclRef(E->ExtendingDecl, Record);
   Code = serialization::EXPR_MATERIALIZE_TEMPORARY;
 }
 

@@ -5,6 +5,7 @@
 // RUN: FileCheck %s -input-file=%t -check-prefix=CHECK-4
 // RUN: FileCheck %s -input-file=%t -check-prefix=CHECK-5
 // RUN: FileCheck %s -input-file=%t -check-prefix=CHECK-6
+// RUN: FileCheck %s -input-file=%t -check-prefix=CHECK-7
 
 struct Foo {
   int x;
@@ -54,7 +55,7 @@ void test2(int x) {
     return x;
   }();
 
-  // CHECK-2: define void @_Z5test2i
+  // CHECK-2-LABEL: define void @_Z5test2i
   // CHECK-2:   call {{.*}} @[[Lambda:["$\w]+]]
   //
   // CHECK-2: define internal {{.*}} @[[Lambda]]
@@ -74,7 +75,7 @@ void test3(int x) {
 
   // CHECK-3: %[[Capture:struct\.anon[\.0-9]*]] = type { i32* }
 
-  // CHECK-3: define void @_Z5test3i
+  // CHECK-3-LABEL: define void @_Z5test3i
   // CHECK-3:   store i32*
   // CHECK-3:   call void @{{.*}}__captured_stmt
   // CHECK-3:   ret void
@@ -86,7 +87,7 @@ void test4() {
     Foo f;
     f.x = 5;
   }
-  // CHECK-4: define void @_Z5test4v
+  // CHECK-4-LABEL: define void @_Z5test4v
   // CHECK-4:   call void @[[HelperName:["$_A-Za-z0-9]+]](%[[Capture:.*]]*
   // CHECK-4:   ret void
   //
@@ -164,11 +165,25 @@ void template_capture_lambda() {
 }
 
 void test_capture_lambda() {
-  // CHECK-6: define {{.*}} void @_ZZ23template_capture_lambdaIiEvvENKS_IiEUlvE_clEv
+  // CHECK-6: define {{.*}} void @_ZZ23template_capture_lambdaIiEvvENKUlvE_clEv
   // CHECK-6-NOT: }
   // CHECK-6: store i32*
   // CHECK-6: store i32*
   // CHECK-6: call void @__captured_stmt
   // CHECK-6-NEXT: ret void
   template_capture_lambda<int>();
+}
+
+inline int test_captured_linkage() {
+  // CHECK-7: @_ZZ21test_captured_linkagevE1i = linkonce_odr global i32 0
+  int j;
+  #pragma clang __debug captured
+  {
+    static int i = 0;
+    j = ++i;
+  }
+  return j;
+}
+void call_test_captured_linkage() {
+  test_captured_linkage();
 }

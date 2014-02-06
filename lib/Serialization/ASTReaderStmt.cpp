@@ -725,7 +725,6 @@ void ASTStmtReader::VisitInitListExpr(InitListExpr *E) {
   } else
     E->ArrayFillerOrUnionFieldInit = ReadDeclAs<FieldDecl>(Record, Idx);
   E->sawArrayRangeDesignator(Record[Idx++]);
-  E->setInitializesStdInitializerList(Record[Idx++]);
   unsigned NumInits = Record[Idx++];
   E->reserveInits(Reader.getContext(), NumInits);
   if (isArrayFiller) {
@@ -836,6 +835,7 @@ void ASTStmtReader::VisitChooseExpr(ChooseExpr *E) {
   E->setRHS(Reader.ReadSubExpr());
   E->setBuiltinLoc(ReadSourceLocation(Record, Idx));
   E->setRParenLoc(ReadSourceLocation(Record, Idx));
+  E->setIsConditionTrue(Record[Idx++]);
 }
 
 void ASTStmtReader::VisitGNUNullExpr(GNUNullExpr *E) {
@@ -852,6 +852,14 @@ void ASTStmtReader::VisitShuffleVectorExpr(ShuffleVectorExpr *E) {
   E->setExprs(Reader.getContext(), Exprs);
   E->setBuiltinLoc(ReadSourceLocation(Record, Idx));
   E->setRParenLoc(ReadSourceLocation(Record, Idx));
+}
+
+void ASTStmtReader::VisitConvertVectorExpr(ConvertVectorExpr *E) {
+  VisitExpr(E);
+  E->BuiltinLoc = ReadSourceLocation(Record, Idx);
+  E->RParenLoc = ReadSourceLocation(Record, Idx);
+  E->TInfo = GetTypeSourceInfo(Record, Idx);
+  E->SrcExpr = Reader.ReadSubExpr();
 }
 
 void ASTStmtReader::VisitBlockExpr(BlockExpr *E) {
@@ -1192,7 +1200,7 @@ void ASTStmtReader::VisitCXXConstructExpr(CXXConstructExpr *E) {
   E->setListInitialization(Record[Idx++]);
   E->setRequiresZeroInitialization(Record[Idx++]);
   E->setConstructionKind((CXXConstructExpr::ConstructionKind)Record[Idx++]);
-  E->ParenRange = ReadSourceRange(Record, Idx);
+  E->ParenOrBraceRange = ReadSourceRange(Record, Idx);
 }
 
 void ASTStmtReader::VisitCXXTemporaryObjectExpr(CXXTemporaryObjectExpr *E) {
@@ -1207,6 +1215,7 @@ void ASTStmtReader::VisitLambdaExpr(LambdaExpr *E) {
   unsigned NumArrayIndexVars = Record[Idx++];
   E->IntroducerRange = ReadSourceRange(Record, Idx);
   E->CaptureDefault = static_cast<LambdaCaptureDefault>(Record[Idx++]);
+  E->CaptureDefaultLoc = ReadSourceLocation(Record, Idx);
   E->ExplicitParams = Record[Idx++];
   E->ExplicitResultType = Record[Idx++];
   E->ClosingBrace = ReadSourceLocation(Record, Idx);
@@ -1227,6 +1236,12 @@ void ASTStmtReader::VisitLambdaExpr(LambdaExpr *E) {
     for (unsigned I = 0; I != NumArrayIndexVars; ++I)
       ArrayIndexVars[I] = ReadDeclAs<VarDecl>(Record, Idx);
   }
+}
+
+void
+ASTStmtReader::VisitCXXStdInitializerListExpr(CXXStdInitializerListExpr *E) {
+  VisitExpr(E);
+  E->SubExpr = Reader.ReadSubExpr();
 }
 
 void ASTStmtReader::VisitCXXNamedCastExpr(CXXNamedCastExpr *E) {
@@ -1256,7 +1271,7 @@ void ASTStmtReader::VisitCXXConstCastExpr(CXXConstCastExpr *E) {
 
 void ASTStmtReader::VisitCXXFunctionalCastExpr(CXXFunctionalCastExpr *E) {
   VisitExplicitCastExpr(E);
-  E->setTypeBeginLoc(ReadSourceLocation(Record, Idx));
+  E->setLParenLoc(ReadSourceLocation(Record, Idx));
   E->setRParenLoc(ReadSourceLocation(Record, Idx));
 }
 
@@ -1578,6 +1593,7 @@ void ASTStmtReader::VisitFunctionParmPackExpr(FunctionParmPackExpr *E) {
 void ASTStmtReader::VisitMaterializeTemporaryExpr(MaterializeTemporaryExpr *E) {
   VisitExpr(E);
   E->Temporary = Reader.ReadSubExpr();
+  E->ExtendingDecl = ReadDeclAs<ValueDecl>(Record, Idx);
 }
 
 void ASTStmtReader::VisitOpaqueValueExpr(OpaqueValueExpr *E) {
@@ -2235,6 +2251,8 @@ void ASTStmtReader::VisitOMPOrderedDirective(OMPOrderedDirective *D) {
 
 Stmt *ASTReader::ReadStmt(ModuleFile &F) {
   switch (ReadingKind) {
+  case Read_None:
+    llvm_unreachable("should not call this when not reading anything");
   case Read_Decl:
   case Read_Type:
     return ReadStmtFromStream(F);
@@ -2584,6 +2602,10 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       S = new (Context) ShuffleVectorExpr(Empty);
       break;
 
+    case EXPR_CONVERT_VECTOR:
+      S = new (Context) ConvertVectorExpr(Empty);
+      break;
+
     case EXPR_BLOCK:
       S = new (Context) BlockExpr(Empty);
       break;
@@ -2795,6 +2817,10 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
 
     case EXPR_USER_DEFINED_LITERAL:
       S = new (Context) UserDefinedLiteral(Context, Empty);
+      break;
+
+    case EXPR_CXX_STD_INITIALIZER_LIST:
+      S = new (Context) CXXStdInitializerListExpr(Empty);
       break;
 
     case EXPR_CXX_BOOL_LITERAL:

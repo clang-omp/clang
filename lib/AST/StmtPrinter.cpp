@@ -1081,6 +1081,9 @@ void StmtPrinter::VisitPredefinedExpr(PredefinedExpr *Node) {
     case PredefinedExpr::Function:
       OS << "__FUNCTION__";
       break;
+    case PredefinedExpr::FuncDName:
+      OS << "__FUNCDNAME__";
+      break;
     case PredefinedExpr::LFunction:
       OS << "L__FUNCTION__";
       break;
@@ -1443,6 +1446,14 @@ void StmtPrinter::VisitShuffleVectorExpr(ShuffleVectorExpr *Node) {
   OS << ")";
 }
 
+void StmtPrinter::VisitConvertVectorExpr(ConvertVectorExpr *Node) {
+  OS << "__builtin_convertvector(";
+  PrintExpr(Node->getSrcExpr());
+  OS << ", ";
+  Node->getType().print(OS, Policy);
+  OS << ")";
+}
+
 void StmtPrinter::VisitInitListExpr(InitListExpr* Node) {
   if (Node->getSyntacticForm()) {
     Visit(Node->getSyntacticForm());
@@ -1650,7 +1661,7 @@ void StmtPrinter::VisitCXXConstCastExpr(CXXConstCastExpr *Node) {
 void StmtPrinter::VisitCXXTypeidExpr(CXXTypeidExpr *Node) {
   OS << "typeid(";
   if (Node->isTypeOperand()) {
-    Node->getTypeOperand().print(OS, Policy);
+    Node->getTypeOperandSourceInfo()->getType().print(OS, Policy);
   } else {
     PrintExpr(Node->getExprOperand());
   }
@@ -1660,7 +1671,7 @@ void StmtPrinter::VisitCXXTypeidExpr(CXXTypeidExpr *Node) {
 void StmtPrinter::VisitCXXUuidofExpr(CXXUuidofExpr *Node) {
   OS << "__uuidof(";
   if (Node->isTypeOperand()) {
-    Node->getTypeOperand().print(OS, Policy);
+    Node->getTypeOperandSourceInfo()->getType().print(OS, Policy);
   } else {
     PrintExpr(Node->getExprOperand());
   }
@@ -1763,6 +1774,8 @@ void StmtPrinter::VisitCXXTemporaryObjectExpr(CXXTemporaryObjectExpr *Node) {
   for (CXXTemporaryObjectExpr::arg_iterator Arg = Node->arg_begin(),
                                          ArgEnd = Node->arg_end();
        Arg != ArgEnd; ++Arg) {
+    if (Arg->isDefaultArgument())
+      break;
     if (Arg != Node->arg_begin())
       OS << ", ";
     PrintExpr(*Arg);
@@ -1801,17 +1814,18 @@ void StmtPrinter::VisitLambdaExpr(LambdaExpr *Node) {
       break;
 
     case LCK_ByRef:
-      if (Node->getCaptureDefault() != LCD_ByRef)
+      if (Node->getCaptureDefault() != LCD_ByRef || C->isInitCapture())
         OS << '&';
       OS << C->getCapturedVar()->getName();
       break;
 
     case LCK_ByCopy:
-      if (Node->getCaptureDefault() != LCD_ByCopy)
-        OS << '=';
       OS << C->getCapturedVar()->getName();
       break;
     }
+
+    if (C->isInitCapture())
+      PrintExpr(C->getCapturedVar()->getInit());
   }
   OS << ']';
 
@@ -1949,6 +1963,10 @@ void StmtPrinter::VisitCXXConstructExpr(CXXConstructExpr *E) {
     OS << " }";
 }
 
+void StmtPrinter::VisitCXXStdInitializerListExpr(CXXStdInitializerListExpr *E) {
+  PrintExpr(E->getSubExpr());
+}
+
 void StmtPrinter::VisitExprWithCleanups(ExprWithCleanups *E) {
   // Just forward to the sub expression.
   PrintExpr(E->getSubExpr());
@@ -2040,6 +2058,7 @@ static const char *getTypeTraitName(UnaryTypeTrait UTT) {
   case UTT_IsReference:             return "__is_reference";
   case UTT_IsRvalueReference:       return "__is_rvalue_reference";
   case UTT_IsScalar:                return "__is_scalar";
+  case UTT_IsSealed:                return "__is_sealed";
   case UTT_IsSigned:                return "__is_signed";
   case UTT_IsStandardLayout:        return "__is_standard_layout";
   case UTT_IsTrivial:               return "__is_trivial";
@@ -2310,7 +2329,7 @@ void StmtPrinter::VisitAsTypeExpr(AsTypeExpr *Node) {
 // Stmt method implementations
 //===----------------------------------------------------------------------===//
 
-void Stmt::dumpPretty(ASTContext &Context) const {
+void Stmt::dumpPretty(const ASTContext &Context) const {
   printPretty(llvm::errs(), 0, PrintingPolicy(Context.getLangOpts()));
 }
 

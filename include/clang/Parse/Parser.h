@@ -102,15 +102,17 @@ class Parser : public CodeCompletionHandler {
 
   /// Contextual keywords for Microsoft extensions.
   IdentifierInfo *Ident__except;
+  mutable IdentifierInfo *Ident_sealed;
 
   /// Ident_super - IdentifierInfo for "super", to support fast
   /// comparison.
   IdentifierInfo *Ident_super;
-  /// Ident_vector and Ident_pixel - cached IdentifierInfo's for
-  /// "vector" and "pixel" fast comparison.  Only present if
-  /// AltiVec enabled.
+  /// Ident_vector, Ident_pixel, Ident_bool - cached IdentifierInfo's
+  /// for "vector", "pixel", and "bool" fast comparison.  Only present
+  /// if AltiVec enabled.
   IdentifierInfo *Ident_vector;
   IdentifierInfo *Ident_pixel;
+  IdentifierInfo *Ident_bool;
 
   /// Objective-C contextual keywords.
   mutable IdentifierInfo *Ident_instancetype;
@@ -151,6 +153,7 @@ class Parser : public CodeCompletionHandler {
   OwningPtr<CommentHandler> CommentSemaHandler;
   OwningPtr<PragmaHandler> OpenMPHandler;
   OwningPtr<PragmaHandler> MSCommentHandler;
+  OwningPtr<PragmaHandler> MSDetectMismatchHandler;
 
   /// Whether the '>' token acts as an operator or not. This will be
   /// true except when we are parsing an expression within a C++
@@ -399,7 +402,8 @@ private:
   /// \brief Abruptly cut off parsing; mainly used when we have reached the
   /// code-completion point.
   void cutOffParsing() {
-    PP.setCodeCompletionReached();
+    if (PP.isCodeCompletionEnabled())
+      PP.setCodeCompletionReached();
     // Cut off parsing by acting as if we reached the end-of-file.
     Tok.setKind(tok::eof);
   }
@@ -530,7 +534,8 @@ private:
                        bool &isInvalid) {
     if (!getLangOpts().AltiVec ||
         (Tok.getIdentifierInfo() != Ident_vector &&
-         Tok.getIdentifierInfo() != Ident_pixel))
+         Tok.getIdentifierInfo() != Ident_pixel &&
+         Tok.getIdentifierInfo() != Ident_bool))
       return false;
 
     return TryAltiVecTokenOutOfLine(DS, Loc, PrevSpec, DiagID, isInvalid);
@@ -549,6 +554,13 @@ private:
   bool TryAltiVecTokenOutOfLine(DeclSpec &DS, SourceLocation Loc,
                                 const char *&PrevSpec, unsigned &DiagID,
                                 bool &isInvalid);
+
+  /// TryKeywordIdentFallback - For compatibility with system headers using
+  /// keywords as identifiers, attempt to convert the current token to an
+  /// identifier and optionally disable the keyword for the remainder of the
+  /// translation unit. This returns false if the token was not replaced,
+  /// otherwise emits a diagnostic and returns true.
+  bool TryKeywordIdentFallback(bool DisableKeyword);
 
   /// \brief Get the TemplateIdAnnotation from the token.
   TemplateIdAnnotation *takeTemplateIdAnnotation(const Token &tok);
@@ -604,6 +616,7 @@ private:
       assert(!isActive && "Forgot to call Commit or Revert!");
     }
   };
+  class UnannotatedTentativeParsingAction;
 
   /// ObjCDeclContextSwitch - An object used to switch context from
   /// an objective-c decl context to its enclosing decl context and
@@ -730,32 +743,45 @@ private:
   void CheckNestedObjCContexts(SourceLocation AtLoc);
 
 public:
+
+  /// \brief Control flags for SkipUntil functions.
+  enum SkipUntilFlags {
+    StopAtSemi = 1 << 0,  ///< Stop skipping at semicolon
+    /// \brief Stop skipping at specified token, but don't skip the token itself
+    StopBeforeMatch = 1 << 1,
+    StopAtCodeCompletion = 1 << 2 ///< Stop at code completion
+  };
+
+  friend LLVM_CONSTEXPR SkipUntilFlags operator|(SkipUntilFlags L,
+                                                 SkipUntilFlags R) {
+    return static_cast<SkipUntilFlags>(static_cast<unsigned>(L) |
+                                       static_cast<unsigned>(R));
+  }
+
   /// SkipUntil - Read tokens until we get to the specified token, then consume
-  /// it (unless DontConsume is true).  Because we cannot guarantee that the
-  /// token will ever occur, this skips to the next token, or to some likely
-  /// good stopping point.  If StopAtSemi is true, skipping will stop at a ';'
-  /// character.
+  /// it (unless StopBeforeMatch is specified).  Because we cannot guarantee
+  /// that the token will ever occur, this skips to the next token, or to some
+  /// likely good stopping point.  If Flags has StopAtSemi flag, skipping will
+  /// stop at a ';' character.
   ///
   /// If SkipUntil finds the specified token, it returns true, otherwise it
   /// returns false.
-  bool SkipUntil(tok::TokenKind T, bool StopAtSemi = true,
-                 bool DontConsume = false, bool StopAtCodeCompletion = false) {
-    return SkipUntil(llvm::makeArrayRef(T), StopAtSemi, DontConsume,
-                     StopAtCodeCompletion);
+  bool SkipUntil(tok::TokenKind T,
+                 SkipUntilFlags Flags = static_cast<SkipUntilFlags>(0)) {
+    return SkipUntil(llvm::makeArrayRef(T), Flags);
   }
-  bool SkipUntil(tok::TokenKind T1, tok::TokenKind T2, bool StopAtSemi = true,
-                 bool DontConsume = false, bool StopAtCodeCompletion = false) {
+  bool SkipUntil(tok::TokenKind T1, tok::TokenKind T2,
+                 SkipUntilFlags Flags = static_cast<SkipUntilFlags>(0)) {
     tok::TokenKind TokArray[] = {T1, T2};
-    return SkipUntil(TokArray, StopAtSemi, DontConsume,StopAtCodeCompletion);
+    return SkipUntil(TokArray, Flags);
   }
   bool SkipUntil(tok::TokenKind T1, tok::TokenKind T2, tok::TokenKind T3,
-                 bool StopAtSemi = true, bool DontConsume = false,
-                 bool StopAtCodeCompletion = false) {
+                 SkipUntilFlags Flags = static_cast<SkipUntilFlags>(0)) {
     tok::TokenKind TokArray[] = {T1, T2, T3};
-    return SkipUntil(TokArray, StopAtSemi, DontConsume,StopAtCodeCompletion);
+    return SkipUntil(TokArray, Flags);
   }
-  bool SkipUntil(ArrayRef<tok::TokenKind> Toks, bool StopAtSemi = true,
-                 bool DontConsume = false, bool StopAtCodeCompletion = false);
+  bool SkipUntil(ArrayRef<tok::TokenKind> Toks,
+                 SkipUntilFlags Flags = static_cast<SkipUntilFlags>(0));
 
   /// SkipMalformedDecl - Read tokens until we get to some likely good stopping
   /// point for skipping past a simple-declaration.
@@ -1062,31 +1088,20 @@ private:
     SourceRange getSourceRange() const LLVM_READONLY;
   };
 
-  /// \brief Contains a late templated function.
-  /// Will be parsed at the end of the translation unit.
-  struct LateParsedTemplatedFunction {
-    explicit LateParsedTemplatedFunction(Decl *MD)
-      : D(MD) {}
-
-    CachedTokens Toks;
-
-    /// \brief The template function declaration to be late parsed.
-    Decl *D;
-  };
-
   void LexTemplateFunctionForLateParsing(CachedTokens &Toks);
-  void ParseLateTemplatedFuncDef(LateParsedTemplatedFunction &LMT);
-  typedef llvm::DenseMap<const FunctionDecl*, LateParsedTemplatedFunction*>
-    LateParsedTemplateMapT;
-  LateParsedTemplateMapT LateParsedTemplateMap;
+  void ParseLateTemplatedFuncDef(LateParsedTemplate &LPT);
 
-  static void LateTemplateParserCallback(void *P, const FunctionDecl *FD);
-  void LateTemplateParser(const FunctionDecl *FD);
+  static void LateTemplateParserCallback(void *P, LateParsedTemplate &LPT);
 
   Sema::ParsingClassState
   PushParsingClass(Decl *TagOrTemplate, bool TopLevelClass, bool IsInterface);
   void DeallocateParsedClasses(ParsingClass *Class);
   void PopParsingClass(Sema::ParsingClassState);
+
+  enum CachedInitKind {
+    CIK_DefaultArgument,
+    CIK_DefaultInitializer
+  };
 
   NamedDecl *ParseCXXInlineMethodDef(AccessSpecifier AS,
                                 AttributeList *AccessAttrs,
@@ -1109,6 +1124,8 @@ private:
   void ParseLexedMemberInitializer(LateParsedMemberInitializer &MI);
   void ParseLexedObjCMethodDefs(LexedMethod &LM, bool parseMethod);
   bool ConsumeAndStoreFunctionPrologue(CachedTokens &Toks);
+  bool ConsumeAndStoreInitializer(CachedTokens &Toks, CachedInitKind CIK);
+  bool ConsumeAndStoreConditional(CachedTokens &Toks);
   bool ConsumeAndStoreUntil(tok::TokenKind T1,
                             CachedTokens &Toks,
                             bool StopAtSemi = true,
@@ -1294,6 +1311,12 @@ private:
                                                    ArrayRef<Expr *> Args) = 0,
                            Expr *Data = 0);
 
+  /// ParseSimpleExpressionList - A simple comma-separated list of expressions,
+  /// used for misc language extensions.
+  bool ParseSimpleExpressionList(SmallVectorImpl<Expr*> &Exprs,
+                                 SmallVectorImpl<SourceLocation> &CommaLocs);
+
+
   /// ParenParseOption - Control what ParseParenExpression will parse.
   enum ParenParseOption {
     SimpleExpr,      // Only parse '(' expression ')'
@@ -1345,7 +1368,8 @@ private:
   // [...] () -> type {...}
   ExprResult ParseLambdaExpression();
   ExprResult TryParseLambdaExpression();
-  Optional<unsigned> ParseLambdaIntroducer(LambdaIntroducer &Intro);
+  Optional<unsigned> ParseLambdaIntroducer(LambdaIntroducer &Intro,
+                                           bool *SkippedInits = 0);
   bool TryParseLambdaIntroducer(LambdaIntroducer &Intro);
   ExprResult ParseLambdaExpressionAfterIntroducer(
                LambdaIntroducer &Intro);
@@ -1481,10 +1505,7 @@ private:
   /// A SmallVector of types.
   typedef SmallVector<ParsedType, 12> TypeVector;
 
-  StmtResult ParseStatement(SourceLocation *TrailingElseLoc = 0) {
-    StmtVector Stmts;
-    return ParseStatementOrDeclaration(Stmts, true, TrailingElseLoc);
-  }
+  StmtResult ParseStatement(SourceLocation *TrailingElseLoc = 0);
   StmtResult ParseStatementOrDeclaration(StmtVector &Stmts,
                                          bool OnlyStatement,
                                          SourceLocation *TrailingElseLoc = 0);
@@ -1648,6 +1669,9 @@ private:
                                   AccessSpecifier AS = AS_none,
                                   DeclSpecContext DSC = DSC_normal,
                                   LateParsedAttrList *LateAttrs = 0);
+  bool DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
+                                             DeclSpecContext DSContext,
+                                             LateParsedAttrList *LateAttrs = 0);
 
   void ParseSpecifierQualifierList(DeclSpec &DS, AccessSpecifier AS = AS_none,
                                    DeclSpecContext DSC = DSC_normal);
@@ -1820,6 +1844,11 @@ private:
   isCXXDeclarationSpecifier(TPResult BracedCastResult = TPResult::False(),
                             bool *HasMissingTypename = 0);
 
+  /// Given that isCXXDeclarationSpecifier returns \c TPResult::True or
+  /// \c TPResult::Ambiguous, determine whether the decl-specifier would be
+  /// a type-specifier other than a cv-qualifier.
+  bool isCXXDeclarationSpecifierAType();
+
   /// \brief Determine whether an identifier has been tentatively declared as a
   /// non-type. Such tentative declarations should not be found to name a type
   /// during a tentative parse, but also should not be annotated as a non-type.
@@ -1832,15 +1861,18 @@ private:
   // that more tentative parsing is necessary for disambiguation.
   // They all consume tokens, so backtracking should be used after calling them.
 
-  TPResult TryParseDeclarationSpecifier(bool *HasMissingTypename = 0);
   TPResult TryParseSimpleDeclaration(bool AllowForRangeDecl);
   TPResult TryParseTypeofSpecifier();
   TPResult TryParseProtocolQualifiers();
+  TPResult TryParsePtrOperatorSeq();
+  TPResult TryParseOperatorId();
   TPResult TryParseInitDeclaratorList();
   TPResult TryParseDeclarator(bool mayBeAbstract, bool mayHaveIdentifier=true);
-  TPResult TryParseParameterDeclarationClause(bool *InvalidAsDeclaration = 0);
+  TPResult TryParseParameterDeclarationClause(bool *InvalidAsDeclaration = 0,
+                                              bool VersusTemplateArg = false);
   TPResult TryParseFunctionDeclarator();
   TPResult TryParseBracketDeclarator();
+  TPResult TryConsumeDeclarationSpecifier();
 
 public:
   TypeResult ParseTypeName(SourceRange *Range = 0,
@@ -1886,6 +1918,10 @@ private:
   // for example, attributes appertain to decl specifiers.
   void ProhibitCXX11Attributes(ParsedAttributesWithRange &attrs);
 
+  /// \brief Diagnose and skip C++11 attributes that appear in syntactic
+  /// locations where attributes are not allowed.
+  void DiagnoseAndSkipCXX11Attributes();
+
   void MaybeParseGNUAttributes(Declarator &D,
                                LateParsedAttrList *LateAttrs = 0) {
     if (Tok.is(tok::kw___attribute)) {
@@ -1911,6 +1947,7 @@ private:
                              IdentifierInfo *ScopeName,
                              SourceLocation ScopeLoc,
                              AttributeList::Syntax Syntax);
+  IdentifierLoc *ParseIdentifierLoc();
 
   void MaybeParseCXX11Attributes(Declarator &D) {
     if (getLangOpts().CPlusPlus11 && isCXX11AttributeSpecifier()) {
@@ -1981,6 +2018,11 @@ private:
                                         ParsedAttributes &Attrs,
                                         SourceLocation *EndLoc);
 
+  void ParseAttributeWithTypeArg(IdentifierInfo &AttrName,
+                                 SourceLocation AttrNameLoc,
+                                 ParsedAttributes &Attrs,
+                                 SourceLocation *EndLoc);
+
   void ParseTypeofSpecifier(DeclSpec &DS);
   SourceLocation ParseDecltypeSpecifier(DeclSpec &DS);
   void AnnotateExistingDecltypeSpecifier(const DeclSpec &DS,
@@ -2044,7 +2086,8 @@ private:
 
   void ParseTypeQualifierListOpt(DeclSpec &DS, bool GNUAttributesAllowed = true,
                                  bool CXX11AttributesAllowed = true,
-                                 bool AtomicAllowed = true);
+                                 bool AtomicAllowed = true,
+                                 bool IdentifierRequired = false);
   void ParseDirectDeclarator(Declarator &D);
   void ParseParenDeclarator(Declarator &D);
   void ParseFunctionDeclarator(Declarator &D,
@@ -2055,11 +2098,11 @@ private:
   bool isFunctionDeclaratorIdentifierList();
   void ParseFunctionDeclaratorIdentifierList(
          Declarator &D,
-         SmallVector<DeclaratorChunk::ParamInfo, 16> &ParamInfo);
+         SmallVectorImpl<DeclaratorChunk::ParamInfo> &ParamInfo);
   void ParseParameterDeclarationClause(
          Declarator &D,
          ParsedAttributes &attrs,
-         SmallVector<DeclaratorChunk::ParamInfo, 16> &ParamInfo,
+         SmallVectorImpl<DeclaratorChunk::ParamInfo> &ParamInfo,
          SourceLocation &EllipsisLoc);
   void ParseBracketDeclarator(Declarator &D);
 
@@ -2079,6 +2122,8 @@ private:
   CXX11AttributeKind
   isCXX11AttributeSpecifier(bool Disambiguate = false,
                             bool OuterMightBeMessageSend = false);
+
+  void DiagnoseUnexpectedNamespace(NamedDecl *Context);
 
   Decl *ParseNamespace(unsigned Context, SourceLocation &DeclEnd,
                        SourceLocation InlineLoc = SourceLocation());
@@ -2169,7 +2214,7 @@ private:
   bool ParseOpenMPSimpleVarList(OpenMPDirectiveKind Kind,
                                 SmallVectorImpl<Expr *> &VarList,
                                 bool AllowScopeSpecifier);
-
+  
   /// \param [out] Inits List of inits.
   ///
   Decl *ParseOpenMPDeclareReduction(SmallVectorImpl<QualType> &Types,

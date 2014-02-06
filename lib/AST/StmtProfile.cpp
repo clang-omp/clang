@@ -528,6 +528,10 @@ void StmtProfiler::VisitShuffleVectorExpr(const ShuffleVectorExpr *S) {
   VisitExpr(S);
 }
 
+void StmtProfiler::VisitConvertVectorExpr(const ConvertVectorExpr *S) {
+  VisitExpr(S);
+}
+
 void StmtProfiler::VisitChooseExpr(const ChooseExpr *S) {
   VisitExpr(S);
 }
@@ -869,16 +873,21 @@ void StmtProfiler::VisitCXXNullPtrLiteralExpr(const CXXNullPtrLiteralExpr *S) {
   VisitExpr(S);
 }
 
+void StmtProfiler::VisitCXXStdInitializerListExpr(
+    const CXXStdInitializerListExpr *S) {
+  VisitExpr(S);
+}
+
 void StmtProfiler::VisitCXXTypeidExpr(const CXXTypeidExpr *S) {
   VisitExpr(S);
   if (S->isTypeOperand())
-    VisitType(S->getTypeOperand());
+    VisitType(S->getTypeOperandSourceInfo()->getType());
 }
 
 void StmtProfiler::VisitCXXUuidofExpr(const CXXUuidofExpr *S) {
   VisitExpr(S);
   if (S->isTypeOperand())
-    VisitType(S->getTypeOperand());
+    VisitType(S->getTypeOperandSourceInfo()->getType());
 }
 
 void StmtProfiler::VisitMSPropertyRefExpr(const MSPropertyRefExpr *S) {
@@ -933,9 +942,14 @@ StmtProfiler::VisitLambdaExpr(const LambdaExpr *S) {
                                  CEnd = S->explicit_capture_end();
        C != CEnd; ++C) {
     ID.AddInteger(C->getCaptureKind());
-    if (C->capturesVariable()) {
+    switch (C->getCaptureKind()) {
+    case LCK_This:
+      break;
+    case LCK_ByRef:
+    case LCK_ByCopy:
       VisitDecl(C->getCapturedVar());
       ID.AddBoolean(C->isPackExpansion());
+      break;
     }
   }
   // Note: If we actually needed to be able to match lambda
@@ -974,7 +988,14 @@ StmtProfiler::VisitCXXPseudoDestructorExpr(const CXXPseudoDestructorExpr *S) {
   VisitExpr(S);
   ID.AddBoolean(S->isArrow());
   VisitNestedNameSpecifier(S->getQualifier());
-  VisitType(S->getDestroyedType());
+  ID.AddBoolean(S->getScopeTypeInfo() != 0);
+  if (S->getScopeTypeInfo())
+    VisitType(S->getScopeTypeInfo()->getType());
+  ID.AddBoolean(S->getDestroyedTypeInfo() != 0);
+  if (S->getDestroyedTypeInfo())
+    VisitType(S->getDestroyedType());
+  else
+    ID.AddPointer(S->getDestroyedTypeIdentifier());
 }
 
 void StmtProfiler::VisitOverloadExpr(const OverloadExpr *S) {

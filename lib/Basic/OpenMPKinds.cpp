@@ -40,7 +40,7 @@ const char *clang::getOpenMPDirectiveName(OpenMPDirectiveKind Kind) {
 #define OPENMP_DIRECTIVE_EXT(Name, Str) \
   case OMPD_##Name : return Str;
 #include "clang/Basic/OpenMPKinds.def"
-  default:
+  case NUM_OPENMP_DIRECTIVES:
     break;
   }
   llvm_unreachable("Invalid OpenMP directive kind");
@@ -64,7 +64,7 @@ const char *clang::getOpenMPClauseName(OpenMPClauseKind Kind) {
 #include "clang/Basic/OpenMPKinds.def"
   case OMPC_threadprivate:
     return "threadprivate or thread local";
-  default:
+  case NUM_OPENMP_CLAUSES:
     break;
   }
   llvm_unreachable("Invalid OpenMP clause kind");
@@ -267,4 +267,3 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
   }
   return false;
 }
-

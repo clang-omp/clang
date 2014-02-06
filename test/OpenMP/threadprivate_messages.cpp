@@ -33,7 +33,7 @@ int x, y;
 #pragma omp threadprivate(a,d)  // expected-error {{'#pragma omp threadprivate' must precede all references to variable 'a'}} expected-error {{'#pragma omp threadprivate' must precede all references to variable 'd'}}
 #pragma omp threadprivate(d.a) // expected-error {{expected identifier}}
 #pragma omp threadprivate((float)a) // expected-error {{expected unqualified-id}}
-int foa;
+int foa; // expected-note {{'foa' declared here}}
 #pragma omp threadprivate(faa) // expected-error {{use of undeclared identifier 'faa'; did you mean 'foa'?}}
 #pragma omp threadprivate(foo) // expected-error {{'foo' is not a global variable, static local variable or static data member}}
 #pragma omp threadprivate (int a=2) // expected-error {{expected unqualified-id}}
@@ -44,7 +44,7 @@ extern IncompleteSt e;
 #pragma omp threadprivate (e) // expected-error {{threadprivate variable with incomplete type 'IncompleteSt'}}
 
 int &f = a; // expected-note {{'f' defined here}}
-#pragma omp threadprivate (f) // expected-error {{arguments of '#pragma omp threadprivate' cannot be of reference type}}
+#pragma omp threadprivate (f) // expected-error {{arguments of '#pragma omp threadprivate' cannot be of reference type 'int &'}}
 
 class Class {
   private:
@@ -63,7 +63,7 @@ namespace ns {
   int m;
 #pragma omp threadprivate (m)
 }
-#pragma omp threadprivate (m) // expected-error {{use of undeclared identifier 'm'}} expected-error {{'#pragma omp threadprivate' must precede all references to variable 'ns::m'}}
+#pragma omp threadprivate (m) // expected-error {{use of undeclared identifier 'm'}}
 #pragma omp threadprivate (ns::m) // expected-error {{'#pragma omp threadprivate' must precede all references to variable 'ns::m'}}
 #pragma omp threadprivate (ns:m) // expected-error {{unexpected ':' in nested name specifier; did you mean '::'?}} expected-error {{'#pragma omp threadprivate' must precede all references to variable 'ns::m'}}
 

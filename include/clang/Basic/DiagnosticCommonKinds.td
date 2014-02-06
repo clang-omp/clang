@@ -99,10 +99,10 @@ def ext_cxx11_longlong : Extension<
 def warn_cxx98_compat_longlong : Warning<
   "'long long' is incompatible with C++98">,
   InGroup<CXX98CompatPedantic>, DefaultIgnore;
-def warn_integer_too_large : Warning<
-  "integer constant is too large for its type">;
+def err_integer_too_large : Error<
+  "integer constant is larger than the largest unsigned integer type">;
 def warn_integer_too_large_for_signed : Warning<
-  "integer constant is so large that it is unsigned">;
+  "integer constant is larger than the largest signed integer type">;
 
 // Sema && AST
 def note_invalid_subexpr_in_const_expr : Note<
@@ -115,7 +115,9 @@ def err_target_unknown_triple : Error<
 def err_target_unknown_cpu : Error<"unknown target CPU '%0'">;
 def err_target_unknown_abi : Error<"unknown target ABI '%0'">;
 def err_target_unknown_cxxabi : Error<"unknown C++ ABI '%0'">;
-def err_target_invalid_feature : Error<"invalid target feature '%0'">;
+def err_target_unknown_fpmath : Error<"unknown FP unit '%0'">;
+def err_target_unsupported_fpmath : Error<
+    "the '%0' unit is not supported with this instruction set">;
 
 // Source manager
 def err_cannot_open_file : Error<"cannot open file '%0': %1">, DefaultFatal;

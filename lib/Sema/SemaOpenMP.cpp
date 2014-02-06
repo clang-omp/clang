@@ -550,10 +550,8 @@ public:
     NamedDecl *ND = Candidate.getCorrectionDecl();
     if (VarDecl *VD = dyn_cast_or_null<VarDecl>(ND)) {
       return VD->hasGlobalStorage() &&
-             ((Actions.getCurLexicalContext()->isFileContext() &&
-               VD->getDeclContext()->isFileContext()) ||
-              Actions.isDeclInScope(ND, Actions.getCurLexicalContext(),
-                                    Actions.getCurScope()));
+             Actions.isDeclInScope(ND, Actions.getCurLexicalContext(),
+                                   Actions.getCurScope());
     }
     return false;
   }
@@ -572,30 +570,23 @@ ExprResult Sema::ActOnOpenMPIdExpression(Scope *CurScope,
   VarDecl *VD;
   if (!Lookup.isSingleResult()) {
     VarDeclFilterCCC Validator(*this);
-    TypoCorrection Corrected = CorrectTypo(Id, LookupOrdinaryName, CurScope,
-                                           0, Validator);
-    std::string CorrectedStr = Corrected.getAsString(getLangOpts());
-    std::string CorrectedQuotedStr = Corrected.getQuoted(getLangOpts());
-    if (Lookup.empty()) {
-      if (Corrected.isResolved()) {
-        Diag(Id.getLoc(), diag::err_undeclared_var_use_suggest)
-          << Id.getName() << CorrectedQuotedStr
-          << FixItHint::CreateReplacement(Id.getLoc(), CorrectedStr);
-      } else {
-        Diag(Id.getLoc(), diag::err_undeclared_var_use)
-          << Id.getName();
-      }
+    if (TypoCorrection Corrected = CorrectTypo(Id, LookupOrdinaryName, CurScope,
+                                               0, Validator)) {
+      diagnoseTypo(Corrected,
+                   PDiag(Lookup.empty()? diag::err_undeclared_var_use_suggest
+                                       : diag::err_omp_expected_var_arg_suggest)
+                     << Id.getName());
+      VD = Corrected.getCorrectionDeclAs<VarDecl>();
     } else {
-      Diag(Id.getLoc(), diag::err_omp_expected_var_arg_suggest)
-        << Id.getName() << Corrected.isResolved() << CorrectedQuotedStr
-        << FixItHint::CreateReplacement(Id.getLoc(), CorrectedStr);
+      Diag(Id.getLoc(), Lookup.empty() ? diag::err_undeclared_var_use
+                                       : diag::err_omp_expected_var_arg)
+          << Id.getName();
+      return ExprError();
     }
-    if (!Corrected.isResolved()) return ExprError();
-    VD = Corrected.getCorrectionDeclAs<VarDecl>();
   } else {
     if (!(VD = Lookup.getAsSingle<VarDecl>())) {
-      Diag(Id.getLoc(), diag::err_omp_expected_var_arg_suggest)
-        << Id.getName() << 0;
+      Diag(Id.getLoc(), diag::err_omp_expected_var_arg)
+        << Id.getName();
       Diag(Lookup.getFoundDecl()->getLocation(), diag::note_declared_at);
       return ExprError();
     }
@@ -690,7 +681,8 @@ OMPThreadPrivateDecl *Sema::CheckOMPThreadPrivateDecl(
     //   A threadprivate variable must not have a reference type.
     if (VD->getType()->isReferenceType()) {
       Diag(ILoc, diag::err_omp_ref_type_arg)
-        << getOpenMPDirectiveName(OMPD_threadprivate);
+        << getOpenMPDirectiveName(OMPD_threadprivate)
+        << VD->getType();
       bool IsDecl = VD->isThisDeclarationADefinition(Context) ==
                     VarDecl::DeclarationOnly;
       Diag(VD->getLocation(), IsDecl ? diag::note_previous_decl :
@@ -1567,7 +1559,6 @@ StmtResult Sema::ActOnOpenMPParallelDirective(ArrayRef<OMPClause *> Clauses,
                                               Stmt *AStmt,
                                               SourceLocation StartLoc,
                                               SourceLocation EndLoc) {
-
   getCurFunction()->setHasBranchProtectedScope();
   return Owned(OMPParallelDirective::Create(Context, StartLoc, EndLoc,
                                             Clauses, AStmt));
@@ -2823,46 +2814,46 @@ OMPClause *Sema::ActOnOpenMPNumThreadsClause(Expr *NumThreads,
                                              SourceLocation EndLoc) {
   class CConvertDiagnoser : public ICEConvertDiagnoser {
   public:
-    CConvertDiagnoser() : ICEConvertDiagnoser(false, true) { }
-    virtual DiagnosticBuilder diagnoseNotInt(Sema &S, SourceLocation Loc,
-                                             QualType T) {
+    CConvertDiagnoser() : ICEConvertDiagnoser(true, false, true) { }
+    virtual SemaDiagnosticBuilder diagnoseNotInt(Sema &S, SourceLocation Loc,
+                                                 QualType T) {
       return S.Diag(Loc, diag::err_typecheck_statement_requires_integer) << T;
     }
-    virtual DiagnosticBuilder diagnoseIncomplete(Sema &S,
-                                                 SourceLocation Loc,
-                                                 QualType T) {
+    virtual SemaDiagnosticBuilder diagnoseIncomplete(Sema &S,
+                                                     SourceLocation Loc,
+                                                     QualType T) {
       return S.Diag(Loc, diag::err_incomplete_class_type) << T;
     }
-    virtual DiagnosticBuilder diagnoseExplicitConv(Sema &S,
-                                                   SourceLocation Loc,
-                                                   QualType T,
-                                                   QualType ConvTy) {
+    virtual SemaDiagnosticBuilder diagnoseExplicitConv(Sema &S,
+                                                       SourceLocation Loc,
+                                                       QualType T,
+                                                       QualType ConvTy) {
       return S.Diag(Loc, diag::err_explicit_conversion) << T << ConvTy;
     }
 
-    virtual DiagnosticBuilder noteExplicitConv(Sema &S,
-                                               CXXConversionDecl *Conv,
-                                               QualType ConvTy) {
+    virtual SemaDiagnosticBuilder noteExplicitConv(Sema &S,
+                                                   CXXConversionDecl *Conv,
+                                                   QualType ConvTy) {
       return S.Diag(Conv->getLocation(), diag::note_conversion) <<
         ConvTy->isEnumeralType() << ConvTy;
     }
-    virtual DiagnosticBuilder diagnoseAmbiguous(Sema &S, SourceLocation Loc,
-                                                QualType T) {
+    virtual SemaDiagnosticBuilder diagnoseAmbiguous(Sema &S, SourceLocation Loc,
+                                                    QualType T) {
       return S.Diag(Loc, diag::err_multiple_conversions) << T;
     }
 
-    virtual DiagnosticBuilder noteAmbiguous(Sema &S,
-                                            CXXConversionDecl *Conv,
-                                            QualType ConvTy) {
+    virtual SemaDiagnosticBuilder noteAmbiguous(Sema &S,
+                                                CXXConversionDecl *Conv,
+                                                QualType ConvTy) {
       return S.Diag(Conv->getLocation(), diag::note_conversion) <<
         ConvTy->isEnumeralType() << ConvTy;
     }
 
-    virtual DiagnosticBuilder diagnoseConversion(Sema &S,
-                                                 SourceLocation Loc,
-                                                 QualType T,
-                                                 QualType ConvTy) {
-      return DiagnosticBuilder::getEmpty();
+    virtual SemaDiagnosticBuilder diagnoseConversion(Sema &S,
+                                                     SourceLocation Loc,
+                                                     QualType T,
+                                                     QualType ConvTy) {
+      llvm_unreachable("conversion functions are permitted");
     }
   } ConvertDiagnoser;
 
@@ -2873,10 +2864,9 @@ OMPClause *Sema::ActOnOpenMPNumThreadsClause(Expr *NumThreads,
   if (!ValExpr->isTypeDependent() && !ValExpr->isValueDependent() &&
       !ValExpr->isInstantiationDependent()) {
     SourceLocation Loc = NumThreads->getExprLoc();
-    ExprResult Value = ConvertToIntegralOrEnumerationType(Loc,
-                                                          NumThreads,
-                                                          ConvertDiagnoser,
-                                                          true);
+    ExprResult Value = PerformContextualImplicitConversion(Loc,
+                                                           NumThreads,
+                                                           ConvertDiagnoser);
     if (Value.isInvalid() ||
         !Value.get()->getType()->isIntegralOrUnscopedEnumerationType())
       return 0;
@@ -3149,46 +3139,46 @@ OMPClause *Sema::ActOnOpenMPScheduleClause(OpenMPScheduleClauseKind Kind,
                                            SourceLocation EndLoc) {
   class CConvertDiagnoser : public ICEConvertDiagnoser {
   public:
-    CConvertDiagnoser() : ICEConvertDiagnoser(false, true) { }
-    virtual DiagnosticBuilder diagnoseNotInt(Sema &S, SourceLocation Loc,
-                                             QualType T) {
+    CConvertDiagnoser() : ICEConvertDiagnoser(true, false, true) { }
+    virtual SemaDiagnosticBuilder diagnoseNotInt(Sema &S, SourceLocation Loc,
+                                                 QualType T) {
       return S.Diag(Loc, diag::err_typecheck_statement_requires_integer) << T;
     }
-    virtual DiagnosticBuilder diagnoseIncomplete(Sema &S,
-                                                 SourceLocation Loc,
-                                                 QualType T) {
+    virtual SemaDiagnosticBuilder diagnoseIncomplete(Sema &S,
+                                                     SourceLocation Loc,
+                                                     QualType T) {
       return S.Diag(Loc, diag::err_incomplete_class_type) << T;
     }
-    virtual DiagnosticBuilder diagnoseExplicitConv(Sema &S,
-                                                   SourceLocation Loc,
-                                                   QualType T,
-                                                   QualType ConvTy) {
+    virtual SemaDiagnosticBuilder diagnoseExplicitConv(Sema &S,
+                                                       SourceLocation Loc,
+                                                       QualType T,
+                                                       QualType ConvTy) {
       return S.Diag(Loc, diag::err_explicit_conversion) << T << ConvTy;
     }
 
-    virtual DiagnosticBuilder noteExplicitConv(Sema &S,
-                                               CXXConversionDecl *Conv,
-                                               QualType ConvTy) {
+    virtual SemaDiagnosticBuilder noteExplicitConv(Sema &S,
+                                                   CXXConversionDecl *Conv,
+                                                   QualType ConvTy) {
       return S.Diag(Conv->getLocation(), diag::note_conversion) <<
         ConvTy->isEnumeralType() << ConvTy;
     }
-    virtual DiagnosticBuilder diagnoseAmbiguous(Sema &S, SourceLocation Loc,
-                                                QualType T) {
+    virtual SemaDiagnosticBuilder diagnoseAmbiguous(Sema &S, SourceLocation Loc,
+                                                    QualType T) {
       return S.Diag(Loc, diag::err_multiple_conversions) << T;
     }
 
-    virtual DiagnosticBuilder noteAmbiguous(Sema &S,
-                                            CXXConversionDecl *Conv,
-                                            QualType ConvTy) {
+    virtual SemaDiagnosticBuilder noteAmbiguous(Sema &S,
+                                                CXXConversionDecl *Conv,
+                                                QualType ConvTy) {
       return S.Diag(Conv->getLocation(), diag::note_conversion) <<
         ConvTy->isEnumeralType() << ConvTy;
     }
 
-    virtual DiagnosticBuilder diagnoseConversion(Sema &S,
-                                                 SourceLocation Loc,
-                                                 QualType T,
-                                                 QualType ConvTy) {
-      return DiagnosticBuilder::getEmpty();
+    virtual SemaDiagnosticBuilder diagnoseConversion(Sema &S,
+                                                     SourceLocation Loc,
+                                                     QualType T,
+                                                     QualType ConvTy) {
+      llvm_unreachable("conversion functions are permitted");
     }
   } ConvertDiagnoser;
 
@@ -3220,8 +3210,8 @@ OMPClause *Sema::ActOnOpenMPScheduleClause(OpenMPScheduleClauseKind Kind,
     if (!ChunkSize->isTypeDependent() && !ChunkSize->isValueDependent() &&
         !ChunkSize->isInstantiationDependent()) {
       SourceLocation Loc = ChunkSize->getExprLoc();
-      Value = ConvertToIntegralOrEnumerationType(Loc, ChunkSize,
-                                                 ConvertDiagnoser, true);
+      Value = PerformContextualImplicitConversion(Loc, ChunkSize,
+                                                  ConvertDiagnoser);
       if (Value.isInvalid())
         return 0;
 
@@ -3287,46 +3277,46 @@ OMPClause *Sema::ActOnOpenMPDistScheduleClause(OpenMPScheduleClauseKind Kind,
                                                SourceLocation EndLoc) {
   class CConvertDiagnoser : public ICEConvertDiagnoser {
   public:
-    CConvertDiagnoser() : ICEConvertDiagnoser(false, true) { }
-    virtual DiagnosticBuilder diagnoseNotInt(Sema &S, SourceLocation Loc,
-                                             QualType T) {
+    CConvertDiagnoser() : ICEConvertDiagnoser(true, false, true) { }
+    virtual SemaDiagnosticBuilder diagnoseNotInt(Sema &S, SourceLocation Loc,
+                                                 QualType T) {
       return S.Diag(Loc, diag::err_typecheck_statement_requires_integer) << T;
     }
-    virtual DiagnosticBuilder diagnoseIncomplete(Sema &S,
-                                                 SourceLocation Loc,
-                                                 QualType T) {
+    virtual SemaDiagnosticBuilder diagnoseIncomplete(Sema &S,
+                                                     SourceLocation Loc,
+                                                     QualType T) {
       return S.Diag(Loc, diag::err_incomplete_class_type) << T;
     }
-    virtual DiagnosticBuilder diagnoseExplicitConv(Sema &S,
-                                                   SourceLocation Loc,
-                                                   QualType T,
-                                                   QualType ConvTy) {
+    virtual SemaDiagnosticBuilder diagnoseExplicitConv(Sema &S,
+                                                       SourceLocation Loc,
+                                                       QualType T,
+                                                       QualType ConvTy) {
       return S.Diag(Loc, diag::err_explicit_conversion) << T << ConvTy;
     }
 
-    virtual DiagnosticBuilder noteExplicitConv(Sema &S,
-                                               CXXConversionDecl *Conv,
-                                               QualType ConvTy) {
+    virtual SemaDiagnosticBuilder noteExplicitConv(Sema &S,
+                                                   CXXConversionDecl *Conv,
+                                                   QualType ConvTy) {
       return S.Diag(Conv->getLocation(), diag::note_conversion) <<
         ConvTy->isEnumeralType() << ConvTy;
     }
-    virtual DiagnosticBuilder diagnoseAmbiguous(Sema &S, SourceLocation Loc,
-                                                QualType T) {
+    virtual SemaDiagnosticBuilder diagnoseAmbiguous(Sema &S, SourceLocation Loc,
+                                                    QualType T) {
       return S.Diag(Loc, diag::err_multiple_conversions) << T;
     }
 
-    virtual DiagnosticBuilder noteAmbiguous(Sema &S,
-                                            CXXConversionDecl *Conv,
-                                            QualType ConvTy) {
+    virtual SemaDiagnosticBuilder noteAmbiguous(Sema &S,
+                                                CXXConversionDecl *Conv,
+                                                QualType ConvTy) {
       return S.Diag(Conv->getLocation(), diag::note_conversion) <<
         ConvTy->isEnumeralType() << ConvTy;
     }
 
-    virtual DiagnosticBuilder diagnoseConversion(Sema &S,
-                                                 SourceLocation Loc,
-                                                 QualType T,
-                                                 QualType ConvTy) {
-      return DiagnosticBuilder::getEmpty();
+    virtual SemaDiagnosticBuilder diagnoseConversion(Sema &S,
+                                                     SourceLocation Loc,
+                                                     QualType T,
+                                                     QualType ConvTy) {
+      llvm_unreachable("conversion functions are permitted");
     }
   } ConvertDiagnoser;
 
@@ -3342,8 +3332,8 @@ OMPClause *Sema::ActOnOpenMPDistScheduleClause(OpenMPScheduleClauseKind Kind,
     if (!ChunkSize->isTypeDependent() && !ChunkSize->isValueDependent() &&
         !ChunkSize->isInstantiationDependent()) {
       SourceLocation Loc = ChunkSize->getExprLoc();
-      Value = ConvertToIntegralOrEnumerationType(Loc, ChunkSize,
-                                                 ConvertDiagnoser, true);
+      Value = PerformContextualImplicitConversion(Loc, ChunkSize,
+                                                  ConvertDiagnoser);
       if (Value.isInvalid())
         return 0;
 
@@ -3492,7 +3482,7 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
     }
     if (Type->isReferenceType()) {
       Diag(ELoc, diag::err_omp_clause_ref_type_arg)
-        << getOpenMPClauseName(OMPC_private);
+        << getOpenMPClauseName(OMPC_private) << Type;
       bool IsDecl = VD->isThisDeclarationADefinition(Context) ==
                     VarDecl::DeclarationOnly;
       Diag(VD->getLocation(), IsDecl ? diag::note_previous_decl :
@@ -3648,7 +3638,7 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
     }
     if (Type->isReferenceType()) {
       Diag(ELoc, diag::err_omp_clause_ref_type_arg)
-        << getOpenMPClauseName(OMPC_firstprivate);
+        << getOpenMPClauseName(OMPC_firstprivate) << Type;
       bool IsDecl = VD->isThisDeclarationADefinition(Context) ==
                     VarDecl::DeclarationOnly;
       Diag(VD->getLocation(), IsDecl ? diag::note_previous_decl :
@@ -3903,7 +3893,7 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
     }
     if (Type->isReferenceType()) {
       Diag(ELoc, diag::err_omp_clause_ref_type_arg)
-        << getOpenMPClauseName(OMPC_lastprivate);
+        << getOpenMPClauseName(OMPC_lastprivate) << Type;
       bool IsDecl = VD->isThisDeclarationADefinition(Context) ==
                     VarDecl::DeclarationOnly;
       Diag(VD->getLocation(), IsDecl ? diag::note_previous_decl :
@@ -3990,7 +3980,9 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
                           Type->getAsCXXRecordDecl() : 0;
     if (RD) {
       CXXMethodDecl *MD = LookupCopyingAssignment(RD, 0, false, 0);
-      if (!MD || CheckMemberAccess(ELoc, RD, MD) == AR_inaccessible ||
+      if (!MD ||
+          CheckMemberAccess(ELoc, RD,
+                            DeclAccessPair::make(MD, MD->getAccess())) == AR_inaccessible ||
           MD->isDeleted()) {
         Diag(ELoc, diag::err_omp_required_method)
              << getOpenMPClauseName(OMPC_lastprivate) << 2;
@@ -4204,7 +4196,9 @@ OMPClause *Sema::ActOnOpenMPCopyinClause(ArrayRef<Expr *> VarList,
                           Type->getAsCXXRecordDecl() : 0;
     if (RD) {
       CXXMethodDecl *MD = LookupCopyingAssignment(RD, 0, false, 0);
-      if (!MD || CheckMemberAccess(ELoc, RD, MD) == AR_inaccessible ||
+      if (!MD ||
+          CheckMemberAccess(ELoc, RD,
+                            DeclAccessPair::make(MD, MD->getAccess())) == AR_inaccessible ||
           MD->isDeleted()) {
         Diag(ELoc, diag::err_omp_required_method)
              << getOpenMPClauseName(OMPC_copyin) << 2;
@@ -4359,7 +4353,9 @@ OMPClause *Sema::ActOnOpenMPCopyPrivateClause(ArrayRef<Expr *> VarList,
                           Type->getAsCXXRecordDecl() : 0;
     if (RD) {
       CXXMethodDecl *MD = LookupCopyingAssignment(RD, 0, false, 0);
-      if (!MD || CheckMemberAccess(ELoc, RD, MD) == AR_inaccessible ||
+      if (!MD ||
+          CheckMemberAccess(ELoc, RD,
+                            DeclAccessPair::make(MD, MD->getAccess())) == AR_inaccessible ||
           MD->isDeleted()) {
         Diag(ELoc, diag::err_omp_required_method)
              << getOpenMPClauseName(OMPC_copyprivate) << 2;

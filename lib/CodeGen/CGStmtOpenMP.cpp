@@ -19,6 +19,7 @@
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclObjC.h"
+#include "clang/AST/DeclOpenMP.h"
 #include "clang/Basic/OpenMPKinds.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
@@ -719,7 +720,6 @@ void CodeGenFunction::EmitOMPParallelDirective(const OMPParallelDirective &S) {
   FnArgs.push_back(Arg1);
   FnArgs.push_back(Arg2);
   FnArgs.push_back(Arg3);
-  CGF.maybeInitializeDebugInfo();
   CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
   CGF.StartFunction(FD, getContext().VoidTy, Fn, FI, FnArgs, SourceLocation());
   CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg1), ".__kmpc_global_thread_num.");
@@ -1373,7 +1373,6 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   FunctionArgList FnArgs;
   FnArgs.push_back(Arg1);
   FnArgs.push_back(Arg2);
-  CGF.maybeInitializeDebugInfo();
   CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
   CGF.StartFunction(FD, getContext().IntTy, Fn, FI, FnArgs, SourceLocation());
   llvm::AllocaInst *GTid = CGF.CreateMemTemp(getContext().IntTy,
@@ -2136,7 +2135,7 @@ void CodeGenFunction::EmitUniversalStore(LValue Dst, llvm::Value *Src,
                                          QualType ExprTy) {
   switch (getEvaluationKind(ExprTy)) {
   case TEK_Complex: {
-    RValue Val = convertTempToRValue(Src, ExprTy);
+    RValue Val = convertTempToRValue(Src, ExprTy, SourceLocation());
     EmitStoreOfComplex(Val.getComplexVal(), Dst, false);
     }
     break;
@@ -2144,7 +2143,7 @@ void CodeGenFunction::EmitUniversalStore(LValue Dst, llvm::Value *Src,
     EmitAggregateAssign(Dst.getAddress(), Src, ExprTy);
     break;
   case TEK_Scalar:
-    RValue Val = convertTempToRValue(Src, ExprTy);
+    RValue Val = convertTempToRValue(Src, ExprTy, SourceLocation());
     EmitStoreThroughLValue(Val, Dst, false);
     break;
   }
@@ -2954,7 +2953,6 @@ void CodeGenFunction::EmitInitOMPReductionClause(
         }
       }
     }
-    CGF.maybeInitializeDebugInfo();
     CGF.StartFunction(GlobalDecl(), getContext().VoidTy, Fn,
                       FI, Args, SourceLocation());
     ReductionFunc = CGF.CurFn;
@@ -3611,7 +3609,7 @@ void CodeGenFunction::EmitOMPAtomicDirective(const OMPAtomicDirective &S) {
         EmitStoreOfScalar(Res, EmitLValue(S.getV()));
       } else {
         EmitRuntimeCall(OPENMPRTL_FUNC(atomic_start));
-        RValue Val = EmitLoadOfLValue(X);
+        RValue Val = EmitLoadOfLValue(X, S.getX()->getExprLoc());
         EmitRuntimeCall(OPENMPRTL_FUNC(atomic_end));
         EmitStoreThroughLValue(Val, EmitLValue(S.getV()));
       }
@@ -3891,7 +3889,6 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
             }
           }
         }
-        CGF.maybeInitializeDebugInfo();
         CGF.StartFunction(GlobalDecl(), getContext().VoidTy, Fn,
                           FI, Args, SourceLocation());
 
@@ -3948,10 +3945,10 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
             llvm::Type *PtrType = ConvertType(getContext().getPointerType(QTy));
             llvm::Value *LoadDst = CGF.EmitLoadOfScalar(Dst, false,
               CGM.getDataLayout().getPrefTypeAlignment(PtrType),
-              getContext().getPointerType(QTy));
+              getContext().getPointerType(QTy), SourceLocation());
             llvm::Value *LoadSrc = CGF.EmitLoadOfScalar(Src, false,
               CGM.getDataLayout().getPrefTypeAlignment(PtrType),
-              getContext().getPointerType(QTy));
+              getContext().getPointerType(QTy), SourceLocation());
             CGF.EmitCopyAssignment(
               I,
               AssignIter,
@@ -3975,7 +3972,7 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
           llvm::Value *LoadDidIt = EmitLoadOfScalar(DidIt, false,
             CGM.getDataLayout().getPrefTypeAlignment(
               DidIt->getType()->getSequentialElementType()),
-            getContext().IntTy);
+            getContext().IntTy, SourceLocation());
           llvm::Value *RealArgs[] = {Loc,
               GTid,
               CpySize,
@@ -4427,7 +4424,8 @@ void CodeGenFunction::CGPragmaOmpSimd::emitLinearFinal(
 
             // Prepare destination lvalue to store result into.
             LValue LV = CGF.EmitLValue(*J);
-            llvm::Value *Start = CGF.EmitLoadOfLValue(LV).getScalarVal();
+            llvm::Value *Start =
+              CGF.EmitLoadOfLValue(LV, (*J)->getExprLoc()).getScalarVal();
 
             if (Start->getType()->isPointerTy()) {
               Result = CGF.Builder.CreateGEP(Start, Result);
