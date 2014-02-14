@@ -209,6 +209,7 @@ llvm::Value *CodeGenModule::CreateOpenMPThreadPrivateCached(
                              getContext().getTargetAddressSpace(VD->getType()));
     CharUnits SZ = GetTargetTypeStoreSize(VDTy);
     std::string VarCache = getMangledName(VD).str() + ".cache.";
+
     llvm::Value *Args[] = {CreateIntelOpenMPRTLLoc(Loc, CGF),
                            CreateOpenMPGlobalThreadNum(Loc, CGF),
                            CGF.Builder.CreateBitCast(VD->isStaticLocal() ? 
@@ -318,3 +319,101 @@ void CodeGenModule::EmitOMPDeclareReduction(const OMPDeclareReductionDecl *D) {
     EmitGlobal(cast<FunctionDecl>(D));
   }
 }
+
+void CodeGenModule::EmitOMPDeclareSimd(const OMPDeclareSimdDecl *D) {
+  // 1) Emit function, extract FunctionDecl, Function, CGFunctionInfo.
+  // 2) Prepare input (Groups) for metadata generation.
+  // 3) Do the metadata generation -- call EmitVectorVariantsMetadata.
+
+  // Make sure that the function is emitted.
+  const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D->getFunction());
+
+  if (!FD) {
+    return;
+  }
+
+  EmitGlobal(FD);
+
+  const CGFunctionInfo &FI = getTypes().arrangeGlobalDeclaration(FD);
+  llvm::FunctionType *Ty = getTypes().GetFunctionType(FI);
+  llvm::Function *Fn = cast<llvm::Function>(GetAddrOfFunction(FD, Ty));
+
+  if (FD->isVariadic())
+    return;
+
+  if (!Fn)
+    return;
+
+  // Prepare input for the metadata emission.
+  GroupMap Groups;
+  static unsigned key = 0;
+
+  for (OMPDeclareSimdDecl::simd_variants_const_iterator
+       I = D->simd_variants_begin(),
+       E = D->simd_variants_end(); I != E; ++I) {
+    Groups.FindAndConstruct(++key);
+    unsigned BeginIdx = I->BeginIdx;
+    unsigned EndIdx = I->EndIdx;
+    for (unsigned Idx = BeginIdx; Idx < EndIdx; ++Idx) {
+      OMPDeclareSimdDecl::clauses_const_iterator J = D->clauses_begin() + Idx;
+      if (!*J)
+        continue;
+      if (isa<OMPInBranchClause>(*J)) {
+        Groups[key].Mask.push_back(1);
+      }
+      else if (isa<OMPNotInBranchClause>(*J)) {
+        Groups[key].Mask.push_back(0);
+      }
+      else if (OMPSimdlenClause *C = dyn_cast<OMPSimdlenClause>(*J)) {
+        const Expr *LengthExpr = C->getSimdlen();
+        assert(isa<IntegerLiteral>(LengthExpr) && "integer literal expected");
+        unsigned VLen = cast<IntegerLiteral>(LengthExpr)->getValue().getZExtValue();
+        Groups[key].VecLength.push_back(VLen);
+      }
+      else if (OMPLinearClause *C = dyn_cast<OMPLinearClause>(*J)) {
+        const Expr *StepExpr = C->getStep();
+        int Step = 0;
+        if (const IntegerLiteral *IL =
+            dyn_cast_or_null<IntegerLiteral>(StepExpr)) {
+          Step = IL->getValue().getZExtValue();
+        }
+        else {
+          Step = 1;
+        }
+        for (OMPLinearClause::varlist_const_iterator I = C->varlist_begin(),
+            E = C->varlist_end(); I != E; ++I) {
+          const DeclRefExpr *DRE = cast<DeclRefExpr>(*I);
+          const std::string Name = DRE->getDecl()->getDeclName().getAsString();
+          Groups[key].setLinear(Name, "", Step);
+        }
+      }
+      else if (OMPAlignedClause *C = dyn_cast<OMPAlignedClause>(*J)) {
+        const Expr *AlignExpr = C->getAlignment();
+        int Align = 0;
+        if (const IntegerLiteral *IL =
+            dyn_cast_or_null<IntegerLiteral>(AlignExpr)) {
+          Align = IL->getValue().getZExtValue();
+        }
+        for (OMPAlignedClause::varlist_const_iterator I = C->varlist_begin(),
+            E = C->varlist_end(); I != E; ++I) {
+          const DeclRefExpr *DRE = cast<DeclRefExpr>(*I);
+          const std::string Name = DRE->getDecl()->getDeclName().getAsString();
+          Groups[key].setAligned(Name, Align);
+        }
+      }
+      else if (OMPUniformClause *C = dyn_cast<OMPUniformClause>(*J)) {
+        for (OMPUniformClause::varlist_const_iterator I = C->varlist_begin(),
+            E = C->varlist_end(); I != E; ++I) {
+          const DeclRefExpr *DRE = cast<DeclRefExpr>(*I);
+          Groups[key].setUniform(DRE->getDecl()->getDeclName().getAsString());
+        }
+      }
+      else {
+        llvm_unreachable("Unknown clause on 'omp declare simd' directive");
+      }
+    }
+  }
+
+  EmitVectorVariantsMetadata(FI, FD, Fn, Groups);
+}
+

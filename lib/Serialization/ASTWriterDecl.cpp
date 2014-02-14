@@ -32,7 +32,7 @@ using namespace serialization;
 
 namespace clang {
   class ASTDeclWriter : public DeclVisitor<ASTDeclWriter, void> {
-
+    friend class OMPClauseWriter;
     ASTWriter &Writer;
     ASTContext &Context;
     typedef ASTWriter::RecordData RecordData;
@@ -131,6 +131,7 @@ namespace clang {
     void VisitObjCPropertyImplDecl(ObjCPropertyImplDecl *D);
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
     void VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D);
+    void VisitOMPDeclareSimdDecl(OMPDeclareSimdDecl *D);
   };
 }
 
@@ -1450,6 +1451,28 @@ void ASTDeclWriter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
     Writer.AddStmt(I->InitFunction);
   }
   Code = serialization::DECL_OMP_DECLAREREDUCTION;
+}
+
+void ASTDeclWriter::VisitOMPDeclareSimdDecl(OMPDeclareSimdDecl *D) {
+  Record.push_back(D->simd_variants_size());
+  Record.push_back(D->clauses_size());
+  VisitDecl(D);
+  OMPClauseWriter ClauseWriter(Writer, Record);
+  for (OMPDeclareSimdDecl::clauses_iterator IC = D->clauses_begin(),
+       EC = D->clauses_end(); IC != EC; ++IC) {
+    // Save the clause.
+    ClauseWriter.writeClause(*IC);
+  }
+  for (OMPDeclareSimdDecl::simd_variants_iterator
+      IV = D->simd_variants_begin(),
+      EV = D->simd_variants_end(); IV != EV; ++IV) {
+    // Save the variant info.
+    Writer.AddSourceRange(IV->SrcRange, Record);
+    Record.push_back(IV->BeginIdx);
+    Record.push_back(IV->EndIdx);
+  }
+  Writer.AddDeclRef(D->getFunction(), Record);
+  Code = serialization::DECL_OMP_DECLARESIMD;
 }
 
 //===----------------------------------------------------------------------===//

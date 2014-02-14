@@ -35,6 +35,7 @@ using namespace clang::serialization;
 
 namespace clang {
   class ASTDeclReader : public DeclVisitor<ASTDeclReader, void> {
+    friend class OMPClauseReader;
     ASTReader &Reader;
     ModuleFile &F;
     const DeclID ThisDeclID;
@@ -315,6 +316,7 @@ namespace clang {
     void VisitObjCPropertyImplDecl(ObjCPropertyImplDecl *D);
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
     void VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D);
+    void VisitOMPDeclareSimdDecl(OMPDeclareSimdDecl *D);
   };
 }
 
@@ -1951,6 +1953,32 @@ void ASTDeclReader::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
   D->setData(Data);
 }
 
+void ASTDeclReader::VisitOMPDeclareSimdDecl(OMPDeclareSimdDecl *D) {
+  VisitDecl(D);
+  unsigned NumVariants = D->simd_variants_size();
+  unsigned NumClauses  = D->clauses_size();
+  if (NumClauses > 0) {
+    SmallVector<OMPClause *, 8> Clauses;
+    OMPClauseReader ClauseReader(Reader, Reader.getContext(), Record, Idx, F);
+    for (unsigned i = 0; i != NumClauses; ++i) {
+      Clauses.push_back(ClauseReader.readClause());
+    }
+    D->setClauses(Clauses);
+  }
+  if (NumVariants > 0) {
+    SmallVector<OMPDeclareSimdDecl::SimdVariant, 8> SimdVariants;
+    for (unsigned i = 0; i != NumVariants; ++i) {
+      SourceRange SR = Reader.ReadSourceRange(F, Record, Idx);
+      unsigned BeginIdx = Record[Idx++];
+      unsigned EndIdx = Record[Idx++];
+      SimdVariants.push_back(OMPDeclareSimdDecl::SimdVariant(
+                                SR, BeginIdx, EndIdx));
+    }
+    D->setVariants(SimdVariants);
+  }
+  D->setFunction(ReadDeclAs<Decl>(Record, Idx));
+}
+
 //===----------------------------------------------------------------------===//
 // Attribute Reading
 //===----------------------------------------------------------------------===//
@@ -2584,6 +2612,13 @@ Decl *ASTReader::ReadDeclRecord(DeclID ID) {
     break;
   case DECL_OMP_DECLAREREDUCTION:
     D = OMPDeclareReductionDecl::CreateDeserialized(Context, ID, Record[Idx++]);
+    break;
+  case DECL_OMP_DECLARESIMD: {
+    unsigned NumVariants = Record[Idx++];
+    unsigned NumClauses  = Record[Idx++];
+    D = OMPDeclareSimdDecl::CreateDeserialized(
+                              Context, ID, NumVariants, NumClauses);
+    }
     break;
   case DECL_EMPTY:
     D = EmptyDecl::CreateDeserialized(Context, ID);

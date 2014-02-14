@@ -586,11 +586,16 @@ void StmtPrinter::VisitSEHFinallyStmt(SEHFinallyStmt *Node) {
 //===----------------------------------------------------------------------===//
 
 namespace {
+
+/// \brief OMPClausePrinter class implements clause printing.
+///        It is used by OMPClause::printPretty().
 class OMPClausePrinter : public OMPClauseVisitor<OMPClausePrinter> {
-  StmtPrinter *Printer;
   raw_ostream &OS;
+  const PrintingPolicy &Policy;
 public:
-  OMPClausePrinter(StmtPrinter *P, raw_ostream &OS) : Printer(P), OS(OS) { }
+  OMPClausePrinter(raw_ostream &OS,
+                   const PrintingPolicy &P)
+    : OS(OS), Policy(P) { }
 #define OPENMP_CLAUSE(Name, Class)                              \
   void Visit##Class(Class *S);
 #include "clang/Basic/OpenMPKinds.def"
@@ -598,25 +603,25 @@ public:
 
 void OMPClausePrinter::VisitOMPIfClause(OMPIfClause *Node) {
   OS << "if(";
-  Printer->PrintExpr(Node->getCondition());
+  Node->getCondition()->printPretty(OS, 0, Policy, 0);
   OS << ")";
 }
 
 void OMPClausePrinter::VisitOMPNumThreadsClause(OMPNumThreadsClause *Node) {
   OS << "num_threads(";
-  Printer->PrintExpr(Node->getNumThreads());
+  Node->getNumThreads()->printPretty(OS, 0, Policy, 0);
   OS << ")";
 }
 
 void OMPClausePrinter::VisitOMPFinalClause(OMPFinalClause *Node) {
   OS << "final(";
-  Printer->PrintExpr(Node->getCondition());
+  Node->getCondition()->printPretty(OS, 0, Policy, 0);
   OS << ")";
 }
 
 void OMPClausePrinter::VisitOMPCollapseClause(OMPCollapseClause *Node) {
   OS << "collapse(";
-  Printer->PrintExpr(Node->getNumForLoops());
+  Node->getNumForLoops()->printPretty(OS, 0, Policy, 0);
   OS << ")";
 }
 
@@ -702,7 +707,7 @@ void OMPClausePrinter::VisitOMPReductionClause(OMPReductionClause *Node) {
     OS << "reduction(";
     if (Node->getOperator() == OMPC_REDUCTION_custom) {
       if (NestedNameSpecifier *Qual = Node->getSpec().getNestedNameSpecifier())
-        Qual->print(OS, Printer->Policy);
+        Qual->print(OS, Policy);
       OS << Node->getOpName();
     } else {
       OS << getOpenMPSimpleClauseTypeName(OMPC_reduction, Node->getOperator());
@@ -737,7 +742,7 @@ void OMPClausePrinter::VisitOMPScheduleClause(OMPScheduleClause *Node) {
      << getOpenMPSimpleClauseTypeName(OMPC_schedule, Node->getScheduleKind());
   if (Node->getChunkSize()) {
     OS << ", ";
-    Printer->PrintExpr(Node->getChunkSize());
+    Node->getChunkSize()->printPretty(OS, 0, Policy, 0);
   }
   OS << ")";
 }
@@ -747,7 +752,7 @@ void OMPClausePrinter::VisitOMPDistScheduleClause(OMPDistScheduleClause *Node) {
      << getOpenMPSimpleClauseTypeName(OMPC_dist_schedule, Node->getScheduleKind());
   if (Node->getChunkSize()) {
     OS << ", ";
-    Printer->PrintExpr(Node->getChunkSize());
+    Node->getChunkSize()->printPretty(OS, 0, Policy, 0);
   }
   OS << ")";
 }
@@ -808,6 +813,7 @@ void OMPClausePrinter::VisitOMPFlushClause(OMPFlushClause *Node) {
   }
 }
 
+
 void OMPClausePrinter::VisitOMPUniformClause(OMPUniformClause *Node) {
   if (!Node->varlist_empty()) {
     OS << "uniform";
@@ -823,25 +829,25 @@ void OMPClausePrinter::VisitOMPUniformClause(OMPUniformClause *Node) {
 
 void OMPClausePrinter::VisitOMPSafelenClause(OMPSafelenClause *Node) {
   OS << "safelen(";
-  Printer->PrintExpr(Node->getSafelen());
+  Node->getSafelen()->printPretty(OS, 0, Policy, 0);
   OS << ")";
 }
 
 void OMPClausePrinter::VisitOMPSimdlenClause(OMPSimdlenClause *Node) {
   OS << "simdlen(";
-  Printer->PrintExpr(Node->getSimdlen());
+  Node->getSimdlen()->printPretty(OS, 0, Policy, 0);
   OS << ")";
 }
 
 void OMPClausePrinter::VisitOMPNumTeamsClause(OMPNumTeamsClause *Node) {
   OS << "num_teams(";
-  Printer->PrintExpr(Node->getNumTeams());
+  Node->getNumTeams()->printPretty(OS, 0, Policy, 0);
   OS << ")";
 }
 
 void OMPClausePrinter::VisitOMPThreadLimitClause(OMPThreadLimitClause *Node) {
   OS << "thread_limit(";
-  Printer->PrintExpr(Node->getThreadLimit());
+  Node->getThreadLimit()->printPretty(OS, 0, Policy, 0);
   OS << ")";
 }
 
@@ -856,7 +862,7 @@ void OMPClausePrinter::VisitOMPLinearClause(OMPLinearClause *Node) {
     }
     if (Node->getStep() != 0) {
       OS << ": ";
-      Printer->PrintExpr(Node->getStep());
+      Node->getStep()->printPretty(OS, 0, Policy, 0);
     }
     OS << ")";
   }
@@ -873,7 +879,7 @@ void OMPClausePrinter::VisitOMPAlignedClause(OMPAlignedClause *Node) {
     }
     if (Node->getAlignment() != 0) {
       OS << ": ";
-      Printer->PrintExpr(Node->getAlignment());
+      Node->getAlignment()->printPretty(OS, 0, Policy, 0);
     }
     OS << ")";
   }
@@ -881,21 +887,34 @@ void OMPClausePrinter::VisitOMPAlignedClause(OMPAlignedClause *Node) {
 
 }
 
+void OMPClause::printPretty(raw_ostream &OS,
+                            PrinterHelper *Helper,
+                            const PrintingPolicy &Policy,
+                            unsigned Indentation) const {
+  if (this == 0) {
+    OS << "<NULL>";
+    return;
+  }
+
+  OMPClausePrinter P(OS, Policy);
+  P.Visit(const_cast<OMPClause*>(this));
+}
+
 //===----------------------------------------------------------------------===//
 //  OpenMP directives printing methods
 //===----------------------------------------------------------------------===//
 
 void StmtPrinter::VisitOMPExecutableDirective(OMPExecutableDirective *Node) {
-  OMPClausePrinter Printer(this, OS);
   ArrayRef<OMPClause *> Clauses = Node->clauses();
   for (ArrayRef<OMPClause *>::iterator I = Clauses.begin(), E = Clauses.end();
        I != E; ++I)
     if (*I && !(*I)->isImplicit()) {
-      Printer.Visit(*I);
+      const OMPClause *CurCL = cast_or_null<OMPClause>(*I);
+      CurCL->printPretty(OS, Helper, Policy, IndentLevel);
       OS << ' ';
     }
   OS << "\n";
-  if (Node->getAssociatedStmt()) {
+  if (Node->hasAssociatedStmt() && Node->getAssociatedStmt()) {
     assert(isa<CapturedStmt>(Node->getAssociatedStmt()) &&
            "Expected captured statement!");
     Stmt *CS = cast<CapturedStmt>(Node->getAssociatedStmt())->getCapturedStmt();

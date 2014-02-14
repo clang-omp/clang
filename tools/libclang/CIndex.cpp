@@ -1923,11 +1923,119 @@ void EnqueueVisitor::EnqueueChildren(const Stmt *S) {
   VisitorWorkList::iterator I = WL.begin() + size, E = WL.end();
   std::reverse(I, E);
 }
+namespace {
+class OMPClauseEnqueue : public ConstOMPClauseVisitor<OMPClauseEnqueue> {
+  EnqueueVisitor *Visitor;
+  /// \brief Process clauses with list of variables.
+  template <typename T>
+  void VisitOMPClauseList(const T *Node);
+public:
+  OMPClauseEnqueue(EnqueueVisitor *Visitor) : Visitor(Visitor) { }
+#define OPENMP_CLAUSE(Name, Class)                                             \
+  void Visit##Class(const Class *C);
+#include "clang/Basic/OpenMPKinds.def"
+};
+
+template<typename T>
+void OMPClauseEnqueue::VisitOMPClauseList(const T *Node) {
+  for (typename T::varlist_const_iterator I = Node->varlist_begin(),
+                                          E = Node->varlist_end();
+         I != E; ++I)
+    Visitor->AddStmt(*I);
+}
+
+void OMPClauseEnqueue::VisitOMPIfClause(const OMPIfClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPFinalClause(const OMPFinalClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPNumThreadsClause(const OMPNumThreadsClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPCollapseClause(const OMPCollapseClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPDefaultClause(const OMPDefaultClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPProcBindClause(const OMPProcBindClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPScheduleClause(const OMPScheduleClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPDistScheduleClause(const OMPDistScheduleClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPPrivateClause(const OMPPrivateClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPFirstPrivateClause(const OMPFirstPrivateClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPLastPrivateClause(const OMPLastPrivateClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPSharedClause(const OMPSharedClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPCopyinClause(const OMPCopyinClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPCopyPrivateClause(const OMPCopyPrivateClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPReductionClause(const OMPReductionClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPOrderedClause(const OMPOrderedClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPNowaitClause(const OMPNowaitClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPUntiedClause(const OMPUntiedClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPMergeableClause(const OMPMergeableClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPReadClause(const OMPReadClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPWriteClause(const OMPWriteClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPUpdateClause(const OMPUpdateClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPCaptureClause(const OMPCaptureClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPSeqCstClause(const OMPSeqCstClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPInBranchClause(const OMPInBranchClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPNotInBranchClause(const OMPNotInBranchClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPFlushClause(const OMPFlushClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPUniformClause(const OMPUniformClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPSafelenClause(const OMPSafelenClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPSimdlenClause(const OMPSimdlenClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPNumTeamsClause(const OMPNumTeamsClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPThreadLimitClause(const OMPThreadLimitClause *C) { }
+
+void OMPClauseEnqueue::VisitOMPLinearClause(const OMPLinearClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPAlignedClause(const OMPAlignedClause *C) {
+  VisitOMPClauseList(C);
+}
+}
 void EnqueueVisitor::EnqueueChildren(const OMPClause *S) {
   unsigned size = WL.size();
-  for (Stmt::const_child_range Child = S->children(); Child; ++Child) {
-    AddStmt(*Child);
-  }
+  OMPClauseEnqueue Visitor(this);
+  Visitor.Visit(S);
   if (size == WL.size())
     return;
   // Now reverse the entries we just added.  This will match the DFS
@@ -2213,7 +2321,7 @@ void EnqueueVisitor::VisitPseudoObjectExpr(const PseudoObjectExpr *E) {
 }
 
 void EnqueueVisitor::VisitOMPExecutableDirective(
-                                           const OMPExecutableDirective *D) {
+  const OMPExecutableDirective *D) {
   EnqueueChildren(D);
   for (ArrayRef<OMPClause *>::iterator I = D->clauses().begin(),
                                        E = D->clauses().end();
@@ -4634,6 +4742,7 @@ CXCursor clang_getCursorDefinition(CXCursor C) {
   case Decl::Import:
   case Decl::OMPThreadPrivate:
   case Decl::OMPDeclareReduction:
+  case Decl::OMPDeclareSimd:
     return C;
 
   // Declaration kinds that don't make any sense here, but are

@@ -153,6 +153,119 @@ public:
     return static_cast<OMPDeclareReductionDecl *>(const_cast<DeclContext*>(DC));
   }
 };
+
+/// \brief This represents '#pragma omp declare simd ...' directive.
+/// Here is an example, where two simd-variants are declared for a function:
+///
+/// #pragma omp declare simd inbranch uniform(a) linear(b:4) simdlen(8)
+/// #pragma omp declare simd inbranch uniform(a) linear(b:4) simdlen(16)
+/// void func(float *a, float *b);
+///
+class OMPDeclareSimdDecl : public Decl {
+public:
+  /// \brief SimdVariant refers to a list of clauses which describe some
+  ///        variant of the function that will need to be instantiated.
+  struct SimdVariant {
+    SimdVariant(SourceRange SR, unsigned BI, unsigned EI)
+      :SrcRange(SR), BeginIdx(BI), EndIdx(EI) { }
+    SourceRange SrcRange;
+    unsigned BeginIdx;
+    unsigned EndIdx;
+  };
+private:
+  friend class ASTDeclReader;
+  unsigned NumVariants;
+  unsigned NumClauses;
+  Decl *FuncDecl;
+
+  virtual void anchor();
+
+  OMPDeclareSimdDecl(Kind DK, DeclContext *DC, SourceLocation L,
+                     unsigned NV, unsigned NC)
+    :Decl(DK, DC, L), NumVariants(NV), NumClauses(NC), FuncDecl(0) { }
+
+  static unsigned getFirstVariantOffset();
+  static unsigned getFirstClauseOffset(unsigned NV);
+  static unsigned getTotalSize(unsigned NV, unsigned NC);
+
+public:
+  // Getters for the array of simd variants.
+  ArrayRef<SimdVariant> getVariants() const {
+    return ArrayRef<SimdVariant>(
+                   reinterpret_cast<const SimdVariant *>(
+                     reinterpret_cast<const char *>(this) +
+                     getFirstVariantOffset()),
+                   NumVariants);
+  }
+
+  llvm::MutableArrayRef<SimdVariant> getVariants() {
+    return llvm::MutableArrayRef<SimdVariant>(
+                   reinterpret_cast<SimdVariant *>(
+                     reinterpret_cast<char *>(this) +
+                     getFirstVariantOffset()),
+                   NumVariants);
+  }
+
+  // Getters for the array of clauses.
+  ArrayRef<OMPClause *> getClauses() const {
+    return ArrayRef<OMPClause *>(
+                   reinterpret_cast<OMPClause * const *>(
+                     reinterpret_cast<const char *>(this) +
+                     getFirstClauseOffset(NumVariants)),
+                   NumClauses);
+  }
+
+  llvm::MutableArrayRef<OMPClause *> getClauses() {
+    return llvm::MutableArrayRef<OMPClause *>(
+                   reinterpret_cast<OMPClause **>(
+                     reinterpret_cast<char *>(this) +
+                     getFirstClauseOffset(NumVariants)),
+                   NumClauses);
+  }
+
+public:
+  static OMPDeclareSimdDecl *Create(ASTContext &C, DeclContext *DC,
+                                    SourceLocation L, Decl *FuncDecl,
+                                    unsigned NV,
+                                    ArrayRef<OMPClause *> CL);
+  static OMPDeclareSimdDecl *CreateDeserialized(ASTContext &C, unsigned ID,
+                                                unsigned NV, unsigned NC);
+
+  Decl *getFunction() const { return FuncDecl; }
+  void  setFunction(Decl *FD) { FuncDecl = FD; }
+  unsigned getNumVariants() const { return NumVariants; }
+  unsigned getNumClauses()  const { return NumClauses;  }
+
+  // Stuff to work with variants
+  void setVariants(ArrayRef<SimdVariant> SV);
+
+  typedef llvm::MutableArrayRef<SimdVariant>::iterator simd_variants_iterator;
+  typedef ArrayRef<SimdVariant>::iterator simd_variants_const_iterator;
+
+  unsigned simd_variants_size() const { return NumVariants; }
+  bool simds_variant_empty() const { return NumVariants == 0; }
+  simd_variants_iterator simd_variants_begin() { return getVariants().begin(); }
+  simd_variants_iterator simd_variants_end()   { return getVariants().end(); }
+  simd_variants_const_iterator simd_variants_begin() const { return getVariants().begin(); }
+  simd_variants_const_iterator simd_variants_end()   const { return getVariants().end();   }
+
+  // Stuff to work with clauses
+  void setClauses(ArrayRef<OMPClause *> CL);
+
+  typedef llvm::MutableArrayRef<OMPClause *>::iterator clauses_iterator;
+  typedef ArrayRef<OMPClause *>::iterator clauses_const_iterator;
+
+  unsigned clauses_size() const { return NumClauses; }
+  bool clauses_empty() const { return NumClauses == 0; }
+  clauses_iterator clauses_begin() { return getClauses().begin(); }
+  clauses_iterator clauses_end() { return getClauses().end(); }
+  clauses_const_iterator clauses_begin() const { return getClauses().begin(); }
+  clauses_const_iterator clauses_end() const { return getClauses().end(); }
+
+  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
+  static bool classofKind(Kind K) { return K == OMPDeclareSimd; }
+};
+
 }  // end namespace clang
 
 #endif

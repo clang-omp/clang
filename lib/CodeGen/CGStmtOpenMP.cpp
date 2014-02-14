@@ -1,4 +1,4 @@
-//===--- CGDecl.cpp - Emit LLVM Code for declarations ---------------------===//
+//===--- CGStmtOpenMP.cpp - Emit LLVM Code for declarations ---------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

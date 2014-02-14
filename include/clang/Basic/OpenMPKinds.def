@@ -33,6 +33,9 @@
 #ifndef OPENMP_FOR_SIMD_CLAUSE
 #  define OPENMP_FOR_SIMD_CLAUSE(Name)
 #endif
+#ifndef OPENMP_DECLARE_SIMD_CLAUSE
+#  define OPENMP_DECLARE_SIMD_CLAUSE(Name)
+#endif
 #ifndef OPENMP_PARALLEL_FOR_CLAUSE
 #  define OPENMP_PARALLEL_FOR_CLAUSE(Name)
 #endif
@@ -89,6 +92,7 @@ OPENMP_DIRECTIVE(declare)
 OPENMP_DIRECTIVE_EXT(parallel_for, "parallel for")
 OPENMP_DIRECTIVE_EXT(parallel_sections, "parallel sections")
 OPENMP_DIRECTIVE_EXT(declare_reduction, "declare reduction")
+OPENMP_DIRECTIVE_EXT(declare_simd, "declare simd")
 OPENMP_DIRECTIVE_EXT(for_simd, "for simd")
 
 // OpenMP clauses.
@@ -168,6 +172,14 @@ OPENMP_FOR_SIMD_CLAUSE(nowait)
 OPENMP_FOR_SIMD_CLAUSE(safelen)
 OPENMP_FOR_SIMD_CLAUSE(linear)
 OPENMP_FOR_SIMD_CLAUSE(aligned)
+
+// Clauses allowed for OpenMP directive 'declare simd'.
+OPENMP_DECLARE_SIMD_CLAUSE(simdlen)
+OPENMP_DECLARE_SIMD_CLAUSE(linear)
+OPENMP_DECLARE_SIMD_CLAUSE(aligned)
+OPENMP_DECLARE_SIMD_CLAUSE(uniform)
+OPENMP_DECLARE_SIMD_CLAUSE(inbranch)
+OPENMP_DECLARE_SIMD_CLAUSE(notinbranch)
 
 // Clauses allowed for OpenMP directive 'parallel for'.
 OPENMP_PARALLEL_FOR_CLAUSE(if)
@@ -277,4 +289,5 @@ OPENMP_FLUSH_CLAUSE(flush)
 #undef OPENMP_FOR_CLAUSE
 #undef OPENMP_SIMD_CLAUSE
 #undef OPENMP_FOR_SIMD_CLAUSE
+#undef OPENMP_DECLARE_SIMD_CLAUSE
 #undef OPENMP_SCHEDULE_KIND

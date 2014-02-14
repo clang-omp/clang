@@ -18,6 +18,7 @@
 
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/OpenMPKinds.h"
+#include "clang/AST/PrettyPrinter.h"
 #include "clang/AST/Stmt.h"
 #include "clang/AST/Expr.h"
 
@@ -66,6 +67,10 @@ public:
   ConstStmtRange children() const {
     return const_cast<OMPClause *>(this)->children();
   }
+
+  /// \brief Prints the clause using OMPClausePrinter
+  void printPretty(raw_ostream &OS, PrinterHelper *Helper,
+                   const PrintingPolicy &Policy, unsigned Indentation) const;
 };
 
 /// \brief This represents clauses with the list of variables like 'private',
@@ -485,7 +490,7 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   ///
-  static OMPPrivateClause *Create(ASTContext &C,
+  static OMPPrivateClause *Create(const ASTContext &C,
                                   SourceLocation StartLoc,
                                   SourceLocation EndLoc,
                                   ArrayRef<Expr *> VL,
@@ -495,7 +500,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPPrivateClause *CreateEmpty(ASTContext &C,
+  static OMPPrivateClause *CreateEmpty(const ASTContext &C,
                                        unsigned N);
 
   static bool classof(const OMPClause *T) {
@@ -569,7 +574,7 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   ///
-  static OMPFirstPrivateClause *Create(ASTContext &C,
+  static OMPFirstPrivateClause *Create(const ASTContext &C,
                                        SourceLocation StartLoc,
                                        SourceLocation EndLoc,
                                        ArrayRef<Expr *> VL,
@@ -580,7 +585,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPFirstPrivateClause *CreateEmpty(ASTContext &C,
+  static OMPFirstPrivateClause *CreateEmpty(const ASTContext &C,
                                             unsigned N);
 
   static bool classof(const OMPClause *T) {
@@ -674,7 +679,7 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   ///
-  static OMPLastPrivateClause *Create(ASTContext &C,
+  static OMPLastPrivateClause *Create(const ASTContext &C,
                                       SourceLocation StartLoc,
                                       SourceLocation EndLoc,
                                       ArrayRef<Expr *> VL,
@@ -686,7 +691,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPLastPrivateClause *CreateEmpty(ASTContext &C, unsigned N);
+  static OMPLastPrivateClause *CreateEmpty(const ASTContext &C, unsigned N);
 
   /// \brief Return the list of pseudo vars.
   ArrayRef<const Expr *> getPseudoVars1() const {
@@ -751,7 +756,7 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   ///
-  static OMPSharedClause *Create(ASTContext &C,
+  static OMPSharedClause *Create(const ASTContext &C,
                                  SourceLocation StartLoc,
                                  SourceLocation EndLoc,
                                  ArrayRef<Expr *> VL);
@@ -760,7 +765,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPSharedClause *CreateEmpty(ASTContext &C,
+  static OMPSharedClause *CreateEmpty(const ASTContext &C,
                                       unsigned N);
 
   static bool classof(const OMPClause *T) {
@@ -833,7 +838,7 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   ///
-  static OMPCopyinClause *Create(ASTContext &C,
+  static OMPCopyinClause *Create(const ASTContext &C,
                                  SourceLocation StartLoc,
                                  SourceLocation EndLoc,
                                  ArrayRef<Expr *> VL,
@@ -845,7 +850,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPCopyinClause *CreateEmpty(ASTContext &C,
+  static OMPCopyinClause *CreateEmpty(const ASTContext &C,
                                       unsigned N);
 
   static bool classof(const OMPClause *T) {
@@ -935,7 +940,7 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   ///
-  static OMPCopyPrivateClause *Create(ASTContext &C,
+  static OMPCopyPrivateClause *Create(const ASTContext &C,
                                       SourceLocation StartLoc,
                                       SourceLocation EndLoc,
                                       ArrayRef<Expr *> VL,
@@ -947,7 +952,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPCopyPrivateClause *CreateEmpty(ASTContext &C,
+  static OMPCopyPrivateClause *CreateEmpty(const ASTContext &C,
                                            unsigned N);
 
   /// \brief Return the list of pseudo vars.
@@ -1077,7 +1082,7 @@ public:
   /// \param S nested name specifier.
   /// \param OpName Reduction identifier.
   ///
-  static OMPReductionClause *Create(ASTContext &C,
+  static OMPReductionClause *Create(const ASTContext &C,
                                     SourceLocation StartLoc,
                                     SourceLocation EndLoc,
                                     ArrayRef<Expr *> VL,
@@ -1093,7 +1098,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPReductionClause *CreateEmpty(ASTContext &C, unsigned N);
+  static OMPReductionClause *CreateEmpty(const ASTContext &C, unsigned N);
 
   /// \brief Fetches operator for the clause.
   OpenMPReductionClauseOperator getOperator() const { return Operator; }
@@ -1670,7 +1675,7 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   ///
-  static OMPFlushClause *Create(ASTContext &C,
+  static OMPFlushClause *Create(const ASTContext &C,
                                 SourceLocation StartLoc,
                                 SourceLocation EndLoc,
                                 ArrayRef<Expr *> VL);
@@ -1679,7 +1684,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPFlushClause *CreateEmpty(ASTContext &C, unsigned N);
+  static OMPFlushClause *CreateEmpty(const ASTContext &C, unsigned N);
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_flush;
@@ -1724,7 +1729,7 @@ public:
   /// \brief EndLoc Ending location of the clause.
   /// \param VL List of references to the variables.
   ///
-  static OMPUniformClause *Create(ASTContext &C,
+  static OMPUniformClause *Create(const ASTContext &C,
                                   SourceLocation StartLoc,
                                   SourceLocation EndLoc,
                                   ArrayRef<Expr *> VL);
@@ -1733,7 +1738,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPUniformClause *CreateEmpty(ASTContext &C, unsigned N);
+  static OMPUniformClause *CreateEmpty(const ASTContext &C, unsigned N);
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_uniform;
@@ -1832,7 +1837,7 @@ public:
 
   /// \brief Return safe iteration space distance.
   ///
-  Expr *getSimdlen() { return dyn_cast_or_null<Expr>(Simdlen); }
+  Expr *getSimdlen() const { return dyn_cast_or_null<Expr>(Simdlen); }
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_simdlen;
@@ -1879,7 +1884,7 @@ public:
 
   /// \brief Return the number of teams.
   ///
-  Expr *getNumTeams() { return dyn_cast_or_null<Expr>(NumTeams); }
+  Expr *getNumTeams() const { return dyn_cast_or_null<Expr>(NumTeams); }
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_num_teams;
@@ -1926,7 +1931,7 @@ public:
 
   /// \brief Return the number of teams.
   ///
-  Expr *getThreadLimit() { return dyn_cast_or_null<Expr>(ThreadLimit); }
+  Expr *getThreadLimit() const { return dyn_cast_or_null<Expr>(ThreadLimit); }
 
   static bool classof(const OMPClause *T) {
     return T->getClauseKind() == OMPC_thread_limit;
@@ -1999,7 +2004,7 @@ public:
   /// \param St Linear step.
   /// \param StLoc Location of the linear step.
   ///
-  static OMPLinearClause *Create(ASTContext &C,
+  static OMPLinearClause *Create(const ASTContext &C,
                                  SourceLocation StartLoc,
                                  SourceLocation EndLoc,
                                  ArrayRef<Expr *> VL,
@@ -2010,7 +2015,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPLinearClause *CreateEmpty(ASTContext &C, unsigned N);
+  static OMPLinearClause *CreateEmpty(const ASTContext &C, unsigned N);
 
   /// \brief Fetches the linear step.
   Expr *getStep() {
@@ -2092,7 +2097,7 @@ public:
   /// \param A Alignment.
   /// \param ALoc Location of the alignment.
   ///
-  static OMPAlignedClause *Create(ASTContext &C,
+  static OMPAlignedClause *Create(const ASTContext &C,
                                  SourceLocation StartLoc,
                                  SourceLocation EndLoc,
                                  ArrayRef<Expr *> VL,
@@ -2103,7 +2108,7 @@ public:
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPAlignedClause *CreateEmpty(ASTContext &C, unsigned N);
+  static OMPAlignedClause *CreateEmpty(const ASTContext &C, unsigned N);
 
   /// \brief Fetches the alignment.
   Expr *getAlignment() {

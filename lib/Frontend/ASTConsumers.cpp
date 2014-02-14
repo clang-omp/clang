@@ -471,12 +471,17 @@ void DeclContextPrinter::PrintDeclContext(const DeclContext* DC,
       Out << "<omp threadprivate> " << '"' << *I << "\"\n";
       break;
     }
+    case Decl::OMPDeclareSimd: {
+      Out << "<omp declare simd> " << '"' << *I << "\"\n";
+      break;
+    }
     default:
       Out << "DeclKind: " << DK << '"' << *I << "\"\n";
       llvm_unreachable("decl unhandled");
     }
   }
 }
+
 ASTConsumer *clang::CreateDeclContextPrinter() {
   return new DeclContextPrinter();
 }

@@ -1468,6 +1468,14 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
     PrincipalDecl->setNonMemberOperator();
 
   assert(!D->isDefaulted() && "only methods should be defaulted");
+  if (FunctionTemplate) {
+    OMPDeclareSimdDecl *DSimd = SemaRef.OMPDSimdMap[FunctionTemplate];
+    if (DSimd) {
+      OMPDeclareSimdDecl *TD = cast<OMPDeclareSimdDecl>(
+        TouchOMPDeclareSimdDecl(DSimd, Function, DC));
+      SemaRef.PendingOMP[Function] = TD;
+    }
+  }
   return Function;
 }
 
@@ -1738,7 +1746,20 @@ TemplateDeclInstantiator::VisitCXXMethodDecl(CXXMethodDecl *D,
   } else if (!IsClassScopeSpecialization) {
     Owner->addDecl(Method);
   }
-
+  // Check for #omp declare simd in old record and add it into new record
+  // with our new method.
+  CXXRecordDecl *Parent = D->getParent();
+  for (DeclContext::decl_iterator DI = Parent->decls_begin(),
+                                  DE = Parent->decls_end();
+                                  DI != DE; ++DI) {
+    if (OMPDeclareSimdDecl *DSimd =
+        dyn_cast_or_null<OMPDeclareSimdDecl>(*DI)) {
+      if (dyn_cast_or_null<FunctionDecl>(DSimd->getFunction()) == D) {
+        TouchOMPDeclareSimdDecl(DSimd, Method,
+          SemaRef.CurContext);
+      }
+    }
+  }
   return Method;
 }
 
@@ -2301,6 +2322,112 @@ Decl *TemplateDeclInstantiator::VisitOMPThreadPrivateDecl(
 
   return TD;
 }
+
+Decl *TemplateDeclInstantiator::VisitOMPDeclareSimdDecl(
+                                     OMPDeclareSimdDecl *D) {
+  return TouchOMPDeclareSimdDecl(D, D->getFunction(),
+                                 SemaRef.CurContext);
+}
+
+void TemplateDeclInstantiator::TouchOMPVarlist(
+                                     llvm::MutableArrayRef<clang::Expr*> VL,
+                                     SmallVector<Expr *, 4> &NewVL,
+                                     Decl *FuncDecl) {
+  for (llvm::MutableArrayRef<clang::Expr*>::iterator I = VL.begin(),
+                                                     E = VL.end();
+                                                     I != E; ++I) {
+    const DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*I);
+    assert(DRE);
+    DeclarationNameInfo DNI = DRE->getNameInfo();
+    Expr *NewV = SemaRef.FindOpenMPDeclarativeClauseParameter(
+                           DNI.getAsString(),
+                           DNI.getLoc(),
+                           FuncDecl);
+    assert(NewV);
+    NewVL.push_back(NewV);
+  }
+}
+
+Decl *TemplateDeclInstantiator::TouchOMPDeclareSimdDecl(
+                                     OMPDeclareSimdDecl *D,
+                                     Decl *NewFunc,
+                                     DeclContext *DC) {
+  SmallVector<SourceRange, 4> SrcRanges;
+  SmallVector<unsigned, 4> BeginIdx;
+  SmallVector<unsigned, 4> EndIdx;
+  // Perform AOS->SOA (will be done backward in CheckOMPDeclareSimdDecl).
+  for (ArrayRef<OMPDeclareSimdDecl::SimdVariant>::iterator
+      I = D->simd_variants_begin(),
+      E = D->simd_variants_end();
+      I != E; ++I) {
+    SrcRanges.push_back(I->SrcRange);
+    BeginIdx.push_back(I->BeginIdx);
+    EndIdx.push_back(I->EndIdx);
+  }
+  // Substitute the necessary stuff into the clauses.
+  SmallVector<OMPClause *, 4> CL;
+  for (OMPDeclareSimdDecl::clauses_iterator
+      J = D->clauses_begin(),
+      F = D->clauses_end();
+      J != F; ++J) {
+    if (OMPLinearClause *C = dyn_cast_or_null<OMPLinearClause>(*J)) {
+      Expr *Step = C->getStep();
+      Step = SemaRef.SubstExpr(Step, TemplateArgs).take();
+      SmallVector<Expr *, 4> NewVars;
+      TouchOMPVarlist(C->getVars(), NewVars, NewFunc);
+      OMPClause *NC = SemaRef.ActOnOpenMPDeclarativeLinearClause(
+          NewVars,
+          C->getLocStart(),
+          C->getLocEnd(),
+          Step,
+          C->getStepLoc());
+      CL.push_back(NC);
+    }
+    else if (OMPAlignedClause *C = dyn_cast_or_null<OMPAlignedClause>(*J)) {
+      Expr *Alignment = C->getAlignment();
+      Alignment = SemaRef.SubstExpr(Alignment, TemplateArgs).take();
+      SmallVector<Expr *, 4> NewVars;
+      TouchOMPVarlist(C->getVars(), NewVars, NewFunc);
+      OMPClause *NC = SemaRef.ActOnOpenMPDeclarativeAlignedClause(
+        NewVars,
+        C->getLocStart(),
+        C->getLocEnd(),
+        Alignment,
+        C->getAlignmentLoc());
+      CL.push_back(NC);
+    }
+    else if (OMPUniformClause *C = dyn_cast_or_null<OMPUniformClause>(*J)) {
+      SmallVector<Expr *, 4> NewVars;
+      TouchOMPVarlist(C->getVars(), NewVars, NewFunc);
+      OMPClause *NC = SemaRef.ActOnOpenMPDeclarativeUniformClause(
+        NewVars,
+        C->getLocStart(),
+        C->getLocEnd());
+      CL.push_back(NC);
+    }
+    else if (OMPSimdlenClause *C = dyn_cast_or_null<OMPSimdlenClause>(*J)) {
+      Expr *Length = C->getSimdlen();
+      Length = SemaRef.SubstExpr(Length, TemplateArgs).take();
+      OMPClause *NC = SemaRef.ActOnOpenMPSimdlenClause(
+          Length,
+          C->getLocStart(),
+          C->getLocEnd());
+      CL.push_back(NC);
+    }
+    else {
+      // May push NULL here -- CheckOMPDeclareSimdDecl will clean up.
+      CL.push_back(*J);
+    }
+  }
+
+  OMPDeclareSimdDecl *TD =
+    SemaRef.CheckOMPDeclareSimdDecl(D->getLocation(), NewFunc,
+              SrcRanges, BeginIdx, EndIdx, CL, DC);
+  TD->setAccess(AS_public);
+  DC->addDecl(TD);
+  return TD;
+}
+
 
 Decl *TemplateDeclInstantiator::VisitOMPDeclareReductionDecl(
                                      OMPDeclareReductionDecl *D) {
@@ -3520,6 +3647,12 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
 
   DeclGroupRef DG(Function);
   Consumer.HandleTopLevelDecl(DG);
+
+  PendingOMPInstMap::iterator IOMP = PendingOMP.find(Function);
+  if (IOMP != PendingOMP.end()) {
+    DeclGroupRef DGOMP(IOMP->second);
+    Consumer.HandleTopLevelDecl(DGOMP);
+  }
 
   // This class may have local implicit instantiations that need to be
   // instantiation within this scope.

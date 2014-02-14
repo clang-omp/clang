@@ -83,7 +83,7 @@ int main (int argc, char **argv) {
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();
 #pragma omp for simd aligned(a:CLEN) linear(a:CLEN) safelen(CLEN)
-// CHECK-NEXT: #pragma omp for simd aligned(a: 4) linear(a: CLEN) safelen(4)
+// CHECK-NEXT: #pragma omp for simd aligned(a: 4) linear(a: 4) safelen(4)
   for (int i = 0; i < 10; ++i)foo();
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();

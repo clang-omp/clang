@@ -6725,6 +6725,8 @@ def err_omp_reduction_incomplete_type : Error<
   "a reduction variable with incomplete type %0">;
 def err_omp_lastprivate_incomplete_type : Error<
   "a lastprivate variable with incomplete type %0">;
+def err_omp_linear_incomplete_type : Error<
+  "a linear variable with incomplete type %0">;
 def err_omp_directive_nonblock : Error<
   "directive '#pragma omp %0' bound to nonblock statement">;
 def err_incomplete_class_type : Error<
@@ -6738,6 +6740,8 @@ def note_conversion : Note<
   "conversion to %select{integral|enumeration}0 type %1">;
 def err_negative_expression_in_clause : Error<
   "expression is not a positive integer value">;
+def err_zero_step_in_linear_clause : Error<
+  "zero is not linear enough to be a linear step">;
 def err_omp_unexpected_clause_value : Error <
   "expected %0 in OpenMP clause '%1'">;
 def err_omp_expected_var_name : Error <
@@ -6747,7 +6751,7 @@ def err_omp_required_method : Error <
 def note_omp_marked_here : Note<
   "marked as %0 here">;
 def err_omp_clause_ref_type_arg : Error<
-  "arguments of OpenMP clause '%0' cannot be of reference type %1">;
+  "arguments of OpenMP clause '%0' cannot be of reference type">;
 def err_omp_expected_int_or_ptr : Error<
   "argument of a linear clause should be of integral or pointer type">;
 def err_omp_expected_array_or_ptr : Error<
@@ -6764,6 +6768,14 @@ def err_omp_reduction_ref_type_arg : Error<
   "argument of OpenMP clause 'reduction' must reference the same object in all threads">;
 def err_omp_wrong_dsa : Error<
   "%0 variable cannot be %1">;
+def err_omp_at_most_one_uniform_or_linear : Error<
+  "each argument may be in at most one uniform or linear clause">;
+def err_omp_at_most_one_aligned : Error<
+  "each argument may be in at most one aligned clause">;
+def err_omp_inbranch : Error<
+  "declare simd variant cannot be inbranch and notinbranch at the same time">;
+def err_omp_arg_not_found : Error<
+  "cannot find the function argument with the name requested in the openmp clause">;
 def err_omp_reduction_in_task : Error<
   "reduction variables may not be accessed in an explicit task">;
 def err_omp_once_referenced : Error<
@@ -6776,6 +6788,8 @@ def note_omp_predetermined_dsa : Note <
   "predetermined as %0">;
 def note_omp_referenced : Note <
   "previously referenced here">;
+def note_omp_specified : Note <
+  "previously specified here">;
 def err_omp_dsa_with_directives : Error<
   "%0 variable in '#pragma omp %1' cannot be %2 in '#pragma omp %3'">;
 def err_omp_not_for : Error <
@@ -6836,6 +6850,8 @@ def err_omp_reduction_redeclared : Error <
   "previous declaration with type %0 is found">;
 def err_omp_reduction_non_function_init : Error <
   "expected function call">;
+def err_setjmp_longjmp_in_omp_simd : Error<
+  "The simd region cannot contain calls to the longjmp/setjmp functions">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {

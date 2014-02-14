@@ -17,6 +17,7 @@
 #include "clang/AST/ASTMutationListener.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclarationName.h"
+#include "clang/AST/OpenMPClause.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/Sema/SemaConsumer.h"
 #include "clang/Serialization/ASTBitCodes.h"
@@ -744,6 +745,20 @@ public:
                                             const ObjCPropertyDecl *OrigProp,
                                             const ObjCCategoryDecl *ClassExt);
   void DeclarationMarkedUsed(const Decl *D) LLVM_OVERRIDE;
+};
+
+/// \brief AST Writer for OpenMP clauses, used for both clauses-stmts
+///        (e.g. omp parallel) and clauses-decls (e.g. omp declare simd).
+class OMPClauseWriter : public OMPClauseVisitor<OMPClauseWriter> {
+  ASTWriter &Writer;
+  ASTWriter::RecordData &Record;
+public:
+  OMPClauseWriter(ASTWriter &W, ASTWriter::RecordData &Record)
+    : Writer(W), Record(Record) { }
+#define OPENMP_CLAUSE(Name, Class)    \
+  void Visit##Class(Class *S);
+#include "clang/Basic/OpenMPKinds.def"
+  void writeClause(OMPClause *C);
 };
 
 /// \brief AST and semantic-analysis consumer that generates a

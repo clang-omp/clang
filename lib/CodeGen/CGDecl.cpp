@@ -91,12 +91,6 @@ void CodeGenFunction::EmitDecl(const Decl &D) {
     // None of these decls require codegen support.
     return;
 
-  case Decl::OMPThreadPrivate:
-    CGM.EmitOMPThreadPrivate(cast<OMPThreadPrivateDecl>(&D));
-    break;
-  case Decl::OMPDeclareReduction:
-    CGM.EmitOMPDeclareReduction(cast<OMPDeclareReductionDecl>(&D));
-    break;
   case Decl::NamespaceAlias:
     if (CGDebugInfo *DI = getDebugInfo())
         DI->EmitNamespaceAlias(cast<NamespaceAliasDecl>(D));
@@ -105,6 +99,15 @@ void CodeGenFunction::EmitDecl(const Decl &D) {
     if (CGDebugInfo *DI = getDebugInfo())
         DI->EmitUsingDecl(cast<UsingDecl>(D));
     return;
+  case Decl::OMPThreadPrivate:
+    CGM.EmitOMPThreadPrivate(cast<OMPThreadPrivateDecl>(&D));
+    break;
+  case Decl::OMPDeclareReduction:
+    CGM.EmitOMPDeclareReduction(cast<OMPDeclareReductionDecl>(&D));
+    break;
+  case Decl::OMPDeclareSimd:
+    CGM.EmitOMPDeclareSimd(cast<OMPDeclareSimdDecl>(&D));
+    break;
   case Decl::UsingDirective: // using namespace X; [C++]
     if (CGDebugInfo *DI = getDebugInfo())
       DI->EmitUsingDirective(cast<UsingDirectiveDecl>(D));

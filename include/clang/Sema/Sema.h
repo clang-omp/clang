@@ -30,7 +30,6 @@
 #include "clang/Basic/Specifiers.h"
 #include "clang/Basic/TemplateKinds.h"
 #include "clang/Basic/TypeTraits.h"
-#include "clang/Basic/OpenMPKinds.h"
 #include "clang/Lex/ModuleLoader.h"
 #include "clang/Sema/AnalysisBasedWarnings.h"
 #include "clang/Sema/DeclSpec.h"
@@ -139,9 +138,10 @@ namespace clang {
   class ObjCMethodDecl;
   class ObjCPropertyDecl;
   class ObjCProtocolDecl;
-  class OMPClause;
   class OMPThreadPrivateDecl;
+  class OMPClause;
   class OMPDeclareReductionDecl;
+  class OMPDeclareSimdDecl;
   class OverloadCandidateSet;
   class OverloadExpr;
   class ParenListExpr;
@@ -2910,6 +2910,8 @@ public:
                                  SourceLocation WhileLoc,
                                  SourceLocation CondLParen, Expr *Cond,
                                  SourceLocation CondRParen);
+
+  void CheckForLoopConditionalStatement(Expr *Second, Expr *Third, Stmt *Body);
 
   StmtResult ActOnForStmt(SourceLocation ForLoc,
                           SourceLocation LParenLoc,
@@ -6426,6 +6428,11 @@ public:
   /// types, static variables, enumerators, etc.
   std::deque<PendingImplicitInstantiation> PendingLocalImplicitInstantiations;
 
+  /// \brief We store OpenMP declarative pragmas that will need to be
+  /// instantiated together with the templated functions.
+  typedef llvm::DenseMap<Decl *, OMPDeclareSimdDecl *> PendingOMPInstMap;
+  PendingOMPInstMap PendingOMP;
+
   class SavePendingLocalImplicitInstantiationsRAII {
   public:
     SavePendingLocalImplicitInstantiationsRAII(Sema &S): S(S) {
@@ -7051,8 +7058,9 @@ public:
 
   // OpenMP directives and clauses.
 private:
-  llvm::SmallVector<Stmt *, 64> AdditionalOpenMPStmt;
+  llvm::SmallVector<Stmt *, 4> AdditionalOpenMPStmt;
   void *VarDataSharingAttributesStack;
+  /// \brief Initialization of data-sharing attributes stack.
   void InitDataSharingAttributesStack();
   void DestroyDataSharingAttributesStack();
   /// \brief Check if \a S ia for-loop in canonical form for OpenMP.
@@ -7076,15 +7084,29 @@ private:
                           Expr *&NewVar,
                           Expr *&NewVarCntExpr,
                           Expr *&NewFinal,
-                          SmallVector<Expr *, 8> &VarCnts);
+                          SmallVector<Expr *, 4> &VarCnts);
 
   /// \brief A helper to rebuild a constant positive integer expression.
   Expr *ActOnConstantPositiveSubExpressionInClause(Expr *E);
 
+  /// \brief A helper to rebuild a linear step for linear clause.
+  Expr *ActOnConstantLinearStep(Expr *E);
+
   /// \brief A helper to add two simd-specific arguments into captured stmt.
   CapturedStmt *AddSimdArgsIntoCapturedStmt(CapturedStmt *Cap, Expr *NewVar);
 
+  bool HasOpenMPRegion(OpenMPDirectiveKind Kind);
+
 public:
+  /// \brief Called on start of new data sharing attribute block.
+  void StartOpenMPDSABlock(OpenMPDirectiveKind K,
+                           const DeclarationNameInfo &DirName,
+                           Scope *CurScope);
+  /// \brief Called on end of data sharing attribute block.
+  void EndOpenMPDSABlock(Stmt *CurDirective);
+
+  typedef llvm::DenseMap<FunctionTemplateDecl*, OMPDeclareSimdDecl*> OMPDeclareSimdMap;
+  OMPDeclareSimdMap OMPDSimdMap;
 
   /// \brief Called on correct id-expression from the '#pragma omp
   /// threadprivate'.
@@ -7095,11 +7117,33 @@ public:
   DeclGroupPtrTy ActOnOpenMPThreadprivateDirective(
                                      SourceLocation Loc,
                                      ArrayRef<Expr *> VarList);
-  // \brief Builds a new OpenMPThreadPrivateDecl and checks its correctness.
+  /// \brief Builds a new OMPThreadPrivateDecl and checks its correctness.
   OMPThreadPrivateDecl *CheckOMPThreadPrivateDecl(
                                      SourceLocation Loc,
                                      ArrayRef<Expr *> VarList);
-
+  /// \brief Called on well-formed '#pragma omp declare simd'.
+  DeclGroupPtrTy ActOnOpenMPDeclareSimdDirective(
+                    SourceLocation Loc,
+                    Decl *FuncDecl,
+                    ArrayRef<SourceRange> SrcRanges,
+                    ArrayRef<unsigned> BeginIdx,
+                    ArrayRef<unsigned> EndIdx,
+                    ArrayRef<OMPClause *> CL);
+  /// \brief Builds a new OMPDeclareSimdDecl and checks its correctness.
+  OMPDeclareSimdDecl *CheckOMPDeclareSimdDecl(
+                    SourceLocation Loc,
+                    Decl *FuncDecl,
+                    ArrayRef<SourceRange> SrcRanges,
+                    ArrayRef<unsigned> BeginIdx,
+                    ArrayRef<unsigned> EndIdx,
+                    ArrayRef<OMPClause *> CL,
+                    DeclContext *CurDC);
+  /// \brief Transforms arrays into array of SimdVariant structures and
+  ///        stores it into D.
+  void CompleteOMPDeclareSimdDecl(OMPDeclareSimdDecl *D,
+                                  ArrayRef<SourceRange> SrcRanges,
+                                  ArrayRef<unsigned> BeginIdx,
+                                  ArrayRef<unsigned> EndIdx);
   /// \brief A RAII object to enter scope of a declare reduction.
   class OMPDeclareReductionRAII {
   public:
@@ -7201,19 +7245,13 @@ public:
                                                    ArrayRef<SourceRange> TyRanges,
                                                    ArrayRef<Expr *> Combiners,
                                                    ArrayRef<Expr *> Inits);
-  // \brief Builds a new OpenMPThreadPrivateDecl and checks its correctness.
+  /// \brief Builds a new OMPDeclareReductionDecl and checks its correctness.
   void CompleteOMPDeclareReductionDecl(OMPDeclareReductionDecl *D,
                                        ArrayRef<QualType> Types,
                                        ArrayRef<SourceRange> TyRanges,
                                        ArrayRef<Expr *> Combiners,
                                        ArrayRef<Expr *> Inits);
 
-  /// \brief Called on start of new data sharing attribute block.
-  void StartOpenMPDSABlock(OpenMPDirectiveKind K,
-                           const DeclarationNameInfo &DirName,
-                           Scope *CurScope);
-  /// \brief Called on end of data sharing attribute block.
-  void EndOpenMPDSABlock(Stmt *CurDirective);
   StmtResult ActOnOpenMPExecutableDirective(OpenMPDirectiveKind Kind,
                                             const DeclarationNameInfo &DirName,
                                             ArrayRef<OMPClause *> Clauses,
@@ -7360,6 +7398,25 @@ public:
                                       CXXScopeSpec &SS,
                                       const UnqualifiedId &OpName,
                                       SourceLocation OpLoc);
+  /// \brief Helper to build DeclRefExpr for declarative clause.
+  Expr *ActOnOpenMPParameterInDeclarativeVarListClause(
+                    SourceLocation Loc,
+                    ParmVarDecl *Param);
+  /// \brief Helper to find paremeter with given name in function.
+  Expr *FindOpenMPDeclarativeClauseParameter(
+                    StringRef Name,
+                    SourceLocation Loc,
+                    Decl *FuncDecl);
+  /// \brief Helper for all declarative clauses with varlists
+  ///        (i.e. for declarative form of linear, aligned and uniform).
+  OMPClause *ActOnOpenMPDeclarativeVarListClause(
+                OpenMPClauseKind CKind,
+                ArrayRef<DeclarationNameInfo> NameInfos,
+                SourceLocation StartLoc,
+                SourceLocation EndLoc,
+                Expr *TailExpr,
+                SourceLocation TailLoc,
+                Decl *FuncDecl);
 
   /// \brief Called on well-formed 'private' clause.
   OMPClause *ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
@@ -7464,7 +7521,25 @@ public:
                                       SourceLocation EndLoc,
                                       Expr *Alignment,
                                       SourceLocation AlignmentLoc);
-
+  /// \brief Called on well-formed 'linear' clause (declarative form).
+  OMPClause *ActOnOpenMPDeclarativeLinearClause(
+                                     ArrayRef<Expr *> VarList,
+                                     SourceLocation StartLoc,
+                                     SourceLocation EndLoc,
+                                     Expr *Step,
+                                     SourceLocation StepLoc);
+  /// \brief Called on well-formed 'aligned' clause (declarative form).
+  OMPClause *ActOnOpenMPDeclarativeAlignedClause(
+                                      ArrayRef<Expr *> VarList,
+                                      SourceLocation StartLoc,
+                                      SourceLocation EndLoc,
+                                      Expr *Alignment,
+                                      SourceLocation AlignmentLoc);
+  /// \brief Called on well-formed 'uniform' clause (declarative form).
+  OMPClause *ActOnOpenMPDeclarativeUniformClause(
+                                      ArrayRef<Expr *> VarList,
+                                      SourceLocation StartLoc,
+                                      SourceLocation EndLoc);
   OMPClause *ActOnOpenMPSingleExprWithTypeClause(OpenMPClauseKind Kind,
                                                  unsigned Argument,
                                                  SourceLocation ArgumentLoc,

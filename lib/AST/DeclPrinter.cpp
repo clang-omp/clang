@@ -83,6 +83,7 @@ namespace {
     void VisitUsingDecl(UsingDecl *D);
     void VisitUsingShadowDecl(UsingShadowDecl *D);
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
+    void VisitOMPDeclareSimdDecl(OMPDeclareSimdDecl *D);
     void VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D);
 
     void PrintTemplateParameters(const TemplateParameterList *Params,
@@ -297,6 +298,18 @@ void DeclPrinter::VisitDeclContext(DeclContext *DC, bool Indent) {
     const char *Terminator = 0;
     if (isa<OMPThreadPrivateDecl>(*D) || isa<OMPDeclareReductionDecl>(*D))
       Terminator = 0;
+    else if (isa<OMPDeclareSimdDecl>(*D)) {
+      if (FunctionDecl *Func = dyn_cast_or_null<FunctionDecl>(
+            cast<OMPDeclareSimdDecl>(*D)->getFunction())) {
+        if (Func->isThisDeclarationADefinition())
+          Terminator = 0;
+        else
+          Terminator = ";";
+      }
+      else {
+        Terminator = 0;
+      }
+    }
     else if (isa<FunctionDecl>(*D) &&
              cast<FunctionDecl>(*D)->isThisDeclarationADefinition())
       Terminator = 0;
@@ -1197,6 +1210,29 @@ void DeclPrinter::VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D) {
     Out << ")";
   }
 }
+
+void DeclPrinter::VisitOMPDeclareSimdDecl(OMPDeclareSimdDecl *D) {
+  for (OMPDeclareSimdDecl::simd_variants_iterator
+        I = D->simd_variants_begin(),
+        E = D->simd_variants_end();
+        I != E; ++I) {
+    Out << "#pragma omp declare simd";
+    for (unsigned J = I->BeginIdx, F = I->EndIdx; J != F; ++J) {
+      Out << " ";
+      if (*(D->clauses_begin() + J) &&
+        !(*(D->clauses_begin() + J))->isImplicit()) {
+        const OMPClause *CurCL = cast_or_null<OMPClause>(
+                                   *(D->clauses_begin() + J));
+        CurCL->printPretty(Out, 0, Policy, Indentation);
+      }
+    }
+    Out << "\n";
+  }
+  Decl *FuncDecl = D->getFunction();
+  assert(FuncDecl && "Pragma has no function declaration (omp declare simd)");
+  Visit(FuncDecl);
+}
+
 
 void DeclPrinter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
   if (!D->isInvalidDecl() && !D->datalist_empty()) {

@@ -203,7 +203,7 @@ public:
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPParallelDirective *Create(ASTContext &C,
+  static OMPParallelDirective *Create(const ASTContext &C,
                                       SourceLocation StartLoc,
                                       SourceLocation EndLoc,
                                       ArrayRef<OMPClause *> Clauses,
@@ -214,7 +214,7 @@ public:
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPParallelDirective *CreateEmpty(ASTContext &C, unsigned N,
+  static OMPParallelDirective *CreateEmpty(const ASTContext &C, unsigned N,
                                            EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -292,7 +292,7 @@ public:
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPForDirective *Create(ASTContext &C,
+  static OMPForDirective *Create(const ASTContext &C,
                                  SourceLocation StartLoc,
                                  SourceLocation EndLoc,
                                  ArrayRef<OMPClause *> Clauses,
@@ -305,7 +305,7 @@ public:
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPForDirective *CreateEmpty(ASTContext &C, unsigned CollapsedNum,
+  static OMPForDirective *CreateEmpty(const ASTContext &C, unsigned CollapsedNum,
                                       unsigned N, EmptyShell);
 
   Expr *getNewIterVar() const {
@@ -411,21 +411,21 @@ public:
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPSimdDirective *Create(ASTContext &C,
-                                 SourceLocation StartLoc,
-                                 SourceLocation EndLoc,
-                                 ArrayRef<OMPClause *> Clauses,
-                                 Stmt *AssociatedStmt, Expr *NewIterVar,
-                                 Expr *NewIterEnd, Expr *Init, Expr *Final,
-                                 ArrayRef<Expr *> VarCnts);
+  static OMPSimdDirective *Create(const ASTContext &C,
+                                  SourceLocation StartLoc,
+                                  SourceLocation EndLoc,
+                                  ArrayRef<OMPClause *> Clauses,
+                                  Stmt *AssociatedStmt, Expr *NewIterVar,
+                                  Expr *NewIterEnd, Expr *Init, Expr *Final,
+                                  ArrayRef<Expr *> VarCnts);
 
   /// \brief Creates an empty directive with the place for \a N clauses.
   ///
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPSimdDirective *CreateEmpty(ASTContext &C, unsigned CollapsedNum,
-                                      unsigned N, EmptyShell);
+  static OMPSimdDirective *CreateEmpty(const ASTContext &C, unsigned CollapsedNum,
+                                       unsigned N, EmptyShell);
 
   Expr *getNewIterVar() const {
     return cast_or_null<Expr>(reinterpret_cast<Stmt * const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[1]);
@@ -530,7 +530,7 @@ public:
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPForSimdDirective *Create(ASTContext &C,
+  static OMPForSimdDirective *Create(const ASTContext &C,
                                      SourceLocation StartLoc,
                                      SourceLocation EndLoc,
                                      ArrayRef<OMPClause *> Clauses,
@@ -543,7 +543,7 @@ public:
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPForSimdDirective *CreateEmpty(ASTContext &C, unsigned CollapsedNum,
+  static OMPForSimdDirective *CreateEmpty(const ASTContext &C, unsigned CollapsedNum,
                                           unsigned N, EmptyShell);
 
   Expr *getNewIterVar() const {
@@ -626,7 +626,7 @@ public:
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPSectionsDirective *Create(ASTContext &C,
+  static OMPSectionsDirective *Create(const ASTContext &C,
                                       SourceLocation StartLoc,
                                       SourceLocation EndLoc,
                                       ArrayRef<OMPClause *> Clauses,
@@ -637,7 +637,7 @@ public:
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPSectionsDirective *CreateEmpty(ASTContext &C, unsigned N,
+  static OMPSectionsDirective *CreateEmpty(const ASTContext &C, unsigned N,
                                            EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -683,7 +683,7 @@ public:
   /// \param EndLoc Ending Location of the directive.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPSectionDirective *Create(ASTContext &C,
+  static OMPSectionDirective *Create(const ASTContext &C,
                                      SourceLocation StartLoc,
                                      SourceLocation EndLoc,
                                      Stmt *AssociatedStmt);
@@ -692,7 +692,7 @@ public:
   ///
   /// \param C AST context.
   ///
-  static OMPSectionDirective *CreateEmpty(ASTContext &C,
+  static OMPSectionDirective *CreateEmpty(const ASTContext &C,
                                           EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -744,7 +744,7 @@ public:
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPSingleDirective *Create(ASTContext &C,
+  static OMPSingleDirective *Create(const ASTContext &C,
                                     SourceLocation StartLoc,
                                     SourceLocation EndLoc,
                                     ArrayRef<OMPClause *> Clauses,
@@ -755,7 +755,7 @@ public:
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPSingleDirective *CreateEmpty(ASTContext &C, unsigned N,
+  static OMPSingleDirective *CreateEmpty(const ASTContext &C, unsigned N,
                                          EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -807,7 +807,7 @@ public:
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPTaskDirective *Create(ASTContext &C,
+  static OMPTaskDirective *Create(const ASTContext &C,
                                   SourceLocation StartLoc,
                                   SourceLocation EndLoc,
                                   ArrayRef<OMPClause *> Clauses,
@@ -818,7 +818,7 @@ public:
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPTaskDirective *CreateEmpty(ASTContext &C, unsigned N,
+  static OMPTaskDirective *CreateEmpty(const ASTContext &C, unsigned N,
                                        EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -855,7 +855,7 @@ public:
   /// \param StartLoc Starting location of the directive kind.
   /// \param EndLoc Ending Location of the directive.
   ///
-  static OMPTaskyieldDirective *Create(ASTContext &C,
+  static OMPTaskyieldDirective *Create(const ASTContext &C,
                                        SourceLocation StartLoc,
                                        SourceLocation EndLoc);
 
@@ -863,7 +863,7 @@ public:
   ///
   /// \param C AST context.
   ///
-  static OMPTaskyieldDirective *CreateEmpty(ASTContext &C,
+  static OMPTaskyieldDirective *CreateEmpty(const ASTContext &C,
                                             EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -909,7 +909,7 @@ public:
   /// \param EndLoc Ending Location of the directive.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPMasterDirective *Create(ASTContext &C,
+  static OMPMasterDirective *Create(const ASTContext &C,
                                     SourceLocation StartLoc,
                                     SourceLocation EndLoc,
                                     Stmt *AssociatedStmt);
@@ -918,7 +918,7 @@ public:
   ///
   /// \param C AST context.
   ///
-  static OMPMasterDirective *CreateEmpty(ASTContext &C,
+  static OMPMasterDirective *CreateEmpty(const ASTContext &C,
                                          EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -976,7 +976,7 @@ public:
   /// \param EndLoc Ending Location of the directive.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPCriticalDirective *Create(ASTContext &C,
+  static OMPCriticalDirective *Create(const ASTContext &C,
                                       DeclarationNameInfo DirName,
                                       SourceLocation StartLoc,
                                       SourceLocation EndLoc,
@@ -986,7 +986,7 @@ public:
   ///
   /// \param C AST context.
   ///
-  static OMPCriticalDirective *CreateEmpty(ASTContext &C,
+  static OMPCriticalDirective *CreateEmpty(const ASTContext &C,
                                            EmptyShell);
 
   /// \brief Return name of the directive.
@@ -1027,7 +1027,7 @@ public:
   /// \param StartLoc Starting location of the directive kind.
   /// \param EndLoc Ending Location of the directive.
   ///
-  static OMPBarrierDirective *Create(ASTContext &C,
+  static OMPBarrierDirective *Create(const ASTContext &C,
                                      SourceLocation StartLoc,
                                      SourceLocation EndLoc);
 
@@ -1035,7 +1035,7 @@ public:
   ///
   /// \param C AST context.
   ///
-  static OMPBarrierDirective *CreateEmpty(ASTContext &C,
+  static OMPBarrierDirective *CreateEmpty(const ASTContext &C,
                                           EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -1072,7 +1072,7 @@ public:
   /// \param StartLoc Starting location of the directive kind.
   /// \param EndLoc Ending Location of the directive.
   ///
-  static OMPTaskwaitDirective *Create(ASTContext &C,
+  static OMPTaskwaitDirective *Create(const ASTContext &C,
                                       SourceLocation StartLoc,
                                       SourceLocation EndLoc);
 
@@ -1080,7 +1080,7 @@ public:
   ///
   /// \param C AST context.
   ///
-  static OMPTaskwaitDirective *CreateEmpty(ASTContext &C,
+  static OMPTaskwaitDirective *CreateEmpty(const ASTContext &C,
                                            EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -1126,7 +1126,7 @@ public:
   /// \param EndLoc Ending Location of the directive.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPTaskgroupDirective *Create(ASTContext &C,
+  static OMPTaskgroupDirective *Create(const ASTContext &C,
                                        SourceLocation StartLoc,
                                        SourceLocation EndLoc,
                                        Stmt *AssociatedStmt);
@@ -1135,7 +1135,7 @@ public:
   ///
   /// \param C AST context.
   ///
-  static OMPTaskgroupDirective *CreateEmpty(ASTContext &C,
+  static OMPTaskgroupDirective *CreateEmpty(const ASTContext &C,
                                             EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -1225,7 +1225,7 @@ public:
   /// \param Clauses List of clauses.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPAtomicDirective *Create(ASTContext &C,
+  static OMPAtomicDirective *Create(const ASTContext &C,
                                     SourceLocation StartLoc,
                                     SourceLocation EndLoc,
                                     ArrayRef<OMPClause *> Clauses,
@@ -1239,7 +1239,7 @@ public:
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPAtomicDirective *CreateEmpty(ASTContext &C, unsigned N,
+  static OMPAtomicDirective *CreateEmpty(const ASTContext &C, unsigned N,
                                          EmptyShell);
 
   /// \brief Returns binary operator for atomic.
@@ -1312,7 +1312,9 @@ public:
   /// \param C AST context.
   /// \param StartLoc Starting location of the directive kind.
   /// \param EndLoc Ending Location of the directive.
-  static OMPFlushDirective *Create(ASTContext &C,
+  /// \param Clauses List of clauses.
+  ///
+  static OMPFlushDirective *Create(const ASTContext &C,
                                    SourceLocation StartLoc,
                                    SourceLocation EndLoc,
                                    ArrayRef<OMPClause *> Clauses);
@@ -1322,7 +1324,7 @@ public:
   /// \param C AST context.
   /// \param N The number of clauses.
   ///
-  static OMPFlushDirective *CreateEmpty(ASTContext &C, unsigned N,
+  static OMPFlushDirective *CreateEmpty(const ASTContext &C, unsigned N,
                                         EmptyShell);
 
   static bool classof(const Stmt *T) {
@@ -1368,7 +1370,7 @@ public:
   /// \param EndLoc Ending Location of the directive.
   /// \param AssociatedStmt Statement, associated with the directive.
   ///
-  static OMPOrderedDirective *Create(ASTContext &C,
+  static OMPOrderedDirective *Create(const ASTContext &C,
                                      SourceLocation StartLoc,
                                      SourceLocation EndLoc,
                                      Stmt *AssociatedStmt);
@@ -1377,7 +1379,7 @@ public:
   ///
   /// \param C AST context.
   ///
-  static OMPOrderedDirective *CreateEmpty(ASTContext &C,
+  static OMPOrderedDirective *CreateEmpty(const ASTContext &C,
                                           EmptyShell);
 
   static bool classof(const Stmt *T) {

@@ -1067,6 +1067,8 @@ namespace clang {
       DECL_OMP_THREADPRIVATE,
       /// \brief An OMPDeclareReductionDecl record.
       DECL_OMP_DECLAREREDUCTION,
+      /// \brief An OMPDeclareSimdDecl record.
+      DECL_OMP_DECLARESIMD,
       /// \brief An EmptyDecl record.
       DECL_EMPTY
     };

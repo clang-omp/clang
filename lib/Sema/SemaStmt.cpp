@@ -458,7 +458,8 @@ Sema::ActOnIfStmt(SourceLocation IfLoc, FullExprArg CondVal, Decl *CondVar,
 
   DiagnoseUnusedExprResult(elseStmt);
 
-  return Owned(new (Context) IfStmt(Context, IfLoc, ConditionVar, ConditionExpr,
+  return Owned(new (Context) IfStmt(Context, IfLoc,
+                                    ConditionVar, ConditionExpr,
                                     thenStmt, ElseLoc, elseStmt));
 }
 
@@ -1357,63 +1358,7 @@ namespace {
 
   };  // end class DeclMatcher
 
-  void CheckForLoopConditionalStatement(Sema &S, Expr *Second,
-                                        Expr *Third, Stmt *Body) {
-    // Condition is empty
-    if (!Second) return;
-
-    if (S.Diags.getDiagnosticLevel(diag::warn_variables_not_in_loop_body,
-                                   Second->getLocStart())
-        == DiagnosticsEngine::Ignored)
-      return;
-
-    PartialDiagnostic PDiag = S.PDiag(diag::warn_variables_not_in_loop_body);
-    llvm::SmallPtrSet<VarDecl*, 8> Decls;
-    SmallVector<SourceRange, 10> Ranges;
-    DeclExtractor DE(S, Decls, Ranges);
-    DE.Visit(Second);
-
-    // Don't analyze complex conditionals.
-    if (!DE.isSimple()) return;
-
-    // No decls found.
-    if (Decls.size() == 0) return;
-
-    // Don't warn on volatile, static, or global variables.
-    for (llvm::SmallPtrSet<VarDecl*, 8>::iterator I = Decls.begin(),
-                                                  E = Decls.end();
-         I != E; ++I)
-      if ((*I)->getType().isVolatileQualified() ||
-          (*I)->hasGlobalStorage()) return;
-
-    if (DeclMatcher(S, Decls, Second).FoundDeclInUse() ||
-        DeclMatcher(S, Decls, Third).FoundDeclInUse() ||
-        DeclMatcher(S, Decls, Body).FoundDeclInUse())
-      return;
-
-    // Load decl names into diagnostic.
-    if (Decls.size() > 4)
-      PDiag << 0;
-    else {
-      PDiag << Decls.size();
-      for (llvm::SmallPtrSet<VarDecl*, 8>::iterator I = Decls.begin(),
-                                                    E = Decls.end();
-           I != E; ++I)
-        PDiag << (*I)->getDeclName();
-    }
-
-    // Load SourceRanges into diagnostic if there is room.
-    // Otherwise, load the SourceRange of the conditional expression.
-    if (Ranges.size() <= PartialDiagnostic::MaxArguments)
-      for (SmallVectorImpl<SourceRange>::iterator I = Ranges.begin(),
-                                                  E = Ranges.end();
-           I != E; ++I)
-        PDiag << *I;
-    else
-      PDiag << Second->getSourceRange();
-
-    S.Diag(Ranges.begin()->getBegin(), PDiag);
-  }
+  
 
   // If Statement is an incemement or decrement, return true and sets the
   // variables Increment and DRE.
@@ -1515,6 +1460,64 @@ namespace {
 
 } // end namespace
 
+void Sema::CheckForLoopConditionalStatement(Expr *Second, Expr *Third,
+                                            Stmt *Body) {
+  // Condition is empty
+  if (!Second) return;
+
+  if (Diags.getDiagnosticLevel(diag::warn_variables_not_in_loop_body,
+                               Second->getLocStart())
+      == DiagnosticsEngine::Ignored)
+    return;
+
+  PartialDiagnostic PDiag = this->PDiag(diag::warn_variables_not_in_loop_body);
+  llvm::SmallPtrSet<VarDecl*, 8> Decls;
+  SmallVector<SourceRange, 10> Ranges;
+  DeclExtractor DE(*this, Decls, Ranges);
+  DE.Visit(Second);
+
+  // Don't analyze complex conditionals.
+  if (!DE.isSimple()) return;
+
+  // No decls found.
+  if (Decls.size() == 0) return;
+
+  // Don't warn on volatile, static, or global variables.
+  for (llvm::SmallPtrSet<VarDecl*, 8>::iterator I = Decls.begin(),
+                                                E = Decls.end();
+       I != E; ++I)
+    if ((*I)->getType().isVolatileQualified() ||
+        (*I)->hasGlobalStorage()) return;
+
+  if (DeclMatcher(*this, Decls, Second).FoundDeclInUse() ||
+      DeclMatcher(*this, Decls, Third).FoundDeclInUse() ||
+      DeclMatcher(*this, Decls, Body).FoundDeclInUse())
+    return;
+
+  // Load decl names into diagnostic.
+  if (Decls.size() > 4)
+    PDiag << 0;
+  else {
+    PDiag << Decls.size();
+    for (llvm::SmallPtrSet<VarDecl*, 8>::iterator I = Decls.begin(),
+                                                  E = Decls.end();
+         I != E; ++I)
+      PDiag << (*I)->getDeclName();
+  }
+
+  // Load SourceRanges into diagnostic if there is room.
+  // Otherwise, load the SourceRange of the conditional expression.
+  if (Ranges.size() <= PartialDiagnostic::MaxArguments)
+    for (SmallVectorImpl<SourceRange>::iterator I = Ranges.begin(),
+                                                E = Ranges.end();
+         I != E; ++I)
+      PDiag << *I;
+  else
+    PDiag << Second->getSourceRange();
+
+  Diag(Ranges.begin()->getBegin(), PDiag);
+}
+
 StmtResult
 Sema::ActOnForStmt(SourceLocation ForLoc, SourceLocation LParenLoc,
                    Stmt *First, FullExprArg second, Decl *secondVar,
@@ -1538,7 +1541,7 @@ Sema::ActOnForStmt(SourceLocation ForLoc, SourceLocation LParenLoc,
     }
   }
 
-  CheckForLoopConditionalStatement(*this, second.get(), third.get(), Body);
+  CheckForLoopConditionalStatement(second.get(), third.get(), Body);
   CheckForRedundantIteration(*this, third.get(), Body);
 
   ExprResult SecondResult(second.release());
@@ -3253,6 +3256,8 @@ void Sema::ActOnCapturedRegionStart(SourceLocation Loc, Scope *CurScope,
   // Enter the capturing scope for this captured region.
   PushCapturedRegionScope(CurScope, CD, RD, Kind);
 
+  PushCompoundScope();
+
   if (CurScope)
     PushDeclContext(CurScope, CD);
   else
@@ -3277,6 +3282,8 @@ void Sema::ActOnCapturedRegionError() {
               SourceLocation(), SourceLocation(), /*AttributeList=*/0);
 
   PopDeclContext();
+  // Pop the compound scope we inserted implicitly.
+  PopCompoundScope();
   PopFunctionScopeInfo();
 }
 
@@ -3301,6 +3308,8 @@ StmtResult Sema::ActOnCapturedRegionEnd(Stmt *S) {
   PopExpressionEvaluationContext();
 
   PopDeclContext();
+  // Pop the compound scope we inserted implicitly.
+  PopCompoundScope();
   PopFunctionScopeInfo();
 
   return Owned(Res);
