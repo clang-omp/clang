@@ -34,7 +34,8 @@ using namespace CodeGen;
 
 CodeGenFunction::CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext)
     : CodeGenTypeCache(cgm), CGM(cgm), Target(cgm.getTarget()),
-      Builder(cgm.getModule().getContext()), OpenMPRoot(0),
+      Builder(cgm.getModule().getContext(), llvm::ConstantFolder(),
+              CGBuilderInserterTy(this)), OpenMPRoot(0),
       CapturedStmtInfo(0),
       SanitizePerformTypeCheck(CGM.getSanOpts().Null |
                                CGM.getSanOpts().Alignment |
@@ -49,8 +50,8 @@ CodeGenFunction::CodeGenFunction(CodeGenModule &cgm, bool suppressNewContext)
       NumSimpleReturnExprs(0), CXXABIThisDecl(0), CXXABIThisValue(0),
       CXXThisValue(0), CXXDefaultInitExprThis(0),
       CXXStructorImplicitParamDecl(0), CXXStructorImplicitParamValue(0),
-      OutermostConditional(0), CurLexicalScope(0), TerminateLandingPad(0),
-      TerminateHandler(0), TrapBB(0) {
+      OutermostConditional(0), CurLexicalScope(0), ExceptionsDisabled(false),
+      TerminateLandingPad(0), TerminateHandler(0), TrapBB(0) {
   if (!suppressNewContext)
     CGM.getCXXABI().getMangleContext().startNewFunction();
 
@@ -1496,3 +1497,36 @@ llvm::Value *CodeGenFunction::EmitFieldAnnotations(const FieldDecl *D,
 }
 
 CodeGenFunction::CGCapturedStmtInfo::~CGCapturedStmtInfo() { }
+
+void
+CodeGenFunction::InsertHelper(llvm::Instruction *I,
+                              const llvm::Twine &Name,
+                              llvm::BasicBlock *BB,
+                              llvm::BasicBlock::iterator InsertPt) const {
+  LoopStack.InsertHelper(I);
+}
+
+template <bool PreserveNames>
+void CGBuilderInserter<PreserveNames>::
+  InsertHelper(llvm::Instruction *I,
+               const llvm::Twine &Name,
+               llvm::BasicBlock *BB,
+               llvm::BasicBlock::iterator InsertPt) const {
+  llvm::IRBuilderDefaultInserter<PreserveNames>::InsertHelper(I, Name, BB,
+                                                              InsertPt);
+  if (CGF)
+    CGF->InsertHelper(I, Name, BB, InsertPt);
+}
+#ifdef NDEBUG
+template void CGBuilderInserter<false>::
+  InsertHelper(llvm::Instruction *I,
+               const llvm::Twine &Name,
+               llvm::BasicBlock *BB,
+               llvm::BasicBlock::iterator InsertPt) const;
+#else
+template void CGBuilderInserter<true>::
+  InsertHelper(llvm::Instruction *I,
+               const llvm::Twine &Name,
+               llvm::BasicBlock *BB,
+               llvm::BasicBlock::iterator InsertPt) const;
+#endif

@@ -34,9 +34,19 @@ struct LoopAttributes {
   explicit LoopAttributes(bool IsParallel = false);
   void Clear();
 
-  /// Toggle llvm.loop.parallel metadata generation.
+  /// llvm.loop.parallel metadata generation for loads and stores.
   bool IsParallel;
-  /// VectorizerWidth
+
+  /// llvm.vectorizer.enable value:
+  enum LVEnableState {
+    LVEC_UNSPECIFIED,
+    LVEC_ENABLE,
+    LVEC_DISABLE
+  };
+
+  LVEnableState VectorizerEnable;
+
+  /// llvm.vectorizer.width value
   unsigned VectorizerWidth;
 };
 
@@ -96,6 +106,12 @@ public:
   /// Set the next pushed loop as parallel.
   void SetParallel() { StagedAttrs.IsParallel = true; }
 
+  /// Set the next pushed loop 'vectorizer.enable'
+  void SetVectorizerEnable(bool Enable = true) {
+    StagedAttrs.VectorizerEnable = Enable ? LoopAttributes::LVEC_ENABLE :
+                                            LoopAttributes::LVEC_DISABLE;
+  }
+
   /// Set the vectorizer width for the next loop pushed.
   void SetVectorizerWidth(unsigned W) { StagedAttrs.VectorizerWidth = W; }
 
@@ -111,9 +127,9 @@ private:
   /// Return the LoopInfo for the current loop. HasInfo should be called first
   /// to ensure LoopInfo is present.
   const LoopInfo &GetInfo() const { return Active.back(); }
-
   /// The set of attributes that will be applied to the next pushed loop.
   LoopAttributes StagedAttrs;
+  /// Stack of active loops.
   llvm::SmallVector<LoopInfo, 4> Active;
   // 'Aligned' information.
   llvm::DenseMap<const llvm::Value *, int> Aligneds;

@@ -4222,6 +4222,7 @@ Stmt *CodeGenFunction::CGPragmaOmpSimd::extractLoopBody(Stmt *S) const {
 bool CodeGenFunction::CGPragmaOmpSimd::emitSafelen(CodeGenFunction *CGF) const {
   bool SeparateLastIter = false;
   CGF->LoopStack.SetParallel();
+  CGF->LoopStack.SetVectorizerEnable(true);
   for (ArrayRef<OMPClause *>::iterator I = SimdOmp->clauses().begin(),
        E = SimdOmp->clauses().end(); I != E; ++I) {
     OMPClause *C = dyn_cast<OMPClause>(*I);
@@ -4246,6 +4247,25 @@ bool CodeGenFunction::CGPragmaOmpSimd::emitSafelen(CodeGenFunction *CGF) const {
     }
   }
   return SeparateLastIter;
+}
+
+llvm::ConstantInt *CodeGenFunction::CGPragmaOmpSimd::emitClauseTail(
+  CodeGenFunction *CGF,
+  Expr *E
+) const {
+  // Emit a constant integer for clause's tail expression.
+  // E can be an integer or NULL.
+  llvm::ConstantInt *Val = 0;
+  if (E != 0) {
+    RValue RVal = CGF->EmitAnyExpr(E, AggValueSlot::ignored(), true);
+    Val = dyn_cast<llvm::ConstantInt>(RVal.getScalarVal());
+  }
+  else {
+    Val = cast<llvm::ConstantInt>(
+            llvm::ConstantInt::getNullValue(CGF->CGM.IntTy));
+  }
+  assert(Val);
+  return Val;
 }
 
 
@@ -4313,8 +4333,13 @@ bool CodeGenFunction::CGPragmaOmpSimd::walkLocalVariablesToEmit(
           llvm::Value *Start = CGF->EmitAnyExprToTemp(*J).getScalarVal();
           llvm::Value *Index = CGF->Builder.CreateLoad(LoopIndex);
           llvm::Value *Result = 0;
-          if (const Expr *StepExpr = L->getStep())
+          if (const Expr *StepExpr = L->getStep()) {
             Result = CGF->EmitAnyExpr(StepExpr).getScalarVal();
+            QualType IndexTy = CD->getParam(1)->getType();
+            Result =
+              CGF->Builder.CreateIntCast(Result, Index->getType(),
+                             IndexTy->hasSignedIntegerRepresentation());
+          }
           else
             Result = llvm::ConstantInt::get(Index->getType(), 1);
           Result = CGF->Builder.CreateMul(Index, Result);
@@ -4346,11 +4371,7 @@ bool CodeGenFunction::CGPragmaOmpSimd::walkLocalVariablesToEmit(
         {
           OMPAlignedClause *A = cast<OMPAlignedClause>(C);
           // Prepare alignment expression for using it below.
-          RValue ARVal = CGF->EmitAnyExpr(A->getAlignment(),
-              AggValueSlot::ignored(), true);
-          llvm::ConstantInt *AVal = dyn_cast<llvm::ConstantInt>(
-              ARVal.getScalarVal());
-          assert(AVal);
+          llvm::ConstantInt *AVal = emitClauseTail(CGF, A->getAlignment());
           // Walk the list and push each var's alignment into metadata.
           for (OMPAlignedClause::varlist_iterator J = A->varlist_begin(),
                                                   F = A->varlist_end();
@@ -4417,8 +4438,13 @@ void CodeGenFunction::CGPragmaOmpSimd::emitLinearFinal(
             const Expr *CountExpr = getLoopCount();
             llvm::Value *Index = CGF.EmitAnyExpr(CountExpr).getScalarVal();
             llvm::Value *Result = 0;
-            if (const Expr *StepExpr = L->getStep())
+            if (const Expr *StepExpr = L->getStep()) {
               Result = CGF.EmitAnyExpr(StepExpr).getScalarVal();
+              QualType IndexTy = CountExpr->getType();
+              Result =
+                CGF.Builder.CreateIntCast(Result, Index->getType(),
+                              IndexTy->hasSignedIntegerRepresentation());
+            }
             else
               Result = llvm::ConstantInt::get(Index->getType(), 1);
             Result = CGF.Builder.CreateMul(Index, Result);

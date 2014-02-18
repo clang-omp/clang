@@ -20,7 +20,9 @@ static llvm::MDNode *CreateMetadata(llvm::LLVMContext &Ctx,
                                     const LoopAttributes &Attrs) {
   using namespace llvm;
 
-  if (!Attrs.IsParallel && Attrs.VectorizerWidth == 0)
+  if (!Attrs.IsParallel &&
+      Attrs.VectorizerWidth == 0 &&
+      Attrs.VectorizerEnable == LoopAttributes::LVEC_UNSPECIFIED)
     return 0;
 
   SmallVector<Value *, 4> Args;
@@ -28,6 +30,9 @@ static llvm::MDNode *CreateMetadata(llvm::LLVMContext &Ctx,
   MDNode *TempNode = MDNode::getTemporary(Ctx, None);
   Args.push_back(TempNode);
 
+  // Setting vectorizer.width
+  // TODO: For a correct implementation of 'safelen' clause
+  // we need to update the value somewhere (based on target info).
   if (Attrs.VectorizerWidth > 0) {
     Value *Vals[] = {
       MDString::get(Ctx, "llvm.vectorizer.width"),
@@ -36,22 +41,41 @@ static llvm::MDNode *CreateMetadata(llvm::LLVMContext &Ctx,
     Args.push_back(MDNode::get(Ctx, Vals));
   }
 
+  // Setting vectorizer.enable
+  int EnableLoopVectorizer = 0;
+  switch (Attrs.VectorizerEnable) {
+    case LoopAttributes::LVEC_UNSPECIFIED:
+      break;
+    case LoopAttributes::LVEC_ENABLE:
+      EnableLoopVectorizer = 1;
+      // Fall-through
+    case LoopAttributes::LVEC_DISABLE:
+      Value *Vals[] = {
+        MDString::get(Ctx, "llvm.vectorizer.enable"),
+        ConstantInt::get(Type::getInt32Ty(Ctx), EnableLoopVectorizer)
+      };
+      Args.push_back(MDNode::get(Ctx, Vals));
+      break;
+  }
+
   MDNode *LoopID = MDNode::get(Ctx, Args);
   assert(LoopID->use_empty() && "LoopID should not be used");
 
   // Set the first operand to itself.
   LoopID->replaceOperandWith(0, LoopID);
   MDNode::deleteTemporary(TempNode);
-
   return LoopID;
 }
 
 LoopAttributes::LoopAttributes(bool IsParallel)
-  : IsParallel(IsParallel), VectorizerWidth(0) { }
+  : IsParallel(IsParallel),
+    VectorizerEnable(LoopAttributes::LVEC_UNSPECIFIED),
+    VectorizerWidth(0) { }
 
 void LoopAttributes::Clear() {
   IsParallel = false;
   VectorizerWidth = 0;
+  VectorizerEnable = LoopAttributes::LVEC_UNSPECIFIED;
 }
 
 LoopInfo::LoopInfo(llvm::BasicBlock *Header, const LoopAttributes &Attrs)
@@ -129,3 +153,4 @@ void LoopInfoStack::Push(llvm::MDNode *LoopID) {
   Active.push_back(LoopInfo(LoopID, LoopAttributes(true)));
   StagedAttrs.Clear();
 }
+
