@@ -2320,13 +2320,15 @@ Decl *TemplateDeclInstantiator::VisitOMPThreadPrivateDecl(
   OMPThreadPrivateDecl *TD =
     SemaRef.CheckOMPThreadPrivateDecl(D->getLocation(), Vars);
 
+  TD->setAccess(AS_public);
+  Owner->addDecl(TD);
+
   return TD;
 }
 
 Decl *TemplateDeclInstantiator::VisitOMPDeclareSimdDecl(
                                      OMPDeclareSimdDecl *D) {
-  return TouchOMPDeclareSimdDecl(D, D->getFunction(),
-                                 SemaRef.CurContext);
+  return TouchOMPDeclareSimdDecl(D, D->getFunction(), Owner);
 }
 
 void TemplateDeclInstantiator::TouchOMPVarlist(
