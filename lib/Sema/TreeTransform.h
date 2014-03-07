@@ -7189,9 +7189,9 @@ TreeTransform<Derived>::TransformOMPNumTeamsClause(OMPNumTeamsClause *C) {
   if (E.isInvalid())
     return 0;
 
-  return getDerived().RebuildOMPSimdlenClause(E.take(),
-                                              C->getLocStart(),
-                                              C->getLocEnd());
+  return getDerived().RebuildOMPNumTeamsClause(E.take(),
+                                               C->getLocStart(),
+                                               C->getLocEnd());
 }
 
 template<typename Derived>
