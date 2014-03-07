@@ -6599,10 +6599,6 @@ void gnutools::Link::ConstructJob(Compilation &C, const JobAction &JA,
       bool OpenMP = Args.hasArg(options::OPT_fopenmp);
       if (OpenMP) {
         CmdArgs.push_back("-liomp5");
-
-        // FIXME: Exclude this for platforms whith libgomp that doesn't require
-        // librt. Most modern Linux platfroms require it, but some may not.
-        CmdArgs.push_back("-lrt");
       }
 
       AddLibgcc(ToolChain.getTriple(), D, CmdArgs, Args);
