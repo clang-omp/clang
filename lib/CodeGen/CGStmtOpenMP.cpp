@@ -4234,6 +4234,10 @@ bool CodeGenFunction::CGPragmaOmpSimd::emitSafelen(CodeGenFunction *CGF) const {
           llvm::ConstantInt *Val = dyn_cast<llvm::ConstantInt>(Len.getScalarVal());
           assert(Val);
           CGF->LoopStack.SetVectorizerWidth(Val->getZExtValue());
+          // In presence of finite 'safelen', it may be unsafe to mark all
+          // the memory instructions parallel, because loop-carried
+          // dependences of 'safelen' iterations are possible.
+          CGF->LoopStack.SetParallel(false);
           break;
         }
       case OMPC_lastprivate:

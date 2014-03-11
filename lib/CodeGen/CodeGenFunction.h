@@ -343,9 +343,10 @@ public:
   /// (CGPragmaSimdWrapper) for addressing any differences between them.
   class CGSIMDForStmtInfo : public CGCapturedStmtInfo {
   public:
-    CGSIMDForStmtInfo(const CGPragmaSimdWrapper &Wr, llvm::MDNode *LoopID)
+    CGSIMDForStmtInfo(const CGPragmaSimdWrapper &Wr, llvm::MDNode *LoopID,
+                      bool LoopParallel)
       : CGCapturedStmtInfo(*(Wr.getAssociatedStmt()), CR_SIMDFor),
-        Wrapper(Wr), LoopID(LoopID) { }
+        Wrapper(Wr), LoopID(LoopID), LoopParallel(LoopParallel) { }
 
     virtual StringRef getHelperName() const { return "__simd_for_helper"; }
 
@@ -354,6 +355,7 @@ public:
     }
 
     llvm::MDNode *getLoopID() const { return LoopID; }
+    bool getLoopParallel() const { return LoopParallel; }
 
 
     bool isOmp() const { return Wrapper.isOmp(); }
@@ -374,6 +376,8 @@ public:
     const CGPragmaSimdWrapper &Wrapper;
     /// \brief The loop id metadata.
     llvm::MDNode *LoopID;
+    /// \brief Is loop parallel.
+    bool LoopParallel;
 
   };
 

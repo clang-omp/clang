@@ -137,6 +137,12 @@ void CodeGenFunction::EmitStmt(const Stmt *S) {
   case Stmt::SwitchStmtClass:   EmitSwitchStmt(cast<SwitchStmt>(*S));     break;
   case Stmt::GCCAsmStmtClass:   // Intentional fall-through.
   case Stmt::MSAsmStmtClass:    EmitAsmStmt(cast<AsmStmt>(*S));           break;
+  case Stmt::CapturedStmtClass: {
+    const CapturedStmt *CS = cast<CapturedStmt>(S);
+    EmitCapturedStmt(*CS, CS->getCapturedRegionKind());
+    }
+    break;
+
   // "One-call" OMP Directives
   case Stmt::OMPBarrierDirectiveClass:
     EmitOMPBarrierDirective(cast<OMPBarrierDirective>(*S));
@@ -191,10 +197,6 @@ void CodeGenFunction::EmitStmt(const Stmt *S) {
     break;
   case Stmt::OMPTaskgroupDirectiveClass:
     EmitOMPTaskgroupDirective(cast<OMPTaskgroupDirective>(*S));
-  case Stmt::CapturedStmtClass: {
-    const CapturedStmt *CS = cast<CapturedStmt>(S);
-    EmitCapturedStmt(*CS, CS->getCapturedRegionKind());
-    }
     break;
   case Stmt::ObjCAtTryStmtClass:
     EmitObjCAtTryStmt(cast<ObjCAtTryStmt>(*S));
@@ -1969,13 +1971,14 @@ llvm::Function *CodeGenFunction::EmitSimdFunction(CGPragmaSimdWrapper &W) {
   CapturedDecl *CD = const_cast<CapturedDecl *>(CS.getCapturedDecl());
   const RecordDecl *RD = CS.getCapturedRecordDecl();
 
-  CGSIMDForStmtInfo CSInfo(W, LoopStack.GetCurLoopID());
+  CGSIMDForStmtInfo CSInfo(W, LoopStack.GetCurLoopID(),
+                              LoopStack.GetCurLoopParallel());
   CodeGenFunction CGF(CGM, true);
   CGF.CapturedStmtInfo = &CSInfo;
 
   CGF.disableExceptions();
-  llvm::Function *BodyFunction =
-    CGF.GenerateCapturedStmtFunction(CD, RD, CS.getLocStart());
+  llvm::Function *BodyFunction = CGF.GenerateCapturedStmtFunction(
+                                         CD, RD, CS.getLocStart());
   CGF.enableExceptions();
 
   // Always inline this function back to the call site.
@@ -2141,7 +2144,7 @@ void CodeGenFunction::EmitSIMDForHelperBody(const Stmt *S) {
   CGSIMDForStmtInfo *Info = cast<CGSIMDForStmtInfo>(CapturedStmtInfo);
 
   // Mark the loop body as an extended region of this SIMD loop.
-  LoopStack.Push(Info->getLoopID());
+  LoopStack.Push(Info->getLoopID(), Info->getLoopParallel());
   {
     RunCleanupsScope Scope(*this);
 

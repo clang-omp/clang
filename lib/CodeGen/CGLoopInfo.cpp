@@ -148,9 +148,9 @@ void LoopInfoStack::InsertHelper(llvm::Instruction *I) const {
   }
 }
 
-void LoopInfoStack::Push(llvm::MDNode *LoopID) {
+void LoopInfoStack::Push(llvm::MDNode *LoopID, bool IsParallel) {
   assert(Active.empty() && "cannot have an active loop");
-  Active.push_back(LoopInfo(LoopID, LoopAttributes(true)));
+  Active.push_back(LoopInfo(LoopID, LoopAttributes(IsParallel)));
   StagedAttrs.Clear();
 }
 

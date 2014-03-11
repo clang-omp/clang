@@ -77,7 +77,7 @@ private:
   LoopAttributes Attrs;
 };
 
-/// LoopInfoStack - A stack of loop information corresponding to loop 
+/// LoopInfoStack - A stack of loop information corresponding to loop
 /// nesting levels. This stack can be used to prepare attributes which are
 /// applied when a loop is emitted.
 class LoopInfoStack {
@@ -92,7 +92,7 @@ public:
 
   /// Extend the code region as part of a parallel loop which might be inside
   /// another llvm function.
-  void Push(llvm::MDNode *LoopID);
+  void Push(llvm::MDNode *LoopID, bool IsParallel);
 
   /// End the current loop.
   void Pop();
@@ -100,11 +100,17 @@ public:
   /// Return the top loop id metadata.
   llvm::MDNode *GetCurLoopID() const { return GetInfo().GetLoopID(); }
 
+  /// Return true if the top loop is parallel.
+  bool GetCurLoopParallel() const {
+    return HasInfo() ?
+           GetInfo().GetAttributes().IsParallel : false;
+  }
+
   /// Function called by the CodeGenFunction when an instruction is created.
   void InsertHelper(llvm::Instruction *I) const;
 
   /// Set the next pushed loop as parallel.
-  void SetParallel() { StagedAttrs.IsParallel = true; }
+  void SetParallel(bool Enable = true) { StagedAttrs.IsParallel = Enable; }
 
   /// Set the next pushed loop 'vectorizer.enable'
   void SetVectorizerEnable(bool Enable = true) {
