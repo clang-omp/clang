@@ -224,6 +224,10 @@ public:
     return CGF.getOpaqueRValueMapping(E).getScalarVal();
   }
 
+  Value *VisitCEANIndexExpr(CEANIndexExpr *E) {
+    return CGF.EmitScalarExpr(E->getIndexExpr());
+  }
+
   // l-values.
   Value *VisitDeclRefExpr(DeclRefExpr *E) {
     if (CodeGenFunction::ConstantEmission result = CGF.tryEmitAsConstant(E)) {

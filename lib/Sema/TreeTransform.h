@@ -1659,6 +1659,19 @@ public:
                                               Alignment, AlignmentLoc);
   }
 
+  /// \brief Build a new OpenMP 'depend' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPDependClause(ArrayRef<Expr *> VarList,
+                                    SourceLocation StartLoc,
+                                    SourceLocation EndLoc,
+                                    OpenMPDependClauseType Ty,
+                                    SourceLocation TyLoc) {
+    return getSema().ActOnOpenMPDependClause(VarList, StartLoc, EndLoc, Ty,
+                                             TyLoc);
+  }
+
   /// \brief Rebuild the operand to an Objective-C \@synchronized statement.
   ///
   /// By default, performs semantic analysis to build the new statement.
@@ -1919,6 +1932,17 @@ public:
     return getSema().ActOnArraySubscriptExpr(/*Scope=*/0, LHS,
                                              LBracketLoc, RHS,
                                              RBracketLoc);
+  }
+
+  /// \brief Build a new CEAN index expression.
+  ///
+  /// By default, performs semantic analysis to build the new expression.
+  /// Subclasses may override this routine to provide different behavior.
+  ExprResult RebuildCEANIndexExpr(Expr *Base, Expr *LowerBound,
+                                  SourceLocation ColonLoc,
+                                  Expr *Length) {
+    return getSema().ActOnCEANIndexExpr(0, Base, LowerBound, ColonLoc,
+                                        Length);
   }
 
   /// \brief Build a new call expression.
@@ -7258,6 +7282,26 @@ TreeTransform<Derived>::TransformOMPAlignedClause(OMPAlignedClause *C) {
                                               C->getAlignmentLoc());
 }
 
+template<typename Derived>
+OMPClause *
+TreeTransform<Derived>::TransformOMPDependClause(OMPDependClause *C) {
+  llvm::SmallVector<Expr *, 16> Vars;
+  Vars.reserve(C->varlist_size());
+  for (OMPDependClause::varlist_iterator I = C->varlist_begin(),
+                                         E = C->varlist_end();
+       I != E; ++I) {
+    ExprResult EVar = getDerived().TransformExpr(cast<Expr>(*I));
+    if (EVar.isInvalid())
+      return 0;
+    Vars.push_back(EVar.take());
+  }
+  return getDerived().RebuildOMPDependClause(Vars,
+                                             C->getLocStart(),
+                                             C->getLocEnd(),
+                                             C->getType(),
+                                             C->getTypeLoc());
+}
+
 //===----------------------------------------------------------------------===//
 // Expression transformation
 //===----------------------------------------------------------------------===//
@@ -7592,6 +7636,31 @@ TreeTransform<Derived>::TransformArraySubscriptExpr(ArraySubscriptExpr *E) {
                                            /*FIXME:*/E->getLHS()->getLocStart(),
                                                 RHS.get(),
                                                 E->getRBracketLoc());
+}
+
+template<typename Derived>
+ExprResult
+TreeTransform<Derived>::TransformCEANIndexExpr(CEANIndexExpr *E) {
+  ExprResult Base = getDerived().TransformExpr(E->getBase());
+  if (Base.isInvalid())
+    return ExprError();
+  ExprResult LowerBound = getDerived().TransformExpr(E->getLowerBound());
+  if (LowerBound.isInvalid())
+    return ExprError();
+  ExprResult Length = getDerived().TransformExpr(E->getLength());
+  if (Length.isInvalid())
+    return ExprError();
+
+  if (!getDerived().AlwaysRebuild() &&
+      Base.get() == E->getBase() &&
+      LowerBound.get() == E->getLowerBound() &&
+      Length.get() == E->getLength())
+    return SemaRef.Owned(E);
+
+  return getDerived().RebuildCEANIndexExpr(Base.get(),
+                                           LowerBound.get(),
+                                           E->getColonLoc(),
+                                           Length.get());
 }
 
 template<typename Derived>

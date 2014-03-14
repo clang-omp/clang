@@ -11433,6 +11433,8 @@ static bool isVariableCapturable(CapturingScopeInfo *CSI, VarDecl *Var,
   bool IsBlock = isa<BlockScopeInfo>(CSI);
   bool IsLambda = isa<LambdaScopeInfo>(CSI);
 
+  if (Var->hasAttr<OMPLocalAttr>()) return false;
+
   // Lambdas are not allowed to capture unnamed variables
   // (e.g. anonymous unions).
   // FIXME: The C++11 rule don't actually state this explicitly, but I'm

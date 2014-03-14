@@ -3371,6 +3371,8 @@ public:
                                      Expr *Idx, SourceLocation RLoc);
   ExprResult CreateBuiltinArraySubscriptExpr(Expr *Base, SourceLocation LLoc,
                                              Expr *Idx, SourceLocation RLoc);
+  ExprResult ActOnCEANIndexExpr(Scope *S, Expr *Base, Expr *LowerBound,
+                                SourceLocation ColonLoc, Expr *Length);
 
   ExprResult BuildMemberReferenceExpr(Expr *Base, QualType BaseType,
                                       SourceLocation OpLoc, bool IsArrow,
@@ -7558,6 +7560,12 @@ public:
                                            Expr *ChunkSize,
                                            SourceLocation StartLoc,
                                            SourceLocation EndLoc);
+  /// \brief Called on well-formed 'depend' clause.
+  OMPClause *ActOnOpenMPDependClause(ArrayRef<Expr *> VarList,
+                                     SourceLocation StartLoc,
+                                     SourceLocation EndLoc,
+                                     OpenMPDependClauseType Ty,
+                                     SourceLocation TyLoc);
 
   /// \brief Marks all decls as used in associated captured statement.
   void MarkOpenMPClauses(ArrayRef<OMPClause *> Clauses);

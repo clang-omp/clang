@@ -1349,11 +1349,39 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
       T.consumeOpen();
       Loc = T.getOpenLocation();
       ExprResult Idx;
+
+      ExprResult CEANLength;
+      bool IsCEAN = false;
+      SourceLocation ColonLoc;
       if (getLangOpts().CPlusPlus11 && Tok.is(tok::l_brace)) {
         Diag(Tok, diag::warn_cxx98_compat_generalized_initializer_lists);
         Idx = ParseBraceInitializer();
+      } else if (IsCEANAllowed && Tok.is(tok::colon)) {
+        // '[' ':'
+        IsCEAN = true;
+        ColonLoc = ConsumeToken();
+        ColonProtectionRAIIObject CPRAII(*this);
+        if (Tok.isNot(tok::r_square)) {
+          CEANLength = ParseExpression();
+        }
+      } else if (IsCEANAllowed) {
+        ColonProtectionRAIIObject CPRAII(*this);
+        Idx = ParseExpression();
+        if (IsCEANAllowed && Tok.is(tok::colon)) {
+          // '[' <expr> ':'
+          IsCEAN = true;
+          ColonLoc = ConsumeToken();
+          // <length>
+          if (Tok.isNot(tok::colon) && Tok.isNot(tok::r_square)) {
+            CEANLength = ParseExpression();
+          }
+        }
       } else
         Idx = ParseExpression();
+      if (IsCEAN && !Idx.isInvalid() && !CEANLength.isInvalid()) {
+          Idx = Actions.ActOnCEANIndexExpr(getCurScope(), LHS.get(), Idx.take(),
+                                           ColonLoc, CEANLength.take());
+      }
 
       SourceLocation RLoc = Tok.getLocation();
 

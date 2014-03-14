@@ -771,7 +771,8 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::OpaqueValueExprClass:
     case Stmt::AsTypeExprClass:
     case Stmt::AtomicExprClass:
-      // Fall through.
+    case Stmt::CEANIndexExprClass:
+    // Fall through.
 
     // Cases we intentionally don't evaluate, since they don't need
     // to be explicitly evaluated.

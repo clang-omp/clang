@@ -2049,6 +2049,7 @@ bool Expr::isUnusedResultAWarning(const Expr *&WarnE, SourceLocation &Loc,
   case CompoundAssignOperatorClass:
   case VAArgExprClass:
   case AtomicExprClass:
+  case CEANIndexExprClass:
     return false;
 
   case ConditionalOperatorClass: {
@@ -2851,6 +2852,7 @@ bool Expr::HasSideEffects(const ASTContext &Ctx) const {
   case CXXBindTemporaryExprClass:
   case BlockExprClass:
   case CUDAKernelCallExprClass:
+  case CEANIndexExprClass:
     // These always have a side-effect.
     return true;
 

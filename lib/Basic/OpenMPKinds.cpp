@@ -22,12 +22,10 @@ using namespace clang;
 
 OpenMPDirectiveKind clang::getOpenMPDirectiveKind(StringRef Str) {
   return llvm::StringSwitch<OpenMPDirectiveKind>(Str)
-#define OPENMP_DIRECTIVE(Name) \
-           .Case(#Name, OMPD_##Name)
-#define OPENMP_DIRECTIVE_EXT(Name, Str) \
-           .Case(Str, OMPD_##Name)
+#define OPENMP_DIRECTIVE(Name) .Case(#Name, OMPD_##Name)
+#define OPENMP_DIRECTIVE_EXT(Name, Str) .Case(Str, OMPD_##Name)
 #include "clang/Basic/OpenMPKinds.def"
-           .Default(OMPD_unknown);
+      .Default(OMPD_unknown);
 }
 
 const char *clang::getOpenMPDirectiveName(OpenMPDirectiveKind Kind) {
@@ -35,10 +33,12 @@ const char *clang::getOpenMPDirectiveName(OpenMPDirectiveKind Kind) {
   switch (Kind) {
   case OMPD_unknown:
     return "unknown";
-#define OPENMP_DIRECTIVE(Name) \
-  case OMPD_##Name : return #Name;
-#define OPENMP_DIRECTIVE_EXT(Name, Str) \
-  case OMPD_##Name : return Str;
+#define OPENMP_DIRECTIVE(Name)                                                 \
+  case OMPD_##Name:                                                            \
+    return #Name;
+#define OPENMP_DIRECTIVE_EXT(Name, Str)                                        \
+  case OMPD_##Name:                                                            \
+    return Str;
 #include "clang/Basic/OpenMPKinds.def"
   case NUM_OPENMP_DIRECTIVES:
     break;
@@ -48,10 +48,9 @@ const char *clang::getOpenMPDirectiveName(OpenMPDirectiveKind Kind) {
 
 OpenMPClauseKind clang::getOpenMPClauseKind(StringRef Str) {
   return llvm::StringSwitch<OpenMPClauseKind>(Str)
-#define OPENMP_CLAUSE(Name, Class) \
-           .Case(#Name, OMPC_##Name)
+#define OPENMP_CLAUSE(Name, Class) .Case(#Name, OMPC_##Name)
 #include "clang/Basic/OpenMPKinds.def"
-           .Default(OMPC_unknown);
+      .Default(OMPC_unknown);
 }
 
 const char *clang::getOpenMPClauseName(OpenMPClauseKind Kind) {
@@ -59,8 +58,9 @@ const char *clang::getOpenMPClauseName(OpenMPClauseKind Kind) {
   switch (Kind) {
   case OMPC_unknown:
     return "unknown";
-#define OPENMP_CLAUSE(Name, Class) \
-  case OMPC_##Name : return #Name;
+#define OPENMP_CLAUSE(Name, Class)                                             \
+  case OMPC_##Name:                                                            \
+    return #Name;
 #include "clang/Basic/OpenMPKinds.def"
   case OMPC_threadprivate:
     return "threadprivate or thread local";
@@ -75,28 +75,30 @@ unsigned clang::getOpenMPSimpleClauseType(OpenMPClauseKind Kind,
   switch (Kind) {
   case OMPC_default:
     return llvm::StringSwitch<OpenMPDefaultClauseKind>(Str)
-#define OPENMP_DEFAULT_KIND(Name) \
-             .Case(#Name, OMPC_DEFAULT_##Name)
+#define OPENMP_DEFAULT_KIND(Name) .Case(#Name, OMPC_DEFAULT_##Name)
 #include "clang/Basic/OpenMPKinds.def"
-             .Default(OMPC_DEFAULT_unknown);
+        .Default(OMPC_DEFAULT_unknown);
   case OMPC_proc_bind:
     return llvm::StringSwitch<OpenMPProcBindClauseKind>(Str)
-#define OPENMP_PROC_BIND_KIND(Name) \
-             .Case(#Name, OMPC_PROC_BIND_##Name)
+#define OPENMP_PROC_BIND_KIND(Name) .Case(#Name, OMPC_PROC_BIND_##Name)
 #include "clang/Basic/OpenMPKinds.def"
-             .Default(OMPC_PROC_BIND_unknown);
+        .Default(OMPC_PROC_BIND_unknown);
   case OMPC_reduction:
     return llvm::StringSwitch<OpenMPReductionClauseOperator>(Str)
-#define OPENMP_REDUCTION_OPERATOR(Name, Symbol) \
-             .Case(Symbol, OMPC_REDUCTION_##Name)
+#define OPENMP_REDUCTION_OPERATOR(Name, Symbol)                                \
+  .Case(Symbol, OMPC_REDUCTION_##Name)
 #include "clang/Basic/OpenMPKinds.def"
-             .Default(OMPC_REDUCTION_unknown);
+        .Default(OMPC_REDUCTION_unknown);
+  case OMPC_depend:
+    return llvm::StringSwitch<OpenMPDependClauseType>(Str)
+#define OPENMP_DEPENDENCE_TYPE(Name, Type) .Case(Type, OMPC_DEPEND_##Name)
+#include "clang/Basic/OpenMPKinds.def"
+        .Default(OMPC_DEPEND_unknown);
   case OMPC_schedule:
     return llvm::StringSwitch<OpenMPScheduleClauseKind>(Str)
-#define OPENMP_SCHEDULE_KIND(Name) \
-             .Case(#Name, OMPC_SCHEDULE_##Name)
+#define OPENMP_SCHEDULE_KIND(Name) .Case(#Name, OMPC_SCHEDULE_##Name)
 #include "clang/Basic/OpenMPKinds.def"
-             .Default(OMPC_SCHEDULE_unknown);
+        .Default(OMPC_SCHEDULE_unknown);
   default:
     break;
   }
@@ -110,8 +112,9 @@ const char *clang::getOpenMPSimpleClauseTypeName(OpenMPClauseKind Kind,
     switch (Type) {
     case OMPC_DEFAULT_unknown:
       return "unknown";
-#define OPENMP_DEFAULT_KIND(Name) \
-    case OMPC_DEFAULT_##Name : return #Name;
+#define OPENMP_DEFAULT_KIND(Name)                                              \
+  case OMPC_DEFAULT_##Name:                                                    \
+    return #Name;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -121,8 +124,9 @@ const char *clang::getOpenMPSimpleClauseTypeName(OpenMPClauseKind Kind,
     switch (Type) {
     case OMPC_PROC_BIND_unknown:
       return "unknown";
-#define OPENMP_PROC_BIND_KIND(Name) \
-    case OMPC_PROC_BIND_##Name : return #Name;
+#define OPENMP_PROC_BIND_KIND(Name)                                            \
+  case OMPC_PROC_BIND_##Name:                                                  \
+    return #Name;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -132,20 +136,34 @@ const char *clang::getOpenMPSimpleClauseTypeName(OpenMPClauseKind Kind,
     switch (Type) {
     case OMPC_REDUCTION_unknown:
       return "unknown";
-#define OPENMP_REDUCTION_OPERATOR(Name, Symbol) \
-    case OMPC_REDUCTION_##Name : return Symbol;
+#define OPENMP_REDUCTION_OPERATOR(Name, Symbol)                                \
+  case OMPC_REDUCTION_##Name:                                                  \
+    return Symbol;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
     }
     llvm_unreachable("Invalid OpenMP 'reduction' clause operator");
+  case OMPC_depend:
+    switch (Type) {
+    case OMPC_DEPEND_unknown:
+      return "unknown";
+#define OPENMP_DEPENDENCE_TYPE(Name, Type)                                     \
+  case OMPC_DEPEND_##Name:                                                     \
+    return Type;
+#include "clang/Basic/OpenMPKinds.def"
+    default:
+      break;
+    }
+    llvm_unreachable("Invalid OpenMP 'depend' clause dependence type");
   case OMPC_schedule:
   case OMPC_dist_schedule:
     switch (Type) {
     case OMPC_SCHEDULE_unknown:
       return "unknown";
-#define OPENMP_SCHEDULE_KIND(Name) \
-    case OMPC_SCHEDULE_##Name : return #Name;
+#define OPENMP_SCHEDULE_KIND(Name)                                             \
+  case OMPC_SCHEDULE_##Name:                                                   \
+    return #Name;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -164,8 +182,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
   switch (DKind) {
   case OMPD_parallel:
     switch (CKind) {
-#define OPENMP_PARALLEL_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_PARALLEL_CLAUSE(Name)                                           \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -173,8 +192,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_for:
     switch (CKind) {
-#define OPENMP_FOR_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_FOR_CLAUSE(Name)                                                \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -182,8 +202,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_simd:
     switch (CKind) {
-#define OPENMP_SIMD_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_SIMD_CLAUSE(Name)                                               \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -191,8 +212,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_for_simd:
     switch (CKind) {
-#define OPENMP_FOR_SIMD_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_FOR_SIMD_CLAUSE(Name)                                           \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -200,8 +222,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_declare_simd:
     switch (CKind) {
-#define OPENMP_DECLARE_SIMD_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_DECLARE_SIMD_CLAUSE(Name)                                       \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -210,8 +233,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
 
   case OMPD_sections:
     switch (CKind) {
-#define OPENMP_SECTIONS_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_SECTIONS_CLAUSE(Name)                                           \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -219,8 +243,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_single:
     switch (CKind) {
-#define OPENMP_SINGLE_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_SINGLE_CLAUSE(Name)                                             \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -228,8 +253,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_task:
     switch (CKind) {
-#define OPENMP_TASK_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_TASK_CLAUSE(Name)                                               \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -237,8 +263,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_atomic:
     switch (CKind) {
-#define OPENMP_ATOMIC_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_ATOMIC_CLAUSE(Name)                                             \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -246,8 +273,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_flush:
     switch (CKind) {
-#define OPENMP_FLUSH_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_FLUSH_CLAUSE(Name)                                              \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -255,8 +283,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_parallel_for:
     switch (CKind) {
-#define OPENMP_PARALLEL_FOR_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_PARALLEL_FOR_CLAUSE(Name)                                       \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;
@@ -264,8 +293,9 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
     break;
   case OMPD_parallel_sections:
     switch (CKind) {
-#define OPENMP_PARALLEL_SECTIONS_CLAUSE(Name) \
-    case OMPC_##Name: return true;
+#define OPENMP_PARALLEL_SECTIONS_CLAUSE(Name)                                  \
+  case OMPC_##Name:                                                            \
+    return true;
 #include "clang/Basic/OpenMPKinds.def"
     default:
       break;

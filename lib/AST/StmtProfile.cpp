@@ -461,6 +461,10 @@ void StmtProfiler::VisitArraySubscriptExpr(const ArraySubscriptExpr *S) {
   VisitExpr(S);
 }
 
+void StmtProfiler::VisitCEANIndexExpr(const CEANIndexExpr *S) {
+  VisitExpr(S);
+}
+
 void StmtProfiler::VisitCallExpr(const CallExpr *S) {
   VisitExpr(S);
 }

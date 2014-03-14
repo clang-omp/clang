@@ -1101,3 +1101,9 @@ def UnspecifiedInheritance : MSInheritanceAttr {
 def Unaligned : IgnoredAttr {
   let Spellings = [Keyword<"__unaligned">];
 }
+
+def OMPLocal : InheritableAttr {
+  let Spellings = [];
+  let SemaHandler = 0;
+  let HasCustomParsing = 1;
+}

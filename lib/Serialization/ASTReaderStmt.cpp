@@ -588,6 +588,16 @@ void ASTStmtReader::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   E->setLHS(Reader.ReadSubExpr());
   E->setRHS(Reader.ReadSubExpr());
   E->setRBracketLoc(ReadSourceLocation(Record, Idx));
+  if (CEANIndexExpr *CIE = dyn_cast_or_null<CEANIndexExpr>(E->getIdx()))
+    CIE->setBase(E->getBase());
+}
+
+void ASTStmtReader::VisitCEANIndexExpr(CEANIndexExpr *E) {
+  VisitExpr(E);
+  E->setBase(0);
+  E->setLowerBound(Reader.ReadSubExpr());
+  E->setColonLoc(ReadSourceLocation(Record, Idx));
+  E->setLength(Reader.ReadSubExpr());
 }
 
 void ASTStmtReader::VisitCallExpr(CallExpr *E) {
@@ -1766,6 +1776,11 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_uniform:
     C = OMPUniformClause::CreateEmpty(Context, Record[Idx++]);
     break;
+  case OMPC_depend: {
+    unsigned N = Record[Idx++];
+    C = OMPDependClause::CreateEmpty(Context, N, Record[Idx++]);
+    break;
+  }
   default:
     assert(0 && "Unknown clause!");
     return 0;
@@ -2085,6 +2100,29 @@ void OMPClauseReader::VisitOMPAlignedClause(OMPAlignedClause *C) {
     Vars.push_back(Reader.ReadExpr(MFile));
   C->setVars(Vars);
   C->setAlignment(Reader.ReadExpr(MFile));
+}
+
+void OMPClauseReader::VisitOMPDependClause(OMPDependClause *C) {
+  C->setType(
+      static_cast<OpenMPDependClauseType>(Record[Idx++]));
+  C->setTypeLoc(this->ReadSourceLocation(Record, Idx));
+  unsigned NumVars = C->varlist_size();
+  SmallVector<Expr *, 16> Vars;
+  Vars.reserve(NumVars);
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setVars(Vars);
+  C->setNumberOfContiguousSpaces(Reader.ReadSubExpr());
+  Vars.clear();
+  unsigned NumHelpers = C->getNumHelpers();
+  for (unsigned i = 0; i != NumHelpers; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setHelperExprs(Vars);
+  for (unsigned i = 0; i < NumVars; ++i) {
+    C->IndicesLengths[i] = Record[Idx++];
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -2469,6 +2507,10 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
 
     case EXPR_ARRAY_SUBSCRIPT:
       S = new (Context) ArraySubscriptExpr(Empty);
+      break;
+
+    case EXPR_CEAN_INDEX:
+      S = new (Context) CEANIndexExpr(Empty);
       break;
 
     case EXPR_CALL:

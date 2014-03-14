@@ -1090,6 +1090,10 @@ CanThrowResult Sema::canThrow(const Expr *E) {
     // These expressions can never throw.
     return CT_Cannot;
 
+  case Expr::CEANIndexExprClass: {
+    CanThrowResult CT = E->isTypeDependent() ? CT_Dependent : CT_Cannot;
+    return mergeCanThrow(CT, canSubExprsThrow(*this, E));
+  }
   case Expr::MSPropertyRefExprClass:
     llvm_unreachable("Invalid class for expression");
 

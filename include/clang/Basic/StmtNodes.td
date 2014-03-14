@@ -177,6 +177,9 @@ def MSDependentExistsStmt : Stmt;
 // OpenCL Extensions.
 def AsTypeExpr : DStmt<Expr>;
 
+// Extended array notation index for OpenMP.
+def CEANIndexExpr : DStmt<Expr>;
+
 // OpenMP Directives.
 def OMPExecutableDirective : Stmt<1>;
 def OMPParallelDirective : DStmt<OMPExecutableDirective>;

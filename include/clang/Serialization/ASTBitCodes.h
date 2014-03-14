@@ -1154,6 +1154,8 @@ namespace clang {
       EXPR_SIZEOF_ALIGN_OF,
       /// \brief An ArraySubscriptExpr record.
       EXPR_ARRAY_SUBSCRIPT,
+      /// \brief A CEAN index expr.
+      EXPR_CEAN_INDEX,
       /// \brief A CallExpr record.
       EXPR_CALL,
       /// \brief A MemberExpr record.

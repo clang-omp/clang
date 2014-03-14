@@ -885,6 +885,22 @@ void OMPClausePrinter::VisitOMPAlignedClause(OMPAlignedClause *Node) {
   }
 }
 
+void OMPClausePrinter::VisitOMPDependClause(OMPDependClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "depend(";
+    OS << getOpenMPSimpleClauseTypeName(OMPC_depend, Node->getType());
+    OS << ':';
+
+    for (OMPDependClause::varlist_iterator I = Node->varlist_begin(),
+                                           E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? ' ' : ',');
+      (*I)->printPretty(OS, 0, Policy, 0);
+    }
+    OS << ")";
+  }
+}
+
 }
 
 void OMPClause::printPretty(raw_ostream &OS,
@@ -1325,6 +1341,14 @@ void StmtPrinter::VisitArraySubscriptExpr(ArraySubscriptExpr *Node) {
   OS << "[";
   PrintExpr(Node->getRHS());
   OS << "]";
+}
+
+void StmtPrinter::VisitCEANIndexExpr(CEANIndexExpr *Node) {
+  if (Node->getLowerBound() && Node->getLowerBound()->getLocStart().isValid())
+    PrintExpr(Node->getLowerBound());
+  OS << ":";
+  if (Node->getLength() && Node->getLength()->getLocStart().isValid())
+    PrintExpr(Node->getLength());
 }
 
 void StmtPrinter::PrintCallArgs(CallExpr *Call) {

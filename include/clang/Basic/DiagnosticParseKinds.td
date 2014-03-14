@@ -839,33 +839,35 @@ def err_seh___finally_block : Error<
 // OpenMP support.
 let CategoryName = "OpenMP Parse Issue" in {
 
-def warn_pragma_omp_ignored : Warning <
+def warn_pragma_omp_ignored : Warning<
   "unexpected '#pragma omp ...' in program">, InGroup<SourceUsesOpenMP>, DefaultIgnore;
-def warn_omp_extra_tokens_at_eol : Warning <
+def warn_omp_extra_tokens_at_eol : Warning<
   "extra tokens at the end of '#pragma omp %0' are ignored">,
   InGroup<ExtraTokens>;
-def err_omp_unknown_directive : Error <
+def err_omp_unknown_directive : Error<
   "expected an OpenMP directive">;
-def err_omp_unexpected_directive : Error <
+def err_omp_unexpected_directive : Error<
   "unexpected OpenMP directive '#pragma omp %0'">;
-def err_omp_expected_var : Error <
+def err_omp_expected_var : Error<
   "expected '#pragma omp %0' argument to be a variable name">;
-def err_omp_expected_punc : Error <
+def err_omp_expected_punc : Error<
   "expected ',' or ')' in %select{'#pragma omp %1'|'%1' clause}0">;
-def err_omp_unknown_clause : Error <
+def err_omp_unknown_clause : Error<
   "expected OpenMP clause for directive '#pragma omp %0' or end of directive">;
-def err_omp_unexpected_clause : Error <
+def err_omp_unexpected_clause : Error<
   "unexpected OpenMP clause '%0' in directive '#pragma omp %1'">;
-def err_omp_more_one_clause : Error <
+def err_omp_more_one_clause : Error<
   "directive '#pragma omp %0' cannot contain more than one '%1' clause">;
-def err_omp_expected_colon : Error <
+def err_omp_expected_colon : Error<
   "expected ':' in '%0' clause">;
-def err_omp_unknown_reduction_op : Error <
+def err_omp_unknown_reduction_op : Error<
   "expected reduction identifier">;
-def err_omp_immediate_directive : Error <
+def err_omp_immediate_directive : Error<
   "'#pragma omp %0' cannot be immediate substatement">;
-def err_omp_expected_reduction_identifier : Error <
+def err_omp_expected_reduction_identifier : Error<
   "expected identifier or one of the following operators: '+', '-', '*', '&', '|', '^', '&&' and '||'">;
+def err_omp_unknown_dependence_type : Error<
+  "expected dependence type 'in', 'out' or 'inout'">;
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {

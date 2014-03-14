@@ -2031,6 +2031,10 @@ void OMPClauseEnqueue::VisitOMPLinearClause(const OMPLinearClause *C) {
 void OMPClauseEnqueue::VisitOMPAlignedClause(const OMPAlignedClause *C) {
   VisitOMPClauseList(C);
 }
+
+void OMPClauseEnqueue::VisitOMPDependClause(const OMPDependClause *C) {
+  VisitOMPClauseList(C);
+}
 }
 void EnqueueVisitor::EnqueueChildren(const OMPClause *S) {
   unsigned size = WL.size();

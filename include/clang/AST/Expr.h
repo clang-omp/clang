@@ -4791,6 +4791,89 @@ public:
     return child_range(SubExprs, SubExprs+NumSubExprs);
   }
 };
+
+/// CEANIndexExpr - CEAN index triplet.
+class CEANIndexExpr : public Expr {
+  enum { BASE, LOWER_BOUND, LENGTH, INDEX_EXPR, END_EXPR };
+  Stmt* SubExprs[END_EXPR];
+  SourceLocation ColonLoc;
+public:
+  CEANIndexExpr(Expr *Base, Expr *LowerBound, SourceLocation ColonLoc,
+                Expr *Length, QualType QTy)
+  : Expr(CEANIndexExprClass, QTy, VK_RValue, OK_Ordinary,
+         (Base && Base->isTypeDependent()) ||
+         (LowerBound && LowerBound->isTypeDependent()) ||
+         (Length && Length->isTypeDependent()),
+         (Base && Base->isValueDependent()) ||
+         (LowerBound && LowerBound->isValueDependent()) ||
+         (Length && Length->isValueDependent()),
+         ((Base && Base->isInstantiationDependent()) ||
+          (LowerBound && LowerBound->isInstantiationDependent()) ||
+          (Length && Length->isInstantiationDependent())),
+         ((Base && Base->containsUnexpandedParameterPack()) ||
+          (LowerBound && LowerBound->containsUnexpandedParameterPack()) ||
+          (Length && Length->containsUnexpandedParameterPack()))),
+    ColonLoc(ColonLoc) {
+    SubExprs[BASE] = Base;
+    SubExprs[LOWER_BOUND] = LowerBound;
+    SubExprs[LENGTH] = Length;
+    SubExprs[INDEX_EXPR] = 0;
+  }
+
+  /// \brief Create an empty CEAN index expression.
+  explicit CEANIndexExpr(EmptyShell Shell)
+    : Expr(CEANIndexExprClass, Shell), ColonLoc() { }
+
+  Expr *getBase() { return dyn_cast_or_null<Expr>(SubExprs[BASE]); }
+  const Expr *getBase() const { return dyn_cast_or_null<Expr>(SubExprs[BASE]); }
+  void setBase(Expr *E) { SubExprs[BASE] = E; }
+
+  Expr *getLowerBound() {
+    return dyn_cast_or_null<Expr>(SubExprs[LOWER_BOUND]);
+  }
+  const Expr *getLowerBound() const {
+    return dyn_cast_or_null<Expr>(SubExprs[LOWER_BOUND]);
+  }
+  void setLowerBound(Expr *E) { SubExprs[LOWER_BOUND] = E; }
+
+  Expr *getLength() { return dyn_cast_or_null<Expr>(SubExprs[LENGTH]); }
+  const Expr *getLength() const {
+    return dyn_cast_or_null<Expr>(SubExprs[LENGTH]);
+  }
+  void setLength(Expr *E) { SubExprs[LENGTH] = E; }
+
+  Expr *getIndexExpr() {
+    return SubExprs[INDEX_EXPR] ? cast<Expr>(SubExprs[INDEX_EXPR]) : 0;
+  }
+  Expr *getIndexExpr() const {
+    return SubExprs[INDEX_EXPR] ? cast<Expr>(SubExprs[INDEX_EXPR]) : 0;
+  }
+  void setIndexExpr(Expr *E) { SubExprs[INDEX_EXPR] = E; }
+
+  SourceLocation getLocStart() const LLVM_READONLY {
+    return getLowerBound()->getLocStart();
+  }
+  SourceLocation getLocEnd() const LLVM_READONLY {
+    return getLength()->getLocEnd();
+  }
+
+  SourceLocation getColonLoc() const LLVM_READONLY { return ColonLoc; }
+  void setColonLoc(SourceLocation L) { ColonLoc = L; }
+
+  SourceLocation getExprLoc() const LLVM_READONLY {
+    return getLocStart();
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == CEANIndexExprClass;
+  }
+
+  // Iterators
+  child_range children() {
+    return child_range(&SubExprs[LOWER_BOUND], &SubExprs[END_EXPR]);
+  }
+};
+
 }  // end namespace clang
 
 #endif

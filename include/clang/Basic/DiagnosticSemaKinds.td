@@ -6742,11 +6742,11 @@ def err_negative_expression_in_clause : Error<
   "expression is not a positive integer value">;
 def err_zero_step_in_linear_clause : Error<
   "zero is not linear enough to be a linear step">;
-def err_omp_unexpected_clause_value : Error <
+def err_omp_unexpected_clause_value : Error<
   "expected %0 in OpenMP clause '%1'">;
-def err_omp_expected_var_name : Error <
+def err_omp_expected_var_name : Error<
   "expected variable name">;
-def err_omp_required_method : Error <
+def err_omp_required_method : Error<
   "%0 variable must have an accessible, unambiguous %select{default constructor|copy constructor|copy assignment operator|'%2'|destructor}1">;
 def note_omp_marked_here : Note<
   "marked as %0 here">;
@@ -6782,51 +6782,51 @@ def err_omp_once_referenced : Error<
   "variable can appear only once in OpenMP '%0' clause">;
 def err_omp_const_variable : Error<
   "const-qualified variable cannot be %0">;
-def note_omp_explicit_dsa : Note <
+def note_omp_explicit_dsa : Note<
   "defined as %0">;
-def note_omp_predetermined_dsa : Note <
+def note_omp_predetermined_dsa : Note<
   "predetermined as %0">;
-def note_omp_referenced : Note <
+def note_omp_referenced : Note<
   "previously referenced here">;
-def note_omp_specified : Note <
+def note_omp_specified : Note<
   "previously specified here">;
 def err_omp_dsa_with_directives : Error<
   "%0 variable in '#pragma omp %1' cannot be %2 in '#pragma omp %3'">;
-def err_omp_not_for : Error <
+def err_omp_not_for : Error<
   "only for-loops are allowed for '#pragma omp %0'">;
-def err_omp_for_variable : Error <
+def err_omp_for_variable : Error<
   "variable must be of integer or %select{pointer|random access iterator}0 type">;
-def err_omp_not_canonical_for : Error <
+def err_omp_not_canonical_for : Error<
   "%select{initialization|condition|increment}0 of for-loop does not have canonical form">;
-def err_omp_for_incr_not_integer : Error <
+def err_omp_for_incr_not_integer : Error<
   "increment expression of for-loop must be of an integer type">;
-def err_omp_for_incr_not_compatible : Error <
+def err_omp_for_incr_not_compatible : Error<
   "increment expression must cause %q0 to %select{decrease|increase}1 on each iteration of the loop">;
-def err_omp_for_type_not_compatible : Error <
+def err_omp_for_type_not_compatible : Error<
   "expression of type %0 is not compatible with variable %1 of type %2">;
-def err_omp_for_wrong_count : Error <
+def err_omp_for_wrong_count : Error<
   "unable to calculate number of iterations of the for-loop">;
-def err_omp_type_not_rai : Error <
+def err_omp_type_not_rai : Error<
   "iteration variable is not of a random access iterator type">;
-def err_omp_for_loop_var_dsa : Error <
+def err_omp_for_loop_var_dsa : Error<
   "loop iteration variable may not be %0">;
-def err_omp_sections_not_section : Error <
+def err_omp_sections_not_section : Error<
   "the statement for '#pragma omp %0' must be '#pragma omp section'">;
-def err_omp_section_orphaned : Error <
+def err_omp_section_orphaned : Error<
   "orphaned '#pragma omp section' is prohibited">;
-def err_omp_sections_not_compound_stmt : Error <
+def err_omp_sections_not_compound_stmt : Error<
   "the statement for '#pragma omp %0' must be compound statement">;
-def err_omp_prohibited_region : Error <
+def err_omp_prohibited_region : Error<
   "region cannot be%select{| closely}0 nested inside %1 region%select{| with name %3}2">;
-def err_omp_prohibited_ordered_region : Error <
+def err_omp_prohibited_ordered_region : Error<
   "region must be closely nested inside loop or parallel loop region with 'ordered' clause">;
-def err_omp_atomic_more_one_clause : Error <
+def err_omp_atomic_more_one_clause : Error<
   "directive '#pragma omp atomic' cannot contain more than one 'read', 'write', 'update' or 'capture' clause">;
-def err_omp_atomic_not_expression : Error <
+def err_omp_atomic_not_expression : Error<
   "expected expression statement for '#pragma omp atomic %0'">;
-def err_omp_atomic_wrong_statement : Error <
+def err_omp_atomic_wrong_statement : Error<
   "statement form is not allowed for '#pragma omp atomic %0'">;
-def err_omp_no_dsa_for_variable : Error <
+def err_omp_no_dsa_for_variable : Error<
   "variable %q0 must have explicitly specified data sharing attributes">;
 def err_omp_for_cannot_break: Error<
   "cannot break from a '#pragma omp %0' loop">;
@@ -6846,12 +6846,26 @@ def err_omp_reduction_reference_type : Error<
   "a type name cannot be a reference type">;
 def err_omp_reduction_array_type : Error<
   "a type name cannot be an array type">;
-def err_omp_reduction_redeclared : Error <
+def err_omp_reduction_redeclared : Error<
   "previous declaration with type %0 is found">;
-def err_omp_reduction_non_function_init : Error <
+def err_omp_reduction_non_function_init : Error<
   "expected function call">;
 def err_setjmp_longjmp_in_omp_simd : Error<
   "The simd region cannot contain calls to the longjmp/setjmp functions">;
+def err_cean_not_in_statement : Error<
+  "extended array notation is not allowed">;
+def err_cean_lower_bound_not_integer : Error<
+  "lower bound expression has non-integer type %0">;
+def err_cean_length_not_integer : Error<
+  "length expression has non-integer type %0">;
+def err_cean_no_length_for_non_array : Error<
+  "cannot define default length for non-array type %0">;
+def err_omp_array_section_length_not_greater_zero : Error<
+  "length of the array section must be greater than 0">;
+def err_omp_expected_var_name_or_array_item : Error<
+  "expected variable name or an array item">;
+def err_omp_depend_arg_not_lvalue : Error<
+  "argument expression must be an l-value">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {

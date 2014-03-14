@@ -515,6 +515,14 @@ void ASTStmtWriter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   Code = serialization::EXPR_ARRAY_SUBSCRIPT;
 }
 
+void ASTStmtWriter::VisitCEANIndexExpr(CEANIndexExpr *E) {
+  VisitExpr(E);
+  Writer.AddStmt(E->getLowerBound());
+  Writer.AddSourceLocation(E->getColonLoc(), Record);
+  Writer.AddStmt(E->getLength());
+  Code = serialization::EXPR_CEAN_INDEX;
+}
+
 void ASTStmtWriter::VisitCallExpr(CallExpr *E) {
   VisitExpr(E);
   Record.push_back(E->getNumArgs());
@@ -1918,6 +1926,18 @@ void OMPClauseWriter::VisitOMPAlignedClause(OMPAlignedClause *C) {
         I != E; ++I)
     Writer.AddStmt(*I);
   Writer.AddStmt(C->getAlignment());
+}
+
+void OMPClauseWriter::VisitOMPDependClause(OMPDependClause *C) {
+  Record.push_back(C->varlist_size());
+  Record.push_back(C->getNumHelpers());
+  Record.push_back(C->getType());
+  Writer.AddSourceLocation(C->getTypeLoc(), Record);
+  for (StmtRange I = C->children(); I ; ++I)
+    Writer.AddStmt(*I);
+  for (unsigned i = 0, e = C->varlist_size(); i < e; ++i) {
+    Record.push_back(C->IndicesLengths[i]);
+  }
 }
 
 //===----------------------------------------------------------------------===//

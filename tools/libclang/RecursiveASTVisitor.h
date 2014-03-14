@@ -2202,6 +2202,7 @@ DEF_TRAVERSE_STMT(CXXMemberCallExpr, { })
 // over the children.
 DEF_TRAVERSE_STMT(AddrLabelExpr, { })
 DEF_TRAVERSE_STMT(ArraySubscriptExpr, { })
+DEF_TRAVERSE_STMT(CEANIndexExpr, { })
 DEF_TRAVERSE_STMT(BlockExpr, {
   TRY_TO(TraverseDecl(S->getBlockDecl()));
   return true; // no child statements to loop through.
