@@ -71,6 +71,33 @@ Parser::ParseOpenMPDeclarativeDirective(AccessSpecifier AS) {
     }
     break;
   }
+  case OMPD_parallel: {
+    // This is to get correct directive name in the error message below.
+    // This whole switch actually should be extracted into a helper routine
+    // and reused in ParseOpenMPDeclarativeOrExecutableDirective below.
+    Token SavedToken = PP.LookAhead(0);
+    if (!SavedToken.isAnnotation()) {
+      OpenMPDirectiveKind SDKind =
+          getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+      if (SDKind == OMPD_for) {
+        DKind = OMPD_parallel_for;
+        ConsumeAnyToken();
+        SavedToken = PP.LookAhead(0);
+        if (!SavedToken.isAnnotation()) {
+          OpenMPDirectiveKind SDKind =
+              getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+          if (SDKind == OMPD_simd) {
+            DKind = OMPD_parallel_for_simd;
+            ConsumeAnyToken();
+          }
+        }
+      } else if (SDKind == OMPD_section) {
+        DKind = OMPD_parallel_sections;
+        ConsumeAnyToken();
+      }
+    }
+    break;
+  }
   default:
     break;
   }
@@ -398,7 +425,7 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
   StmtResult Directive = StmtError();
   DeclarationNameInfo DirName;
   SmallVector<OMPClause *, 4> LocalSavedClauses;
-  Token SavedToken;
+  Token SavedToken, SavedToken1;
 
   switch (DKind) {
   case OMPD_declare: {
@@ -512,6 +539,15 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
         if (SDKind == OMPD_for) {
           DKind = OMPD_parallel_for;
           ConsumeAnyToken();
+          SavedToken1 = PP.LookAhead(0);
+          if (!SavedToken1.isAnnotation()) {
+            OpenMPDirectiveKind SDKind =
+                getOpenMPDirectiveKind(PP.getSpelling(SavedToken1));
+            if (SDKind == OMPD_simd) {
+              DKind = OMPD_parallel_for_simd;
+              ConsumeAnyToken();
+            }
+          }
         } else if (SDKind == OMPD_sections) {
           DKind = OMPD_parallel_sections;
           ConsumeAnyToken();
@@ -538,7 +574,10 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
         NewDKind = OMPD_parallel_for;
       else if (DKind == OMPD_sections)
         NewDKind = OMPD_parallel_sections;
-    } else if (DKind == OMPD_parallel_for || DKind == OMPD_parallel_sections)
+      else if (DKind == OMPD_for_simd)
+        NewDKind = OMPD_parallel_for_simd;
+    } else if (DKind == OMPD_parallel_for || DKind == OMPD_parallel_sections ||
+               DKind == OMPD_parallel_for_simd)
       NewDKind = OMPD_parallel;
     ParseScope OMPDirectiveScope(this, ScopeFlags);
     Actions.StartOpenMPDSABlock(NewDKind, DirName, Actions.getCurScope());
@@ -554,7 +593,9 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
         if ((DKind == OMPD_parallel_for &&
              isAllowedClauseForDirective(OMPD_for, CKind)) ||
             (DKind == OMPD_parallel_sections &&
-             isAllowedClauseForDirective(OMPD_sections, CKind))) {
+             isAllowedClauseForDirective(OMPD_sections, CKind)) ||
+            (DKind == OMPD_parallel_for_simd &&
+             isAllowedClauseForDirective(OMPD_for_simd, CKind))) {
           LocalSavedClauses.push_back(Clause);
           if (CKind == OMPC_firstprivate)
             Clauses.push_back(Clause);
@@ -579,6 +620,18 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
       Toks[2] = Tok;
       PP.EnterTokenStream(Toks, 3, true, true);
       DKind = OMPD_parallel;
+    } else if (DKind == OMPD_parallel_for_simd) {
+      // Create fake #pragma omp for or sections pragma.
+      Token *Toks = new Token[4];
+      Toks[0].startToken();
+      Toks[0].setKind(tok::annot_pragma_openmp);
+      Toks[0].setLocation(Loc);
+      Toks[0].setAnnotationValue(&LocalSavedClauses);
+      Toks[1] = SavedToken;
+      Toks[2] = SavedToken1;
+      Toks[3] = Tok;
+      PP.EnterTokenStream(Toks, 4, true, true);
+      DKind = OMPD_parallel;
     } else if (FirstToken.getAnnotationValue()) {
       assert(Clauses.empty() &&
              "There are saved clauses for non-empty clauses list.");
@@ -594,6 +647,8 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
         DKind = OMPD_parallel_for;
       else if (DKind == OMPD_sections)
         DKind = OMPD_parallel_sections;
+      else if (DKind == OMPD_for_simd)
+        DKind = OMPD_parallel_for_simd;
     }
     // Consume final annot_pragma_openmp_end.
     ConsumeAnyToken();
@@ -608,7 +663,8 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
       // The body is a block scope like in Lambdas and Blocks.
       Sema::CompoundScopeRAII CompoundScope(Actions);
       // Simd has two additional args -- integer index and boolean last_iter.
-      int NumArgs = (DKind == OMPD_simd || DKind == OMPD_for_simd) ? 3 : 1;
+      int NumArgs = (DKind == OMPD_simd || DKind == OMPD_for_simd ||
+                     DKind == OMPD_parallel_for_simd) ? 3 : 1;
       Actions.ActOnCapturedRegionStart(Loc, getCurScope(), CR_OpenMP, NumArgs);
       Actions.ActOnStartOfCompoundStmt();
       AssociatedStmt = ParseStatement();

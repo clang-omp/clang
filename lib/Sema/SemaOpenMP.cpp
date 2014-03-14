@@ -477,11 +477,13 @@ void Sema::StartOpenMPDSABlock(OpenMPDirectiveKind DKind,
                                Scope *CurScope) {
   DSAStack->push(DKind, DirName, CurScope);
 
-  if (DKind == OMPD_parallel_for && DSAStack->isParentOrdered()) {
+  if ((DKind == OMPD_parallel_for || DKind == OMPD_parallel_for_simd) &&
+      DSAStack->isParentOrdered()) {
     DSAStack->setOrdered();
     DSAStack->clearParentOrdered();
   }
-  if ((DKind == OMPD_parallel_for || DKind == OMPD_parallel_sections) &&
+  if ((DKind == OMPD_parallel_for || DKind == OMPD_parallel_sections ||
+       DKind == OMPD_parallel_for_simd) &&
       DSAStack->isParentNowait()) {
     DSAStack->setNowait();
     DSAStack->clearParentNowait();
@@ -515,7 +517,8 @@ void Sema::EndOpenMPDSABlock(Stmt *CurDirective) {
               VD->getType().getNonReferenceType().getCanonicalType();
           OpenMPDirectiveKind DKind = DSAStack->getCurrentDirective();
           if ((DSAStack->getTopDSA(VD, DE) == OMPC_lastprivate ||
-               (DKind == OMPD_parallel_for &&
+               ((DKind == OMPD_parallel_for ||
+                 DKind == OMPD_parallel_for_simd)&&
                 DSAStack->hasInnermostDSA(VD, OMPC_lastprivate, OMPD_parallel,
                                           DE))) &&
               !Type->isDependentType()) {
@@ -1380,6 +1383,8 @@ public:
            Stack->hasInnermostDSA(VD, OMPC_reduction, OMPD_parallel, PrevRef) ||
            Stack->hasInnermostDSA(VD, OMPC_reduction, OMPD_parallel_for,
                                   PrevRef) ||
+           Stack->hasInnermostDSA(VD, OMPC_reduction, OMPD_parallel_for_simd,
+                                  PrevRef) ||
            Stack->hasInnermostDSA(VD, OMPC_reduction, OMPD_parallel_sections,
                                   PrevRef))) {
         ErrorFound = true;
@@ -1460,7 +1465,8 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       //  or explicit task region.
       NestingProhibited =
           Kind == OMPD_for || Kind == OMPD_sections ||
-          Kind == OMPD_parallel_for || Kind == OMPD_parallel_sections ||
+          Kind == OMPD_parallel_for || Kind == OMPD_parallel_for_simd ||
+          Kind == OMPD_parallel_sections ||
           Kind == OMPD_single || Kind == OMPD_master || Kind == OMPD_barrier;
       Region = "a worksharing";
       break;
@@ -1481,6 +1487,7 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       //  or explicit task region.
       NestingProhibited = Kind == OMPD_for || Kind == OMPD_sections ||
                           Kind == OMPD_parallel_for ||
+                          Kind == OMPD_parallel_for_simd ||
                           Kind == OMPD_parallel_sections ||
                           Kind == OMPD_single || Kind == OMPD_master ||
                           Kind == OMPD_barrier || Kind == OMPD_ordered;
@@ -1495,6 +1502,7 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       //  explicit task, critical, ordered, atomic, or master region.
       NestingProhibited = Kind == OMPD_for || Kind == OMPD_sections ||
                           Kind == OMPD_parallel_for ||
+                          Kind == OMPD_parallel_for_simd ||
                           Kind == OMPD_parallel_sections ||
                           Kind == OMPD_single || Kind == OMPD_barrier;
       Region = "a master";
@@ -1511,6 +1519,7 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       //  or explicit task region.
       NestingProhibited = Kind == OMPD_for || Kind == OMPD_sections ||
                           Kind == OMPD_parallel_for ||
+                          Kind == OMPD_parallel_for_simd ||
                           Kind == OMPD_parallel_sections ||
                           Kind == OMPD_single || HasNamedDirective ||
                           Kind == OMPD_barrier || Kind == OMPD_ordered;
@@ -1534,6 +1543,12 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       NestingProhibited = true;
       Region = "a for simd";
       break;
+    case OMPD_parallel_for_simd:
+      // OpenMP [2.16, Nesting of Regions, p. 8]
+      //  OpenMP constructs may not be nested inside a simd region.
+      NestingProhibited = true;
+      Region = "a parallel for simd";
+      break;
     case OMPD_ordered:
       // OpenMP [2.16, Nesting of Regions, p. 1]
       //  A worksharing region may not be closely nested inside a worksharing,
@@ -1547,7 +1562,8 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       //  or explicit task region.
       NestingProhibited =
           Kind == OMPD_for || Kind == OMPD_sections ||
-          Kind == OMPD_parallel_for || Kind == OMPD_parallel_sections ||
+          Kind == OMPD_parallel_for || Kind == OMPD_parallel_for_simd ||
+          Kind == OMPD_parallel_sections ||
           Kind == OMPD_single || Kind == OMPD_master || Kind == OMPD_barrier;
       Region = "an ordered";
       break;
@@ -1681,6 +1697,7 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
     Res = ActOnOpenMPSimdDirective(Kind, ClausesWithImplicit, AStmt, StartLoc,
                                    EndLoc);
     break;
+  case OMPD_parallel_for_simd:
   case OMPD_for_simd:
     Res = ActOnOpenMPForSimdDirective(Kind, ClausesWithImplicit, AStmt,
                                       StartLoc, EndLoc);
@@ -1834,7 +1851,8 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
     return false;
   }
 
-  if (Kind == OMPD_simd || Kind == OMPD_for_simd) {
+  if (Kind == OMPD_simd || Kind == OMPD_for_simd ||
+      Kind == OMPD_parallel_for_simd) {
     // OpenMP [2.8.1] No exception can be raised in the simd region.
     EhChecker Check;
     if (CStmt && Check.Visit(CStmt)) {
@@ -4071,7 +4089,8 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
     Kind = DSAStack->getImplicitDSA(VD, DKind, PrevRef);
     if ((Kind != OMPC_shared &&
          (CurrDir == OMPD_for || CurrDir == OMPD_sections ||
-          CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_sections ||
+          CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_for_simd ||
+          CurrDir == OMPD_parallel_sections ||
           CurrDir == OMPD_single)) ||
         (CurrDir == OMPD_task &&
          DSAStack->hasDSA(VD, OMPC_reduction, OMPD_parallel, PrevRef))) {
@@ -4304,7 +4323,8 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
     Kind = DSAStack->getImplicitDSA(VD, DKind, PrevRef);
     if (Kind != OMPC_shared &&
         (CurrDir == OMPD_for || CurrDir == OMPD_sections ||
-         CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_sections)) {
+         CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_for_simd ||
+         CurrDir == OMPD_parallel_sections)) {
       if (Kind == OMPC_unknown) {
         Diag(ELoc, diag::err_omp_required_access)
             << getOpenMPClauseName(OMPC_lastprivate)
@@ -5089,7 +5109,8 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
     Kind = DSAStack->getImplicitDSA(VD, DKind, PrevRef);
     if (Kind != OMPC_shared &&
         (CurrDir == OMPD_for || CurrDir == OMPD_sections ||
-         CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_sections)) {
+         CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_for_simd ||
+         CurrDir == OMPD_parallel_sections)) {
       if (Kind == OMPC_unknown) {
         Diag(ELoc, diag::err_omp_required_access)
             << getOpenMPClauseName(OMPC_reduction)
