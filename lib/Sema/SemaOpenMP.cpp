@@ -187,28 +187,7 @@ OpenMPClauseKind DSAStackTy::getDSA(StackTy::reverse_iterator Iter, VarDecl *D,
   E = 0;
   if (Iter == Stack.rend() - 1) {
     Kind = OMPD_unknown;
-    // OpenMP [2.9.1.1, Data-sharing Attribute Rules for Variables Referenced
-    // in a region but not in construct]
-    //  File-scope or namespace-scope variables referenced in called routines
-    //  in the region are shared unless they appear in a threadprivate
-    //  directive.
-    if (!D->isFunctionOrMethodVarDecl())
-      return OMPC_shared;
-
-    // OpenMP [2.9.1.2, Data-sharing Attribute Rules for Variables Referenced
-    // in a region but not in construct]
-    //  Variables with static storage duration that are declared in called
-    //  routines in the region are shared.
-    if (D->hasGlobalStorage())
-      return OMPC_shared;
-
-    // OpenMP [2.9.1.1, Data-sharing Attribute Rules for Variables Referenced
-    // in a region but not in construct]
-    //  Other variables declared in called routines in the region are private.
-    if (D->isFunctionOrMethodVarDecl())
-      return OMPC_private;
-
-    return OMPC_unknown;
+    return OMPC_shared;
   }
   // OpenMP [2.9.1.1, Data-sharing Attribute Rules for Variables Referenced
   // in a Construct, C/C++, predetermined, p.1]
@@ -4089,6 +4068,7 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
     Kind = DSAStack->getImplicitDSA(VD, DKind, PrevRef);
     if ((Kind != OMPC_shared &&
          (CurrDir == OMPD_for || CurrDir == OMPD_sections ||
+          CurrDir == OMPD_for_simd ||
           CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_for_simd ||
           CurrDir == OMPD_parallel_sections ||
           CurrDir == OMPD_single)) ||
@@ -4323,6 +4303,7 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
     Kind = DSAStack->getImplicitDSA(VD, DKind, PrevRef);
     if (Kind != OMPC_shared &&
         (CurrDir == OMPD_for || CurrDir == OMPD_sections ||
+         CurrDir == OMPD_for_simd ||
          CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_for_simd ||
          CurrDir == OMPD_parallel_sections)) {
       if (Kind == OMPC_unknown) {
@@ -5109,6 +5090,7 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
     Kind = DSAStack->getImplicitDSA(VD, DKind, PrevRef);
     if (Kind != OMPC_shared &&
         (CurrDir == OMPD_for || CurrDir == OMPD_sections ||
+         CurrDir == OMPD_for_simd ||
          CurrDir == OMPD_parallel_for || CurrDir == OMPD_parallel_for_simd ||
          CurrDir == OMPD_parallel_sections)) {
       if (Kind == OMPC_unknown) {
