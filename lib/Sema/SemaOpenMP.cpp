@@ -5619,7 +5619,12 @@ public:
                               SourceLocation(), SourceLocation(),
                               &SemaRef.getASTContext().Idents.get(".depend.i"),
                               CIE->getType(), 0, SC_None);
-          VD->setInit(SemaRef.ActOnIntegerConstant(SourceLocation(), 0).take());
+          ExprResult InitExpr =
+              SemaRef.ActOnIntegerConstant(SourceLocation(), 0);
+          InitExpr =
+              SemaRef.PerformImplicitConversion(InitExpr.take(), CIE->getType(),
+                                                Sema::AA_Casting);
+          VD->setInit(InitExpr.take());
           VD->addAttr(new (SemaRef.Context)
                       OMPLocalAttr(SourceLocation(), SemaRef.Context));
           VD->setReferenced();
