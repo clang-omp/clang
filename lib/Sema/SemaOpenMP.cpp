@@ -1284,7 +1284,8 @@ Sema::DeclGroupPtrTy Sema::ActOnOpenMPDeclareReductionDirective(
       ArrayRef<SourceRange>::iterator IR = TyRanges.begin();
       for (ArrayRef<QualType>::iterator IT = Types.begin(), IE = Types.end();
            IT != IE; ++IT, ++IR) {
-        if (!II->QTy.isNull() && Context.hasSameType(II->QTy, *IT)) {
+        if (!II->QTy.isNull() && !IT->isNull() &&
+            Context.hasSameType(II->QTy, *IT)) {
           Diag(IR->getBegin(), diag::err_omp_reduction_redeclared) << II->QTy
                                                                    << *IR;
           Diag(II->TyRange.getBegin(), diag::note_previous_declaration)
