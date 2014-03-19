@@ -4427,14 +4427,14 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
         // Generate a call to __kmpc_copyprivate.
         {
           // __kmpc_copyprivate(ident_t *loc, int32_t global_tid,
-          //                    int32_t cpy_size, void *cpy_data,
+          //                    size_t cpy_size, void *cpy_data,
           //                    kmp_copy_func cpy_func, int32_t didit);
           llvm::Value *Loc =
               CGM.CreateIntelOpenMPRTLLoc(C->getLocStart(), *this);
           llvm::Value *GTid =
               CGM.CreateOpenMPGlobalThreadNum(C->getLocStart(), *this);
           int32_t CpySizeInt = CGM.getDataLayout().getTypeAllocSize(CpyType);
-          llvm::Value *CpySize = llvm::ConstantInt::get(Int32Ty, CpySizeInt);
+          llvm::Value *CpySize = llvm::ConstantInt::get(SizeTy, CpySizeInt);
           llvm::Value *LoadDidIt = EmitLoadOfScalar(
               DidIt, false, CGM.getDataLayout().getPrefTypeAlignment(
                                 DidIt->getType()->getSequentialElementType()),
