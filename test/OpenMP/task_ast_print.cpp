@@ -20,7 +20,7 @@ T tmain (T argc, S **argv) {
 // CHECK-NEXT: a = 2;
 #pragma omp task if(b), final(a), untied, default(shared) mergeable, private(argc,b),firstprivate(argv, c),shared(d,f) depend(in:argc) depend(out : c) depend(inout:arr[1:argc][:][0:23], argc)
   foo();
-// CHECK: #pragma omp task if(.omp.if.var.) final(.omp.final.var.) untied default(shared) mergeable private(argc,b) firstprivate(argv,c) shared(d,f) depend(in: argc) depend(out: c) depend(inout: arr[1:argc][0:123 - 0][0:23],argc)
+// CHECK: #pragma omp task if(b) final(a) untied default(shared) mergeable private(argc,b) firstprivate(argv,c) shared(d,f) depend(in: argc) depend(out: c) depend(inout: arr[1:argc][0:123 - 0][0:23],argc)
 // CHECK-NEXT: foo();
   return T();
 }
@@ -36,7 +36,7 @@ int main (int argc, char **argv) {
 // CHECK-NEXT: a = 2;
 #pragma omp task if(b), final(a), untied, default(shared) mergeable, private(argc,b),firstprivate(argv, c),shared(d,f) depend(in:argc) depend(out : c) depend(inout:arr[1:argc][:][0:23], argc)
   foo();
-// CHECK: #pragma omp task if(.omp.if.var.) final(.omp.final.var.) untied default(shared) mergeable private(argc,b) firstprivate(argv,c) shared(d,f) depend(in: argc) depend(out: c) depend(inout: arr[1:argc][0:123 - 0][0:23],argc)
+// CHECK: #pragma omp task if(b) final(a) untied default(shared) mergeable private(argc,b) firstprivate(argv,c) shared(d,f) depend(in: argc) depend(out: c) depend(inout: arr[1:argc][0:123 - 0][0:23],argc)
 // CHECK-NEXT: foo();
   return tmain(argc, argv);
 }

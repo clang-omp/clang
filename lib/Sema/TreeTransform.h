@@ -1297,9 +1297,11 @@ public:
                                            ArrayRef<OMPClause *> Clauses,
                                            Stmt *AStmt,
                                            SourceLocation StartLoc,
-                                           SourceLocation EndLoc) {
+                                           SourceLocation EndLoc,
+                                           OpenMPDirectiveKind ConstructType) {
     return getSema().ActOnOpenMPExecutableDirective(Kind, DirName, Clauses,
-                                                    AStmt, StartLoc, EndLoc);
+                                                    AStmt, StartLoc, EndLoc,
+                                                    ConstructType);
   }
 
   /// \brief Build a new OpenMP 'if' clause.
@@ -6648,13 +6650,21 @@ TreeTransform<Derived>::TransformOMPExecutableDirective(
     DirName = cast<OMPCriticalDirective>(D)->getDirectiveName();
     DirName = getDerived().TransformDeclarationNameInfo(DirName);
   }
+  OpenMPDirectiveKind ConstructType = OMPD_unknown;
+  if (D->getDirectiveKind() == OMPD_cancel) {
+    ConstructType = cast<OMPCancelDirective>(D)->getConstructType();
+  } else if (D->getDirectiveKind() == OMPD_cancellation_point) {
+    ConstructType =
+      cast<OMPCancellationPointDirective>(D)->getConstructType();
+  }
 
   return getDerived().RebuildOMPExecutableDirective(D->getDirectiveKind(),
                                                     DirName,
                                                     TClauses,
                                                     AStmt,
                                                     D->getLocStart(),
-                                                    D->getLocEnd());
+                                                    D->getLocEnd(),
+                                                    ConstructType);
 }
 
 template<typename Derived>
@@ -6662,6 +6672,36 @@ StmtResult
 TreeTransform<Derived>::TransformOMPParallelDirective(OMPParallelDirective *D) {
   DeclarationNameInfo DirName;
   getDerived().getSema().StartOpenMPDSABlock(OMPD_parallel, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformOMPParallelForDirective(OMPParallelForDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_parallel_for, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformOMPParallelForSimdDirective(OMPParallelForSimdDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_parallel_for_simd, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformOMPParallelSectionsDirective(OMPParallelSectionsDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_parallel_sections, DirName, 0);
   StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
   getDerived().getSema().EndOpenMPDSABlock(Res.get());
   return Res;
@@ -6823,6 +6863,28 @@ StmtResult
 TreeTransform<Derived>::TransformOMPOrderedDirective(OMPOrderedDirective *D) {
   DeclarationNameInfo DirName;
   getDerived().getSema().StartOpenMPDSABlock(OMPD_ordered, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformOMPCancelDirective(OMPCancelDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_cancel, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template<typename Derived>
+StmtResult
+TreeTransform<Derived>::TransformOMPCancellationPointDirective(
+                                       OMPCancellationPointDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_cancellation_point, DirName,
+                                             0);
   StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
   getDerived().getSema().EndOpenMPDSABlock(Res.get());
   return Res;

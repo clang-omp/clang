@@ -14,8 +14,7 @@ template<class T, class N> T reduct(T* arr, N num) {
   T sum = (T)0;
 // CHECK: T sum = (T)0;
 #pragma omp parallel for simd  linear(ind), reduction(+:sum) proc_bind(master)
-// CHECK-NEXT: #pragma omp parallel proc_bind(master)
-// CHECK-NEXT: #pragma omp for simd linear(ind) reduction(+: sum)
+// CHECK-NEXT: #pragma omp parallel for simd linear(ind) reduction(+: sum) proc_bind(master)
   for (i = 0; i < num; ++i) {
     T cur = arr[ind];
     ++ind;
@@ -31,8 +30,7 @@ template<class T> struct S {
     T res;
 // CHECK: T res;
 #pragma omp parallel for simd lastprivate(res) safelen(7) if(m_a)
-// CHECK-NEXT: #pragma omp parallel if(this->m_a)
-// CHECK-NEXT: #pragma omp for simd lastprivate(res) safelen(7)
+// CHECK-NEXT: #pragma omp parallel for simd lastprivate(res) safelen(7) if(this->m_a)
     for (T i = 7; i < m_a; ++i) {
       res = v[i-7] + m_a;
     }
@@ -49,16 +47,14 @@ int main (int argc, char **argv) {
   static int *a;
 // CHECK: static int *a;
 #pragma omp parallel for simd
-// CHECK-NEXT: #pragma omp parallel
-// CHECK-NEXT: #pragma omp for simd
+// CHECK-NEXT: #pragma omp parallel for simd
   for (int i=0; i < 2; ++i)*a=2;
 // CHECK-NEXT: for (int i = 0; i < 2; ++i)
 // CHECK-NEXT: *a = 2;
 #pragma omp parallel for simd private(argc,b),lastprivate(d,f),reduction(+:e) reduction(min : g),  collapse(2) safelen(2) aligned(a:4), linear(k1,k2:8)
   for (int i = 0; i < 10; ++i)
   for (int j = 0; j < 10; ++j) {foo(); k1 += 8; k2 += 8;}
-// CHECK-NEXT: #pragma omp parallel
-// CHECK-NEXT: #pragma omp for simd private(argc,b) lastprivate(d,f) reduction(+: e) reduction(min: g) collapse(2) safelen(2) aligned(a: 4) linear(k1,k2: 8)
+// CHECK-NEXT: #pragma omp parallel for simd private(argc,b) lastprivate(d,f) reduction(+: e) reduction(min: g) collapse(2) safelen(2) aligned(a: 4) linear(k1,k2: 8)
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: for (int j = 0; j < 10; ++j) {
 // CHECK-NEXT: foo();
@@ -69,27 +65,23 @@ int main (int argc, char **argv) {
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();
 #pragma omp parallel for simd aligned(a) linear(a)
-// CHECK-NEXT: #pragma omp parallel
-// CHECK-NEXT: #pragma omp for simd aligned(a) linear(a)
+// CHECK-NEXT: #pragma omp parallel for simd aligned(a) linear(a)
   for (int i = 0; i < 10; ++i)foo();
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();
 #pragma omp parallel for simd collapse(1)
-// CHECK:      #pragma omp parallel
-// CHECK-NEXT: #pragma omp for simd collapse(1)
+// CHECK-NEXT: #pragma omp parallel for simd collapse(1)
   for (int i = 0; i < 10; ++i)foo();
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();
   const int CLEN=4;
 #pragma omp parallel for simd safelen(CLEN)
-// CHECK:      #pragma omp parallel
-// CHECK-NEXT: #pragma omp for simd safelen(4)
+// CHECK: #pragma omp parallel for simd safelen(4)
   for (int i = 0; i < 10; ++i)foo();
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();
 #pragma omp parallel for simd aligned(a:CLEN) linear(a:CLEN) safelen(CLEN)
-// CHECK-NEXT: #pragma omp parallel
-// CHECK-NEXT: #pragma omp for simd aligned(a: 4) linear(a: 4) safelen(4)
+// CHECK-NEXT: #pragma omp parallel for simd aligned(a: 4) linear(a: 4) safelen(4)
   for (int i = 0; i < 10; ++i)foo();
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();

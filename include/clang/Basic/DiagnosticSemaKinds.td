@@ -6866,6 +6866,12 @@ def err_omp_expected_var_name_or_array_item : Error<
   "expected variable name or an array item">;
 def err_omp_depend_arg_not_lvalue : Error<
   "argument expression must be an l-value">;
+def err_omp_prohibited_cancel_region : Error <
+  "region must be nested inside a taskgroup region">;
+def err_omp_prohibited_cancel_region_nowait : Error <
+  "region cannot be nested inside region with 'nowait' clause">;
+def err_omp_prohibited_cancel_region_ordered : Error <
+  "region cannot be nested inside region with 'ordered' clause">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {

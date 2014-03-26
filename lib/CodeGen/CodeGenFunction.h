@@ -170,6 +170,7 @@ public:
   /// AllocaInsertPoint - This is an instruction in the entry block before which
   /// we prefer to insert allocas.
   llvm::AssertingVH<llvm::Instruction> AllocaInsertPt;
+  llvm::AssertingVH<llvm::Instruction> FirstprivateInsertPt;
 
   /// \brief API for captured statement code generation.
   class CGCapturedStmtInfo {
@@ -2038,6 +2039,7 @@ public:
   void EmitCXXForRangeStmt(const CXXForRangeStmt &S);
 
   LValue InitCapturedStruct(const CapturedStmt &S);
+  void InitOpenMPFunction(llvm::Value *Context, const CapturedStmt &S);
   llvm::Function *EmitCapturedStmt(const CapturedStmt &S, CapturedRegionKind K);
   llvm::Function *GenerateCapturedStmtFunction(const CapturedDecl *CD,
                                                const RecordDecl *RD,
@@ -2053,18 +2055,19 @@ public:
 
 
   llvm::Value *GenerateCapturedStmtArgument(const CapturedStmt &S);
-  void EmitCapturedStmtInlined(const CapturedStmt &S, CapturedRegionKind K,
-                               llvm::Value *Arg);
   LValue GetCapturedField(const VarDecl *VD);
   void EmitUniversalStore(llvm::Value *Dst, llvm::Value *Src, QualType ExprTy);
   void EmitUniversalStore(LValue Dst, llvm::Value *Src, QualType ExprTy);
 public:
   void EmitOMPParallelDirective(const OMPParallelDirective &S);
+  void EmitOMPParallelForDirective(const OMPParallelForDirective &S);
+  void EmitOMPParallelForSimdDirective(const OMPParallelForSimdDirective &S);
   void EmitOMPForDirective(const OMPForDirective &S);
   void EmitOMPSimdDirective(const OMPSimdDirective &S);
   void EmitOMPForSimdDirective(const OMPForSimdDirective &S);
   void EmitOMPTaskDirective(const OMPTaskDirective &S);
   void EmitOMPSectionsDirective(const OMPSectionsDirective &S);
+  void EmitOMPParallelSectionsDirective(const OMPParallelSectionsDirective &S);
   void EmitOMPSectionDirective(const OMPSectionDirective &S);
   void EmitInitOMPClause(const OMPClause &C,
                          const OMPExecutableDirective &S);
@@ -2126,6 +2129,9 @@ public:
   void EmitOMPTaskyieldDirective(const OMPTaskyieldDirective &S);
   void EmitOMPTaskwaitDirective(const OMPTaskwaitDirective &S);
   void EmitOMPFlushDirective(const OMPFlushDirective &S);
+  void EmitOMPCancelDirective(const OMPCancelDirective &S);
+  void EmitOMPCancellationPointDirective(
+                             const OMPCancellationPointDirective &S);
   void EmitOMPAtomicDirective(const OMPAtomicDirective &S);
   void EmitOMPTaskgroupDirective(const OMPTaskgroupDirective &S);
   void EmitOMPMasterDirective(const OMPMasterDirective &S);
@@ -2149,6 +2155,11 @@ public:
     llvm::Value *Src);
   void EmitOMPDirectiveWithLoop(
     OpenMPDirectiveKind DKind,
+    OpenMPDirectiveKind SKind,
+    const OMPExecutableDirective &S);
+  void EmitOMPSectionsDirective(
+    OpenMPDirectiveKind DKind,
+    OpenMPDirectiveKind SKind,
     const OMPExecutableDirective &S);
 
   //===--------------------------------------------------------------------===//

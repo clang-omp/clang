@@ -343,6 +343,128 @@ public:
   }
 };
 
+/// \brief This represents '#pragma omp parallel for' directive.
+///
+/// \code
+/// #pragma omp parallel for private(a,b) reduction(+: c,d) ordered
+/// \endcode
+/// In this example directive '#pragma omp parallel for' has clauses 'private'
+/// with the variables 'a' and 'b', 'reduction' with operator '+' and
+/// variables 'c' and 'd' and 'ordered'.
+///
+class OMPParallelForDirective : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPParallelForDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                          unsigned CollapsedNum, unsigned N)
+    : OMPExecutableDirective(OMPParallelForDirectiveClass, OMPD_parallel_for,
+                             StartLoc, EndLoc, N,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPParallelForDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true,
+                             5 + CollapsedNum),
+      CollapsedNum(CollapsedNum) { }
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPParallelForDirective(unsigned CollapsedNum, unsigned N)
+    : OMPExecutableDirective(OMPParallelForDirectiveClass, OMPD_parallel_for,
+                             SourceLocation(), SourceLocation(), N,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPParallelForDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 5 + CollapsedNum),
+                             CollapsedNum(CollapsedNum) { }
+  // 5 is for AssociatedStmt, NewIterVar, NewIterEnd, Init, Final
+  // and CollapsedNum is for Counters.
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum &&
+           "Number of variables is not the same as the number of collapsed loops.");
+    std::copy(VL.begin(), VL.end(),
+              &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
+  }
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPParallelForDirective *Create(const ASTContext &C,
+                                         SourceLocation StartLoc,
+                                         SourceLocation EndLoc,
+                                         ArrayRef<OMPClause *> Clauses,
+                                         Stmt *AssociatedStmt, Expr *NewIterVar,
+                                         Expr *NewIterEnd, Expr *Init, Expr *Final,
+                                         ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPParallelForDirective *CreateEmpty(const ASTContext &C,
+                                              unsigned CollapsedNum,
+                                              unsigned N, EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt * const *>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(reinterpret_cast<Expr * const *>(&(reinterpret_cast<Stmt * const *>(&getClausesStorage()[getNumClauses()])[5])),
+                              CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPParallelForDirectiveClass;
+  }
+};
+
 /// \brief This represents '#pragma omp simd' directive.
 ///
 /// \code
@@ -581,6 +703,125 @@ public:
   }
 };
 
+/// \brief This represents '#pragma omp parallel for simd' directive.
+///
+/// \code
+/// #pragma omp parallel for simd private(a,b) linear(i,j:s) reduction(+:c,d)
+/// \endcode
+/// In this example directive '#pragma omp parallel for simd' has clauses 'private'
+/// with the variables 'a' and 'b', 'linear' with variables 'i', 'j' and
+/// linear step 's', 'reduction' with operator '+' and variables 'c' and 'd'.
+///
+class OMPParallelForSimdDirective : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPParallelForSimdDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                              unsigned CollapsedNum, unsigned N)
+    : OMPExecutableDirective(OMPParallelForSimdDirectiveClass, OMPD_parallel_for_simd,
+                             StartLoc, EndLoc, N,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPParallelForSimdDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true,
+                             5 + CollapsedNum),
+      CollapsedNum(CollapsedNum) { }
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPParallelForSimdDirective(unsigned CollapsedNum, unsigned N)
+    : OMPExecutableDirective(OMPParallelForSimdDirectiveClass, OMPD_parallel_for_simd,
+                             SourceLocation(), SourceLocation(), N,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPParallelForSimdDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 5 + CollapsedNum),
+                             CollapsedNum(CollapsedNum) { }
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum &&
+           "Number of variables is not the same as the number of collapsed loops.");
+    std::copy(VL.begin(), VL.end(),
+              &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
+  }
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPParallelForSimdDirective *Create(const ASTContext &C,
+                                             SourceLocation StartLoc,
+                                             SourceLocation EndLoc,
+                                             ArrayRef<OMPClause *> Clauses,
+                                             Stmt *AssociatedStmt, Expr *NewIterVar,
+                                             Expr *NewIterEnd, Expr *Init, Expr *Final,
+                                             ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPParallelForSimdDirective *CreateEmpty(const ASTContext &C, unsigned CollapsedNum,
+                                                  unsigned N, EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt * const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[4]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(reinterpret_cast<Expr * const *>(&(reinterpret_cast<Stmt * const *>(&reinterpret_cast<OMPClause * const *>(this + 1)[getNumClauses()])[5])),
+                              CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPParallelForSimdDirectiveClass;
+  }
+};
+
 /// \brief This represents '#pragma omp sections' directive.
 ///
 /// \code
@@ -642,6 +883,70 @@ public:
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == OMPSectionsDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp parallel sections' directive.
+///
+/// \code
+/// #pragma omp parallel sections private(a,b) reduction(+: c,d)
+/// \endcode
+/// In this example directive '#pragma omp parallel sections' has clauses 'private'
+/// with the variables 'a' and 'b', 'reduction' with operator '+' and
+/// variables 'c' and 'd'.
+///
+class OMPParallelSectionsDirective : public OMPExecutableDirective {
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPParallelSectionsDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                       unsigned N)
+    : OMPExecutableDirective(OMPParallelSectionsDirectiveClass, OMPD_parallel_sections,
+                             StartLoc, EndLoc, N,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPParallelSectionsDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPParallelSectionsDirective(unsigned N)
+    : OMPExecutableDirective(OMPParallelSectionsDirectiveClass, OMPD_parallel_sections,
+                             SourceLocation(), SourceLocation(), N,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPParallelSectionsDirective),
+                                                                                     sizeof(OMPClause *))),
+                             true, 1) { }
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPParallelSectionsDirective *Create(const ASTContext &C,
+                                              SourceLocation StartLoc,
+                                              SourceLocation EndLoc,
+                                              ArrayRef<OMPClause *> Clauses,
+                                              Stmt *AssociatedStmt);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPParallelSectionsDirective *CreateEmpty(const ASTContext &C, unsigned N,
+                                                   EmptyShell);
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPParallelSectionsDirectiveClass;
   }
 };
 
@@ -1384,6 +1689,145 @@ public:
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == OMPOrderedDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp cancel' directive.
+///
+/// \code
+/// #pragma omp cancel parallel
+/// \endcode
+/// In this example directive '#pragma omp cancel' has construct type
+/// 'parallel'.
+///
+class OMPCancelDirective : public OMPExecutableDirective {
+  OpenMPDirectiveKind ConstructType;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  /// \param ConstructType Construct type.
+  ///
+  OMPCancelDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                     unsigned N, OpenMPDirectiveKind ConstructType)
+    : OMPExecutableDirective(OMPCancelDirectiveClass, OMPD_cancel,
+                             StartLoc, EndLoc, N,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPCancelDirective),
+                                                                                     sizeof(OMPClause *))),
+                             false, 0),
+      ConstructType(ConstructType) { }
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  /// \param ConstructType Construct type.
+  ///
+  explicit OMPCancelDirective(unsigned N, OpenMPDirectiveKind ConstructType)
+    : OMPExecutableDirective(OMPCancelDirectiveClass, OMPD_cancel,
+                             SourceLocation(), SourceLocation(), N,
+                             reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                                            llvm::RoundUpToAlignment(sizeof(OMPCancelDirective),
+                                                                                     sizeof(OMPClause *))),
+                             false, 0),
+      ConstructType(ConstructType) { }
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param ConstructType Construct type.
+  ///
+  static OMPCancelDirective *Create(const ASTContext &C,
+                                    SourceLocation StartLoc,
+                                    SourceLocation EndLoc,
+                                    ArrayRef<OMPClause *> Clauses,
+                                    OpenMPDirectiveKind ConstructType);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  /// \param ConstructType Construct type.
+  ///
+  static OMPCancelDirective *CreateEmpty(const ASTContext &C, unsigned N,
+                                         OpenMPDirectiveKind ConstructType,
+                                         EmptyShell);
+
+  /// \brief Fetches construct type.
+  OpenMPDirectiveKind getConstructType() const { return ConstructType; }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPCancelDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp cancellation point' directive.
+///
+/// \code
+/// #pragma omp cancellation point parallel
+/// \endcode
+/// In this example directive '#pragma omp cancellation point' has construct
+/// type 'parallel'.
+///
+class OMPCancellationPointDirective : public OMPExecutableDirective {
+  OpenMPDirectiveKind ConstructType;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param ConstructType Construct type.
+  ///
+  OMPCancellationPointDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                     OpenMPDirectiveKind ConstructType)
+    : OMPExecutableDirective(OMPCancellationPointDirectiveClass,
+                             OMPD_cancellation_point,
+                             StartLoc, EndLoc, 0, 0,
+                             false, 0),
+      ConstructType(ConstructType) { }
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param ConstructType Construct type.
+  ///
+  explicit OMPCancellationPointDirective(OpenMPDirectiveKind ConstructType)
+    : OMPExecutableDirective(OMPCancellationPointDirectiveClass,
+                             OMPD_cancellation_point,
+                             SourceLocation(), SourceLocation(), 0, 0,
+                             false, 0),
+      ConstructType(ConstructType) { }
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param ConstructType Construct type.
+  ///
+  static OMPCancellationPointDirective *Create(
+                                          const ASTContext &C,
+                                          SourceLocation StartLoc,
+                                          SourceLocation EndLoc,
+                                          OpenMPDirectiveKind ConstructType);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param ConstructType Construct type.
+  ///
+  static OMPCancellationPointDirective *CreateEmpty(
+                                           const ASTContext &C,
+                                           OpenMPDirectiveKind ConstructType,
+                                           EmptyShell);
+
+  /// \brief Fetches construct type.
+  OpenMPDirectiveKind getConstructType() const { return ConstructType; }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPCancellationPointDirectiveClass;
   }
 };
 

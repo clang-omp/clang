@@ -125,8 +125,8 @@ int main(int argc, char **argv) {
   #pragma omp simd reduction(|| : i) 
   for (int x = 0; x < 10; ++x) foo();
   #pragma omp parallel
-  #pragma omp simd private(i), reduction(|| : i) // expected-error {{private variable cannot be reduction}} expected-note {{defined as private}}
-  for (i = 0; i < 10; ++i) foo();
+  #pragma omp simd private(i), reduction(|| : i) // expected-error {{private variable cannot be reduction}} expected-note 2 {{defined as private}}
+  for (i = 0; i < 10; ++i) foo(); // expected-error {{loop iteration variable may not be private}}
   #pragma omp parallel
   #pragma omp simd reduction(+ : p), reduction(+ : p) // expected-error {{variable can appear only once in OpenMP 'reduction' clause}} expected-note {{previously referenced here}}
   for (i = 0; i < 10; ++i) foo();

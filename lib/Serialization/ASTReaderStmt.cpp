@@ -2162,6 +2162,36 @@ void ASTStmtReader::VisitOMPForDirective(OMPForDirective *D) {
   D->setCounters(Vars);
 }
 
+void ASTStmtReader::VisitOMPParallelForDirective(OMPParallelForDirective *D) {
+  VisitStmt(D);
+  Idx += 2;
+  VisitOMPExecutableDirective(D);
+  D->setNewIterVar(Reader.ReadSubExpr());
+  D->setNewIterEnd(Reader.ReadSubExpr());
+  D->setInit(Reader.ReadSubExpr());
+  unsigned NumVars = D->getCollapsedNumber();
+  SmallVector<Expr *, 16> Vars;
+  Vars.reserve(NumVars);
+  for (unsigned i = 0; i != NumVars; ++i)
+    Vars.push_back(Reader.ReadSubExpr());
+  D->setCounters(Vars);
+}
+
+void ASTStmtReader::VisitOMPParallelForSimdDirective(OMPParallelForSimdDirective *D) {
+  VisitStmt(D);
+  Idx += 2;
+  VisitOMPExecutableDirective(D);
+  D->setNewIterVar(Reader.ReadSubExpr());
+  D->setNewIterEnd(Reader.ReadSubExpr());
+  D->setInit(Reader.ReadSubExpr());
+  unsigned NumVars = D->getCollapsedNumber();
+  SmallVector<Expr *, 16> Vars;
+  Vars.reserve(NumVars);
+  for (unsigned i = 0; i != NumVars; ++i)
+    Vars.push_back(Reader.ReadSubExpr());
+  D->setCounters(Vars);
+}
+
 void ASTStmtReader::VisitOMPSimdDirective(OMPSimdDirective *D) {
   VisitStmt(D);
   Idx += 2;
@@ -2193,6 +2223,12 @@ void ASTStmtReader::VisitOMPForSimdDirective(OMPForSimdDirective *D) {
 }
 
 void ASTStmtReader::VisitOMPSectionsDirective(OMPSectionsDirective *D) {
+  VisitStmt(D);
+  ++Idx;
+  VisitOMPExecutableDirective(D);
+}
+
+void ASTStmtReader::VisitOMPParallelSectionsDirective(OMPParallelSectionsDirective *D) {
   VisitStmt(D);
   ++Idx;
   VisitOMPExecutableDirective(D);
@@ -2272,6 +2308,19 @@ void ASTStmtReader::VisitOMPFlushDirective(OMPFlushDirective *D) {
 }
 
 void ASTStmtReader::VisitOMPOrderedDirective(OMPOrderedDirective *D) {
+  VisitStmt(D);
+  ++Idx;
+  VisitOMPExecutableDirective(D);
+}
+
+void ASTStmtReader::VisitOMPCancelDirective(OMPCancelDirective *D) {
+  VisitStmt(D);
+  Idx += 2;
+  VisitOMPExecutableDirective(D);
+}
+
+void ASTStmtReader::VisitOMPCancellationPointDirective(
+                                OMPCancellationPointDirective *D) {
   VisitStmt(D);
   ++Idx;
   VisitOMPExecutableDirective(D);
@@ -2761,6 +2810,16 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       S = OMPForDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
       }
       break;
+    case STMT_OMP_PARALLEL_FOR_DIRECTIVE: {
+      unsigned Val = Record[ASTStmtReader::NumStmtFields];
+      S = OMPParallelForDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+      }
+      break;
+    case STMT_OMP_PARALLEL_FOR_SIMD_DIRECTIVE: {
+      unsigned Val = Record[ASTStmtReader::NumStmtFields];
+      S = OMPParallelForSimdDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+      }
+      break;
     case STMT_OMP_SIMD_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
       S = OMPSimdDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
@@ -2773,6 +2832,9 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       break;
     case STMT_OMP_SECTIONS_DIRECTIVE:
       S = OMPSectionsDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      break;
+    case STMT_OMP_PARALLEL_SECTIONS_DIRECTIVE:
+      S = OMPParallelSectionsDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_SECTION_DIRECTIVE:
       S = OMPSectionDirective::CreateEmpty(Context, Empty);
@@ -2809,6 +2871,18 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       break;
     case STMT_OMP_ORDERED_DIRECTIVE:
       S = OMPOrderedDirective::CreateEmpty(Context, Empty);
+      break;
+    case STMT_OMP_CANCEL_DIRECTIVE:
+      S =
+        OMPCancelDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields],
+                                        static_cast<OpenMPDirectiveKind>(Record[ASTStmtReader::NumStmtFields + 1]),
+                                        Empty);
+      break;
+    case STMT_OMP_CANCELLATION_POINT_DIRECTIVE:
+      S = OMPCancellationPointDirective::CreateEmpty(
+             Context,
+             static_cast<OpenMPDirectiveKind>(Record[ASTStmtReader::NumStmtFields]),
+             Empty);
       break;
 
     case EXPR_CXX_OPERATOR_CALL:

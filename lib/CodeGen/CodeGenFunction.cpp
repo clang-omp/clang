@@ -259,6 +259,11 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
   llvm::Instruction *Ptr = AllocaInsertPt;
   AllocaInsertPt = 0;
   Ptr->eraseFromParent();
+  if (FirstprivateInsertPt) {
+    Ptr = FirstprivateInsertPt;
+    FirstprivateInsertPt = 0;
+    Ptr->eraseFromParent();
+  }
 
   // If someone took the address of a label but never did an indirect goto, we
   // made a zero entry PHI node, which is illegal, zap it now.
@@ -546,6 +551,7 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
   // folded.
   llvm::Value *Undef = llvm::UndefValue::get(Int32Ty);
   AllocaInsertPt = new llvm::BitCastInst(Undef, Int32Ty, "", EntryBB);
+  FirstprivateInsertPt = 0;
   if (Builder.isNamePreserving())
     AllocaInsertPt->setName("allocapt");
 

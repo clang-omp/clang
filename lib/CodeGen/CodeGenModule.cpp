@@ -3251,7 +3251,7 @@ CodeGenModule::OpenMPSupportStackTy::OMPStackElemTy::OMPStackElemTy(CodeGenModul
     LastprivateBB(0), LastprivateIP(0), LastprivateEndBB(0), LastIterVar(0), TaskFlags(0),
     PTaskTValue(0), PTask(0), UntiedPartIdAddr(0), UntiedCounter(0), UntiedSwitch(0),
     NoWait(true), Mergeable(false), Schedule(0), ChunkSize(0), NewTask(false),
-    Untied(false), HasFirstPrivate(false), HasLastPrivate(false), TaskPrivateTy(0),
+    Untied(false), HasLastPrivate(false), TaskPrivateTy(0),
     TaskPrivateQTy(), TaskPrivateBase(0) { }
 
 CodeGenFunction &CodeGenModule::OpenMPSupportStackTy::getCGFForReductionFunction() {
@@ -3407,20 +3407,6 @@ void CodeGenModule::OpenMPSupportStackTy::setOrdered(bool Flag) {
 
 bool CodeGenModule::OpenMPSupportStackTy::getOrdered() {
   return OpenMPStack.back().Ordered;
-}
-
-void CodeGenModule::OpenMPSupportStackTy::setHasFirstPrivate(bool Flag) {
-  OpenMPStack.back().HasFirstPrivate = Flag;
-//  for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
-//                                    E = OpenMPStack.rend();
-//       I != E; ++I) {
-//    I->HasFirstPrivate = I->HasFirstPrivate || Flag;
-//    if (I->NewTask) return;
-//  }
-}
-
-bool CodeGenModule::OpenMPSupportStackTy::hasFirstPrivate() {
-  return OpenMPStack.back().HasFirstPrivate;
 }
 
 void CodeGenModule::OpenMPSupportStackTy::setHasLastPrivate(bool Flag) {

@@ -310,6 +310,17 @@ bool clang::isAllowedClauseForDirective(OpenMPDirectiveKind DKind,
       break;
     }
     break;
+  case OMPD_cancel:
+    switch (CKind) {
+#define OPENMP_CANCEL_CLAUSE(Name) \
+    case OMPC_##Name: return true;
+#include "clang/Basic/OpenMPKinds.def"
+    default:
+      break;
+    }
+    break;
+  case OMPD_cancellation_point:
+    return false;
   default:
     break;
   }

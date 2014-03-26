@@ -2085,9 +2085,13 @@ enum CXCursorKind {
   CXCursor_OMPOrderedDirective           = 246,
   CXCursor_OMPSimdDirective              = 247,
   CXCursor_OMPForSimdDirective           = 248,
+  CXCursor_OMPParallelForDirective       = 249,
+  CXCursor_OMPParallelForSimdDirective   = 250,
+  CXCursor_OMPParallelSectionsDirective  = 251,
+  CXCursor_OMPCancelDirective            = 252,
+  CXCursor_OMPCancellationPointDirective = 253,
 
-
-  CXCursor_LastStmt                      = CXCursor_OMPForSimdDirective,
+  CXCursor_LastStmt                      = CXCursor_OMPCancellationPointDirective,
 
   /**
    * \brief Cursor that represents the translation unit itself.

@@ -2202,6 +2202,8 @@ private:
 
   //===--------------------------------------------------------------------===//
   // OpenMP: Directives and clauses.
+  /// \brief Parses OpenMP directive.
+  OpenMPDirectiveKind ParseOpenMPDirective();
   /// \brief Parses declarative OpenMP directives.
   DeclGroupPtrTy ParseOpenMPDeclarativeDirective(AccessSpecifier AS);
   /// \brief Late parsing of declarative OpenMP directives.

@@ -96,8 +96,8 @@ int main(int argc, char **argv) {
   for (i = 0; i < argc; ++i) foo();
   #pragma omp simd lastprivate(h) // expected-error {{threadprivate or thread local variable cannot be lastprivate}}
   for (i = 0; i < argc; ++i) foo();
-  #pragma omp simd private(i), lastprivate(i) // expected-error {{private variable cannot be lastprivate}} expected-note{{defined as private}}
-  for (i = 0; i < argc; ++i) foo();
+  #pragma omp simd private(i), lastprivate(i) // expected-error {{private variable cannot be lastprivate}} expected-note 2 {{defined as private}}
+  for (i = 0; i < argc; ++i) foo(); // expected-error {{loop iteration variable may not be private}}
   #pragma omp parallel shared(i)
   #pragma omp simd lastprivate(i)
   for (i = 0; i < argc; ++i) foo();

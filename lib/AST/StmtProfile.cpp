@@ -284,6 +284,16 @@ StmtProfiler::VisitOMPParallelDirective(const OMPParallelDirective *S) {
 }
 
 void
+StmtProfiler::VisitOMPParallelForDirective(const OMPParallelForDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void
+StmtProfiler::VisitOMPParallelForSimdDirective(const OMPParallelForSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void
 StmtProfiler::VisitOMPForDirective(const OMPForDirective *S) {
   VisitOMPExecutableDirective(S);
 }
@@ -300,6 +310,11 @@ StmtProfiler::VisitOMPForSimdDirective(const OMPForSimdDirective *S) {
 
 void
 StmtProfiler::VisitOMPSectionsDirective(const OMPSectionsDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void
+StmtProfiler::VisitOMPParallelSectionsDirective(const OMPParallelSectionsDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 
@@ -360,6 +375,17 @@ StmtProfiler::VisitOMPFlushDirective(const OMPFlushDirective *S) {
 
 void
 StmtProfiler::VisitOMPOrderedDirective(const OMPOrderedDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void
+StmtProfiler::VisitOMPCancelDirective(const OMPCancelDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void
+StmtProfiler::VisitOMPCancellationPointDirective(
+                            const OMPCancellationPointDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 

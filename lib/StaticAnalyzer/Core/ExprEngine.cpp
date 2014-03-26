@@ -708,10 +708,13 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::WhileStmtClass:
     case Expr::MSDependentExistsStmtClass:
     case Stmt::OMPParallelDirectiveClass:
+    case Stmt::OMPParallelForDirectiveClass:
+    case Stmt::OMPParallelForSimdDirectiveClass:
     case Stmt::OMPForDirectiveClass:
     case Stmt::OMPSimdDirectiveClass:
     case Stmt::OMPForSimdDirectiveClass:
     case Stmt::OMPSectionsDirectiveClass:
+    case Stmt::OMPParallelSectionsDirectiveClass:
     case Stmt::OMPSectionDirectiveClass:
     case Stmt::OMPSingleDirectiveClass:
     case Stmt::OMPTaskDirectiveClass:
@@ -724,6 +727,8 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::OMPAtomicDirectiveClass:
     case Stmt::OMPFlushDirectiveClass:
     case Stmt::OMPOrderedDirectiveClass:
+    case Stmt::OMPCancelDirectiveClass:
+    case Stmt::OMPCancellationPointDirectiveClass:
     case Stmt::CapturedStmtClass:
       llvm_unreachable("Stmt should not be in analyzer evaluation loop");
 

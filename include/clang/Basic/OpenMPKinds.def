@@ -60,6 +60,9 @@
 #ifndef OPENMP_FLUSH_CLAUSE
 #  define OPENMP_FLUSH_CLAUSE(Name)
 #endif
+#ifndef OPENMP_CANCEL_CLAUSE
+#  define OPENMP_CANCEL_CLAUSE(Name)
+#endif
 #ifndef OPENMP_DEFAULT_KIND
 #  define OPENMP_DEFAULT_KIND(Name)
 #endif
@@ -95,12 +98,14 @@ OPENMP_DIRECTIVE(atomic)
 OPENMP_DIRECTIVE(flush)
 OPENMP_DIRECTIVE(ordered)
 OPENMP_DIRECTIVE(declare)
+OPENMP_DIRECTIVE(cancel)
 OPENMP_DIRECTIVE_EXT(parallel_for, "parallel for")
 OPENMP_DIRECTIVE_EXT(parallel_sections, "parallel sections")
 OPENMP_DIRECTIVE_EXT(declare_reduction, "declare reduction")
 OPENMP_DIRECTIVE_EXT(declare_simd, "declare simd")
 OPENMP_DIRECTIVE_EXT(for_simd, "for simd")
 OPENMP_DIRECTIVE_EXT(parallel_for_simd, "parallel for simd")
+OPENMP_DIRECTIVE_EXT(cancellation_point, "cancellation point")
 
 // OpenMP clauses.
 OPENMP_CLAUSE(if, OMPIfClause)
@@ -304,6 +309,9 @@ OPENMP_ATOMIC_CLAUSE(seq_cst)
 // Clauses allowed for OpenMP directive 'flush'.
 OPENMP_FLUSH_CLAUSE(flush)
 
+// Clauses allowed for OpenMP directive 'cancel'.
+OPENMP_CANCEL_CLAUSE(if)
+
 #undef OPENMP_DEPENDENCE_TYPE
 #undef OPENMP_REDUCTION_OPERATOR
 #undef OPENMP_DEFAULT_KIND
@@ -311,6 +319,7 @@ OPENMP_FLUSH_CLAUSE(flush)
 #undef OPENMP_DIRECTIVE
 #undef OPENMP_DIRECTIVE_EXT
 #undef OPENMP_CLAUSE
+#undef OPENMP_CANCEL_CLAUSE
 #undef OPENMP_ATOMIC_CLAUSE
 #undef OPENMP_FLUSH_CLAUSE
 #undef OPENMP_SECTIONS_CLAUSE

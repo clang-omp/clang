@@ -868,6 +868,8 @@ def err_omp_expected_reduction_identifier : Error<
   "expected identifier or one of the following operators: '+', '-', '*', '&', '|', '^', '&&' and '||'">;
 def err_omp_unknown_dependence_type : Error<
   "expected dependence type 'in', 'out' or 'inout'">;
+def err_omp_expected_cancel_construct_type : Error <
+  "expected 'parallel', 'sections', 'for' or 'taskgroup' construct type">;
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {

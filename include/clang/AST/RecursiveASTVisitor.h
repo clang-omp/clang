@@ -2377,6 +2377,14 @@ DEF_TRAVERSE_STMT(OMPForDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 
+DEF_TRAVERSE_STMT(OMPParallelForDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPParallelForSimdDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
 DEF_TRAVERSE_STMT(OMPSimdDirective, {
   return TraverseOMPExecutableDirective(S);
 })
@@ -2386,6 +2394,10 @@ DEF_TRAVERSE_STMT(OMPForSimdDirective, {
 })
 
 DEF_TRAVERSE_STMT(OMPSectionsDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPParallelSectionsDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 
@@ -2435,6 +2447,14 @@ DEF_TRAVERSE_STMT(OMPFlushDirective, {
 })
 
 DEF_TRAVERSE_STMT(OMPOrderedDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPCancelDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPCancellationPointDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 

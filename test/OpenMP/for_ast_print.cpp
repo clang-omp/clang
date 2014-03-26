@@ -35,7 +35,7 @@ int main (int argc, char **argv) {
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();
 #pragma omp for schedule(static, argc)
-// CHECK: #pragma omp for schedule(static, .omp.schedule.var.)
+// CHECK: #pragma omp for schedule(static, argc)
   for (int i = 0; i < 10; ++i)foo();
 // CHECK-NEXT: for (int i = 0; i < 10; ++i)
 // CHECK-NEXT: foo();
