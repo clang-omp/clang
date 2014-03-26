@@ -1798,6 +1798,18 @@ static void EmitUntiedTaskSwitch(CodeGenFunction &CGF, bool EmitBranch) {
   }
 }
 
+namespace {
+  struct CallStackRestore : EHScopeStack::Cleanup {
+    llvm::Value *Stack;
+    CallStackRestore(llvm::Value *Stack) : Stack(Stack) {}
+    void Emit(CodeGenFunction &CGF, Flags flags) {
+      llvm::Value *V = CGF.Builder.CreateLoad(Stack);
+      llvm::Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::stackrestore);
+      CGF.Builder.CreateCall(F, V);
+    }
+  };
+}
+
 /// Generate an instructions for '#pragma omp task' directive.
 void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   // Generate shared args for captured stmt.
@@ -1935,7 +1947,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   llvm::Value *RecArg =
       CGF.Builder.CreatePointerCast(Arg2Val, ConvertedType, "(anon)shared");
 
-  llvm::Value *Locker = CGF.Builder.CreateConstInBoundsGEP1_32(
+  llvm::Value *Locker = CGF.Builder.CreateConstGEP1_32(
       CGF.Builder.CreateLoad(TaskTPtr), 1);
   CGM.OpenMPSupport.setPTask(Fn, Arg2Val, LPrivateTy, PrivateRecord, Locker);
   // CodeGen for clauses (call start).
@@ -1958,18 +1970,6 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
            I != E; ++I) {
         if (OMPDependClause *ODC = dyn_cast_or_null<OMPDependClause>(*I)) {
           DependClauses.push_back(ODC);
-          for (unsigned i = 0, e = ODC->varlist_size(); i < e; ++i) {
-            ArrayRef<Expr *> Indicies = ODC->getIndicies(i);
-            for (ArrayRef<Expr *>::iterator II = Indicies.begin(),
-                                            EE = Indicies.end();
-                 II != EE; ++II) {
-              if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
-                if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
-                  CGF.EmitVarDecl(*VD);
-                }
-              }
-            }
-          }
           if (!DependCount) {
             DependCount = CGF.EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
           } else {
@@ -1985,13 +1985,31 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
             CGF.ConvertTypeForMem(getContext().getIntPtrType());
         llvm::Value *ByteCount = CGF.Builder.CreateMul(
             DependCount, llvm::ConstantExpr::getSizeOf(DepTy));
+        if (!CGF.DidCallStackSave) {
+          // Save the stack.
+          llvm::Value *Stack = CGF.CreateTempAlloca(Int8PtrTy, "saved_stack");
+
+          llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave);
+          llvm::Value *V = CGF.Builder.CreateCall(F);
+
+          CGF.Builder.CreateStore(V, Stack);
+
+          CGF.DidCallStackSave = true;
+
+          // Push a cleanup block and restore the stack there.
+          // FIXME: in general circumstances, this should be an EH cleanup.
+          CGF.EHStack.pushCleanup<CallStackRestore>(NormalCleanup, Stack);
+        }
         llvm::Value *Addresses = CGF.Builder.CreateAlloca(Int8Ty, ByteCount);
         DependenceAddresses =
             CGF.Builder.CreateBitCast(Addresses, DepTy->getPointerTo());
         llvm::AllocaInst *Counter =
             CGF.CreateMemTemp(getContext().getSizeType(), ".dep.count.addr");
-        CGF.InitTempAlloca(Counter,
-                           llvm::Constant::getNullValue(DependCount->getType()));
+        CGF.EmitStoreOfScalar(llvm::Constant::getNullValue(SizeTy),
+                              Counter,
+                              false,
+                              getContext().getTypeAlignInChars(getContext().getSizeType()).getQuantity(),
+                              getContext().getSizeType());
         for (SmallVectorImpl<const OMPDependClause *>::iterator
                  I = DependClauses.begin(),
                  E = DependClauses.end();
@@ -2025,6 +2043,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
                  II != EE; ++II, ++IL) {
               if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
                 if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
+                  CGF.EmitVarDecl(*VD);
                   ContBlocks.push_back(CGF.createBasicBlock(".dep.cont."));
                   ThenBlocks.push_back(CGF.createBasicBlock(".dep.then."));
                   ExitBlocks.push_back(CGF.createBasicBlock(".dep.exit."));
@@ -2032,7 +2051,12 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
                   llvm::Value *VDValAddr = CGF.GetAddrOfLocalVar(VD);
                   llvm::Value *VDVal = CGF.Builder.CreateLoad(VDValAddr);
                   llvm::Value *Length = CGF.EmitScalarExpr(*IL);
-                  llvm::Value *Cond = CGF.Builder.CreateICmpNE(VDVal, Length);
+                  llvm::Value *Cond = 0;
+                  if ((*IL)->getType()->hasUnsignedIntegerRepresentation()) {
+                    Cond = CGF.Builder.CreateICmpULT(VDVal, Length);
+                  } else {
+                    Cond = CGF.Builder.CreateICmpSLT(VDVal, Length);
+                  }
                   CGF.Builder.CreateCondBr(Cond, ThenBlocks.back(),
                                            ExitBlocks.back());
                   CGF.EmitBlock(ThenBlocks.back());
@@ -2042,21 +2066,21 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
             llvm::Value *CounterVal =
                 CGF.Builder.CreateLoad(Counter, ".dep.count.");
             llvm::Value *DepElPtr =
-                CGF.Builder.CreateInBoundsGEP(DependenceAddresses, CounterVal);
+                CGF.Builder.CreateGEP(DependenceAddresses, CounterVal);
             // [CounterVal].base_addr = &expr;
             llvm::Value *DepBaseAddr =
-                CGF.Builder.CreateConstInBoundsGEP2_32(DepElPtr, 0, 0);
+                CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 0);
             llvm::Value *BaseAddr = CGF.EmitLValue(Vars[i]).getAddress();
             BaseAddr = CGF.Builder.CreatePointerCast(BaseAddr, IntPtrTy);
             CGF.Builder.CreateStore(BaseAddr, DepBaseAddr);
             // [CounterVal].len = size;
             llvm::Value *DepLen =
-                CGF.Builder.CreateConstInBoundsGEP2_32(DepElPtr, 0, 1);
+                CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 1);
             const Expr *Size = (*I)->getSizeInBytes(i);
             CGF.Builder.CreateStore(CGF.EmitScalarExpr(Size), DepLen);
             // [CounterVal].flags = size;
             llvm::Value *DepFlags =
-                CGF.Builder.CreateConstInBoundsGEP2_32(DepElPtr, 0, 2);
+                CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 2);
             llvm::Type *BoolTy = CGF.ConvertTypeForMem(getContext().BoolTy);
             CGF.Builder.CreateStore(llvm::ConstantInt::get(BoolTy, DepType),
                                     DepFlags);
@@ -2140,6 +2164,152 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
       CGM.OpenMPSupport.getTaskFields();
   CGM.OpenMPSupport.endOpenMPRegion();
 
+  // CodeGen for 'depend' clause.
+  llvm::Value *DependCount = 0;
+  llvm::Value *DependenceAddresses = 0;
+  if (!CGM.OpenMPSupport.getUntied()) {
+    SmallVector<const OMPDependClause *, 16> DependClauses;
+    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
+                                         E = S.clauses().end();
+         I != E; ++I) {
+      if (OMPDependClause *ODC = dyn_cast_or_null<OMPDependClause>(*I)) {
+        DependClauses.push_back(ODC);
+        if (!DependCount) {
+          DependCount = EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
+        } else {
+          DependCount = Builder.CreateAdd(
+              DependCount,
+              EmitScalarExpr(ODC->getNumberOfContiguousSpaces()));
+        }
+      }
+    }
+    if (DependCount) {
+      llvm::Type *DepTy = getKMPDependInfoType(&CGM);
+      llvm::Type *IntPtrTy = ConvertTypeForMem(getContext().getIntPtrType());
+      llvm::Value *ByteCount = Builder.CreateMul(
+          DependCount, llvm::ConstantExpr::getSizeOf(DepTy));
+      if (!DidCallStackSave) {
+        // Save the stack.
+        llvm::Value *Stack = CreateTempAlloca(Int8PtrTy, "saved_stack");
+
+        llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave);
+        llvm::Value *V = Builder.CreateCall(F);
+
+        Builder.CreateStore(V, Stack);
+
+        DidCallStackSave = true;
+
+        // Push a cleanup block and restore the stack there.
+        // FIXME: in general circumstances, this should be an EH cleanup.
+        EHStack.pushCleanup<CallStackRestore>(NormalCleanup, Stack);
+      }
+      llvm::Value *Addresses = Builder.CreateAlloca(Int8Ty, ByteCount);
+      DependenceAddresses =
+          Builder.CreateBitCast(Addresses, DepTy->getPointerTo());
+      llvm::AllocaInst *Counter =
+          CreateMemTemp(getContext().getSizeType(), ".dep.count.addr");
+      EmitStoreOfScalar(llvm::Constant::getNullValue(SizeTy),
+                        Counter,
+                        false,
+                        getContext().getTypeAlignInChars(getContext().getSizeType()).getQuantity(),
+                        getContext().getSizeType());
+      for (SmallVectorImpl<const OMPDependClause *>::iterator
+               I = DependClauses.begin(),
+               E = DependClauses.end();
+           I != E; ++I) {
+        ArrayRef<const Expr *> Vars = (*I)->getVars();
+        unsigned DepType = IN;
+        switch ((*I)->getType()) {
+        case OMPC_DEPEND_in:
+          DepType = IN;
+          break;
+        case OMPC_DEPEND_out:
+          DepType = OUT;
+          break;
+        case OMPC_DEPEND_inout:
+          DepType = INOUT;
+          break;
+        case OMPC_DEPEND_unknown:
+        case NUM_OPENMP_DEPENDENCE_TYPE:
+          llvm_unreachable("Unknown kind of dependency");
+          break;
+        }
+        for (unsigned i = 0, e = (*I)->varlist_size(); i < e; ++i) {
+          SmallVector<llvm::BasicBlock *, 16> ContBlocks;
+          SmallVector<llvm::BasicBlock *, 16> ThenBlocks;
+          SmallVector<llvm::BasicBlock *, 16> ExitBlocks;
+          ArrayRef<Expr *> Indicies = (*I)->getIndicies(i);
+          ArrayRef<Expr *> Lengths = (*I)->getLengths(i);
+          for (ArrayRef<Expr *>::iterator II = Indicies.begin(),
+                                          EE = Indicies.end(),
+                                          IL = Lengths.begin();
+               II != EE; ++II, ++IL) {
+            if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
+              if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
+                EmitVarDecl(*VD);
+                ContBlocks.push_back(createBasicBlock(".dep.cont."));
+                ThenBlocks.push_back(createBasicBlock(".dep.then."));
+                ExitBlocks.push_back(createBasicBlock(".dep.exit."));
+                EmitBlock(ContBlocks.back());
+                llvm::Value *VDValAddr = GetAddrOfLocalVar(VD);
+                llvm::Value *VDVal = Builder.CreateLoad(VDValAddr);
+                llvm::Value *Length = EmitScalarExpr(*IL);
+                llvm::Value *Cond = 0;
+                if ((*IL)->getType()->hasUnsignedIntegerRepresentation()) {
+                  Cond = Builder.CreateICmpULT(VDVal, Length);
+                } else {
+                  Cond = Builder.CreateICmpSLT(VDVal, Length);
+                }
+                Builder.CreateCondBr(Cond, ThenBlocks.back(),
+                                     ExitBlocks.back());
+                EmitBlock(ThenBlocks.back());
+              }
+            }
+          }
+          llvm::Value *CounterVal =
+              Builder.CreateLoad(Counter, ".dep.count.");
+          llvm::Value *DepElPtr =
+              Builder.CreateGEP(DependenceAddresses, CounterVal);
+          // [CounterVal].base_addr = &expr;
+          llvm::Value *DepBaseAddr =
+              Builder.CreateConstGEP2_32(DepElPtr, 0, 0);
+          llvm::Value *BaseAddr = EmitLValue(Vars[i]).getAddress();
+          BaseAddr = Builder.CreatePointerCast(BaseAddr, IntPtrTy);
+          Builder.CreateStore(BaseAddr, DepBaseAddr);
+          // [CounterVal].len = size;
+          llvm::Value *DepLen =
+              Builder.CreateConstGEP2_32(DepElPtr, 0, 1);
+          const Expr *Size = (*I)->getSizeInBytes(i);
+          Builder.CreateStore(EmitScalarExpr(Size), DepLen);
+          // [CounterVal].flags = size;
+          llvm::Value *DepFlags =
+              Builder.CreateConstGEP2_32(DepElPtr, 0, 2);
+          llvm::Type *BoolTy = ConvertTypeForMem(getContext().BoolTy);
+          Builder.CreateStore(llvm::ConstantInt::get(BoolTy, DepType),
+                              DepFlags);
+          CounterVal = Builder.CreateAdd(
+              CounterVal, llvm::ConstantInt::get(DependCount->getType(), 1));
+          Builder.CreateStore(CounterVal, Counter);
+          unsigned BCnt = ContBlocks.size() - 1;
+          for (ArrayRef<Expr *>::reverse_iterator II = Indicies.rbegin(),
+                                                  EE = Indicies.rend();
+               II != EE; ++II, --BCnt) {
+            if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
+              if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
+                llvm::Value *VDValAddr = GetAddrOfLocalVar(VD);
+                llvm::Value *VDVal = Builder.CreateLoad(VDValAddr);
+                VDVal = Builder.CreateAdd(
+                    VDVal, llvm::ConstantInt::get(VDVal->getType(), 1));
+                Builder.CreateStore(VDVal, VDValAddr);
+                EmitBranch(ContBlocks[BCnt]);
+                EmitBlock(ExitBlocks[BCnt], false);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
   // CodeGen for "omp task {Associated statement}".
   CGM.OpenMPSupport.startOpenMPRegion(false);
   CGM.OpenMPSupport.getTaskFields() = SavedFields;
@@ -2169,7 +2339,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
     llvm::Value *SharedAddr = Builder.CreateConstInBoundsGEP2_32(
         TaskTVal, 0, llvm::TaskTBuilder::shareds, ".shared.addr");
     EmitAggregateAssign(Builder.CreateLoad(SharedAddr), Arg, QTy);
-    llvm::Value *Locker = Builder.CreateConstInBoundsGEP1_32(TaskTVal, 1);
+    llvm::Value *Locker = Builder.CreateConstGEP1_32(TaskTVal, 1);
     CGM.OpenMPSupport.setPTask(Fn, TaskTVal, LPrivateTy, PrivateRecord, Locker);
     // Skip firstprivate sync for tasks.
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
@@ -2197,140 +2367,6 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
       EmitUntiedBranchEnd(*this);
       EmitBlock(EndBB, true);
     } else {
-      // CodeGen for 'depend' clause.
-      llvm::Value *DependCount = 0;
-      llvm::Value *DependenceAddresses = 0;
-
-      SmallVector<const OMPDependClause *, 16> DependClauses;
-      for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                           E = S.clauses().end();
-           I != E; ++I) {
-        if (OMPDependClause *ODC = dyn_cast_or_null<OMPDependClause>(*I)) {
-          DependClauses.push_back(ODC);
-          for (unsigned i = 0, e = ODC->varlist_size(); i < e; ++i) {
-            ArrayRef<Expr *> Indicies = ODC->getIndicies(i);
-            for (ArrayRef<Expr *>::iterator II = Indicies.begin(),
-                                            EE = Indicies.end();
-                 II != EE; ++II) {
-              if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
-                if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
-                  EmitVarDecl(*VD);
-                }
-              }
-            }
-          }
-          if (!DependCount) {
-            DependCount = EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
-          } else {
-            DependCount = Builder.CreateAdd(
-                DependCount,
-                EmitScalarExpr(ODC->getNumberOfContiguousSpaces()));
-          }
-        }
-      }
-      if (DependCount) {
-        llvm::Type *DepTy = getKMPDependInfoType(&CGM);
-        llvm::Type *IntPtrTy = ConvertTypeForMem(getContext().getIntPtrType());
-        llvm::Value *ByteCount = Builder.CreateMul(
-            DependCount, llvm::ConstantExpr::getSizeOf(DepTy));
-        llvm::Value *Addresses = Builder.CreateAlloca(Int8Ty, ByteCount);
-        DependenceAddresses =
-            Builder.CreateBitCast(Addresses, DepTy->getPointerTo());
-        llvm::AllocaInst *Counter =
-            CreateMemTemp(getContext().getSizeType(), ".dep.count.addr");
-        InitTempAlloca(Counter,
-                       llvm::Constant::getNullValue(DependCount->getType()));
-        for (SmallVectorImpl<const OMPDependClause *>::iterator
-                 I = DependClauses.begin(),
-                 E = DependClauses.end();
-             I != E; ++I) {
-          ArrayRef<const Expr *> Vars = (*I)->getVars();
-          unsigned DepType = IN;
-          switch ((*I)->getType()) {
-          case OMPC_DEPEND_in:
-            DepType = IN;
-            break;
-          case OMPC_DEPEND_out:
-            DepType = OUT;
-            break;
-          case OMPC_DEPEND_inout:
-            DepType = INOUT;
-            break;
-          case OMPC_DEPEND_unknown:
-          case NUM_OPENMP_DEPENDENCE_TYPE:
-            llvm_unreachable("Unknown kind of dependency");
-            break;
-          }
-          for (unsigned i = 0, e = (*I)->varlist_size(); i < e; ++i) {
-            SmallVector<llvm::BasicBlock *, 16> ContBlocks;
-            SmallVector<llvm::BasicBlock *, 16> ThenBlocks;
-            SmallVector<llvm::BasicBlock *, 16> ExitBlocks;
-            ArrayRef<Expr *> Indicies = (*I)->getIndicies(i);
-            ArrayRef<Expr *> Lengths = (*I)->getLengths(i);
-            for (ArrayRef<Expr *>::iterator II = Indicies.begin(),
-                                            EE = Indicies.end(),
-                                            IL = Lengths.begin();
-                 II != EE; ++II, ++IL) {
-              if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
-                if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
-                  ContBlocks.push_back(createBasicBlock(".dep.cont."));
-                  ThenBlocks.push_back(createBasicBlock(".dep.then."));
-                  ExitBlocks.push_back(createBasicBlock(".dep.exit."));
-                  EmitBlock(ContBlocks.back());
-                  llvm::Value *VDValAddr = GetAddrOfLocalVar(VD);
-                  llvm::Value *VDVal = Builder.CreateLoad(VDValAddr);
-                  llvm::Value *Length = EmitScalarExpr(*IL);
-                  llvm::Value *Cond = Builder.CreateICmpNE(VDVal, Length);
-                  Builder.CreateCondBr(Cond, ThenBlocks.back(),
-                                       ExitBlocks.back());
-                  EmitBlock(ThenBlocks.back());
-                }
-              }
-            }
-            llvm::Value *CounterVal =
-                Builder.CreateLoad(Counter, ".dep.count.");
-            llvm::Value *DepElPtr =
-                Builder.CreateInBoundsGEP(DependenceAddresses, CounterVal);
-            // [CounterVal].base_addr = &expr;
-            llvm::Value *DepBaseAddr =
-                Builder.CreateConstInBoundsGEP2_32(DepElPtr, 0, 0);
-            llvm::Value *BaseAddr = EmitLValue(Vars[i]).getAddress();
-            BaseAddr = Builder.CreatePointerCast(BaseAddr, IntPtrTy);
-            Builder.CreateStore(BaseAddr, DepBaseAddr);
-            // [CounterVal].len = size;
-            llvm::Value *DepLen =
-                Builder.CreateConstInBoundsGEP2_32(DepElPtr, 0, 1);
-            const Expr *Size = (*I)->getSizeInBytes(i);
-            Builder.CreateStore(EmitScalarExpr(Size), DepLen);
-            // [CounterVal].flags = size;
-            llvm::Value *DepFlags =
-                Builder.CreateConstInBoundsGEP2_32(DepElPtr, 0, 2);
-            llvm::Type *BoolTy = ConvertTypeForMem(getContext().BoolTy);
-            Builder.CreateStore(llvm::ConstantInt::get(BoolTy, DepType),
-                                DepFlags);
-            CounterVal = Builder.CreateAdd(
-                CounterVal, llvm::ConstantInt::get(DependCount->getType(), 1));
-            Builder.CreateStore(CounterVal, Counter);
-            unsigned BCnt = ContBlocks.size() - 1;
-            for (ArrayRef<Expr *>::reverse_iterator II = Indicies.rbegin(),
-                                                    EE = Indicies.rend();
-                 II != EE; ++II, --BCnt) {
-              if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
-                if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
-                  llvm::Value *VDValAddr = GetAddrOfLocalVar(VD);
-                  llvm::Value *VDVal = Builder.CreateLoad(VDValAddr);
-                  VDVal = Builder.CreateAdd(
-                      VDVal, llvm::ConstantInt::get(VDVal->getType(), 1));
-                  Builder.CreateStore(VDVal, VDValAddr);
-                  EmitBranch(ContBlocks[BCnt]);
-                  EmitBlock(ExitBlocks[BCnt], false);
-                }
-              }
-            }
-          }
-        }
-      }
-
       llvm::Type *PtrDepTy = getKMPDependInfoType(&CGM)->getPointerTo();
       llvm::Value *RealArgs1[] = {
         Loc, GTid, TaskTVal,
@@ -3201,14 +3237,14 @@ CodeGenFunction::EmitCopyAssignment(ArrayRef<const Expr *>::iterator I,
         llvm::Value *NumElements =
             emitArrayLength(ArrayTy, ElementTy, SharedVar);
         llvm::Value *ArrayEnd =
-            Builder.CreateInBoundsGEP(SharedVar, NumElements);
+            Builder.CreateGEP(SharedVar, NumElements);
         llvm::Value *MasterArray = Src;
         unsigned AddrSpace = MasterArray->getType()->getPointerAddressSpace();
         llvm::Type *BaseType = ConvertType(ElementTy)->getPointerTo(AddrSpace);
         llvm::Value *MasterArrayBegin = Builder.CreatePointerCast(
             MasterArray, BaseType, "master.array.begin");
         llvm::Value *MasterArrayEnd =
-            Builder.CreateInBoundsGEP(MasterArrayBegin, NumElements);
+            Builder.CreateGEP(MasterArrayBegin, NumElements);
         // The basic structure here is a do-while loop, because we don't
         // need to check for the zero-element case.
         llvm::BasicBlock *BodyBB = createBasicBlock("omp.arraycpy.body");
@@ -3229,9 +3265,9 @@ CodeGenFunction::EmitCopyAssignment(ArrayRef<const Expr *>::iterator I,
 
         // Shift the address back by one element.
         llvm::Value *NegativeOne = llvm::ConstantInt::get(SizeTy, -1, true);
-        llvm::Value *Element = Builder.CreateInBoundsGEP(
+        llvm::Value *Element = Builder.CreateGEP(
             ElementPast, NegativeOne, "omp.arraycpy.element");
-        llvm::Value *MasterElement = Builder.CreateInBoundsGEP(
+        llvm::Value *MasterElement = Builder.CreateGEP(
             MasterElementPast, NegativeOne, "omp.arraycpy.master.element");
 
         const VarDecl *PseudoVar1 =
@@ -3364,7 +3400,7 @@ void CodeGenFunction::EmitPreOMPPrivateClause(const OMPPrivateClause &C,
         llvm::Value *ArrayBeg = Private;
         llvm::Value *NumElements =
             emitArrayLength(ArrayTy, ElementTy, ArrayBeg);
-        llvm::Value *ArrayEnd = Builder.CreateInBoundsGEP(ArrayBeg, NumElements,
+        llvm::Value *ArrayEnd = Builder.CreateGEP(ArrayBeg, NumElements,
                                                           "omp.arrayctor.end");
         // The basic structure here is a do-while loop, because we don't
         // need to check for the zero-element case.
@@ -3383,7 +3419,7 @@ void CodeGenFunction::EmitPreOMPPrivateClause(const OMPPrivateClause &C,
 
         // Shift the address back by one element.
         llvm::Value *NegativeOne = llvm::ConstantInt::get(SizeTy, -1, true);
-        llvm::Value *Element = Builder.CreateInBoundsGEP(
+        llvm::Value *Element = Builder.CreateGEP(
             ElementPast, NegativeOne, "omp.arrayctor.element");
         EmitAnyExprToMem(*InitIter, Element,
                          (*InitIter)->getType().getQualifiers(), false);
@@ -3516,14 +3552,14 @@ CodeGenFunction::EmitPreOMPFirstPrivateClause(const OMPFirstPrivateClause &C,
         llvm::Value *NumElements =
             emitArrayLength(ArrayTy, ElementTy, ArrayBeg);
         llvm::Value *ArrayEnd =
-            Builder.CreateInBoundsGEP(ArrayBeg, NumElements);
+            Builder.CreateGEP(ArrayBeg, NumElements);
         llvm::Value *MasterArray = EmitLValue(*I).getAddress();
         unsigned AddrSpace = MasterArray->getType()->getPointerAddressSpace();
         llvm::Type *BaseType = ConvertType(ElementTy)->getPointerTo(AddrSpace);
         llvm::Value *MasterArrayBegin = Builder.CreatePointerCast(
             MasterArray, BaseType, "master.array.begin");
         llvm::Value *MasterArrayEnd =
-            Builder.CreateInBoundsGEP(MasterArrayBegin, NumElements);
+            Builder.CreateGEP(MasterArrayBegin, NumElements);
         // The basic structure here is a do-while loop, because we don't
         // need to check for the zero-element case.
         llvm::BasicBlock *BodyBB = createBasicBlock("omp.arraycpy.body");
@@ -3544,9 +3580,9 @@ CodeGenFunction::EmitPreOMPFirstPrivateClause(const OMPFirstPrivateClause &C,
 
         // Shift the address back by one element.
         llvm::Value *NegativeOne = llvm::ConstantInt::get(SizeTy, -1, true);
-        llvm::Value *Element = Builder.CreateInBoundsGEP(
+        llvm::Value *Element = Builder.CreateGEP(
             ElementPast, NegativeOne, "omp.arraycpy.element");
-        llvm::Value *MasterElement = Builder.CreateInBoundsGEP(
+        llvm::Value *MasterElement = Builder.CreateGEP(
             MasterElementPast, NegativeOne, "omp.arraycpy.master.element");
 
         const VarDecl *PseudoVar =
@@ -3715,7 +3751,7 @@ CodeGenFunction::EmitPreOMPLastPrivateClause(const OMPLastPrivateClause &C,
         llvm::Value *ArrayBeg = Private;
         llvm::Value *NumElements =
             emitArrayLength(ArrayTy, ElementTy, ArrayBeg);
-        llvm::Value *ArrayEnd = Builder.CreateInBoundsGEP(ArrayBeg, NumElements,
+        llvm::Value *ArrayEnd = Builder.CreateGEP(ArrayBeg, NumElements,
                                                           "omp.arrayctor.end");
         // The basic structure here is a do-while loop, because we don't
         // need to check for the zero-element case.
@@ -3734,7 +3770,7 @@ CodeGenFunction::EmitPreOMPLastPrivateClause(const OMPLastPrivateClause &C,
 
         // Shift the address back by one element.
         llvm::Value *NegativeOne = llvm::ConstantInt::get(SizeTy, -1, true);
-        llvm::Value *Element = Builder.CreateInBoundsGEP(
+        llvm::Value *Element = Builder.CreateGEP(
             ElementPast, NegativeOne, "omp.arrayctor.element");
         EmitAnyExprToMem(*InitIter, Element,
                          (*InitIter)->getType().getQualifiers(), false);
@@ -3825,14 +3861,14 @@ CodeGenFunction::EmitPostOMPLastPrivateClause(const OMPLastPrivateClause &C,
         llvm::Value *NumElements =
             emitArrayLength(ArrayTy, ElementTy, SharedVar);
         llvm::Value *ArrayEnd =
-            Builder.CreateInBoundsGEP(SharedVar, NumElements);
+            Builder.CreateGEP(SharedVar, NumElements);
         llvm::Value *MasterArray = Private;
         unsigned AddrSpace = MasterArray->getType()->getPointerAddressSpace();
         llvm::Type *BaseType = ConvertType(ElementTy)->getPointerTo(AddrSpace);
         llvm::Value *MasterArrayBegin = Builder.CreatePointerCast(
             MasterArray, BaseType, "master.array.begin");
         llvm::Value *MasterArrayEnd =
-            Builder.CreateInBoundsGEP(MasterArrayBegin, NumElements);
+            Builder.CreateGEP(MasterArrayBegin, NumElements);
         // The basic structure here is a do-while loop, because we don't
         // need to check for the zero-element case.
         llvm::BasicBlock *BodyBB = createBasicBlock("omp.arraycpy.body");
@@ -3853,9 +3889,9 @@ CodeGenFunction::EmitPostOMPLastPrivateClause(const OMPLastPrivateClause &C,
 
         // Shift the address back by one element.
         llvm::Value *NegativeOne = llvm::ConstantInt::get(SizeTy, -1, true);
-        llvm::Value *Element = Builder.CreateInBoundsGEP(
+        llvm::Value *Element = Builder.CreateGEP(
             ElementPast, NegativeOne, "omp.arraycpy.element");
-        llvm::Value *MasterElement = Builder.CreateInBoundsGEP(
+        llvm::Value *MasterElement = Builder.CreateGEP(
             MasterElementPast, NegativeOne, "omp.arraycpy.master.element");
 
         const VarDecl *PseudoVar1 =
@@ -4975,7 +5011,7 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
           // Store the address into our record.
           Builder.CreateStore(
               EmitLValue(*I).getAddress(),
-              Builder.CreateConstInBoundsGEP2_32(CpyVar, 0, FieldNum));
+              Builder.CreateConstGEP2_32(CpyVar, 0, FieldNum));
         }
 
         // Generate field copying in the copy-function.
@@ -5003,9 +5039,9 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
             // cast<VarDecl>(cast<DeclRefExpr>(*I)->getDecl());
             QualType QTy = (*I)->getType();
             llvm::Value *Dst =
-                CGF.Builder.CreateConstInBoundsGEP2_32(DstBase, 0, FieldNum);
+                CGF.Builder.CreateConstGEP2_32(DstBase, 0, FieldNum);
             llvm::Value *Src =
-                CGF.Builder.CreateConstInBoundsGEP2_32(SrcBase, 0, FieldNum);
+                CGF.Builder.CreateConstGEP2_32(SrcBase, 0, FieldNum);
             llvm::Type *PtrType = ConvertType(getContext().getPointerType(QTy));
             llvm::Value *LoadDst = CGF.EmitLoadOfScalar(
                 Dst, false, CGM.getDataLayout().getPrefTypeAlignment(PtrType),
