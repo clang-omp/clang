@@ -575,7 +575,8 @@ static llvm::Type *getKMPDependInfoType(CodeGenModule *CGM) {
   RD->completeDefinition();
   QualType QTy = CGM->getContext().getRecordType(RD);
   Ty = CGM->getTypes().ConvertTypeForMem(QTy);
-  CGM->OpenMPSupport.setKMPDependInfoType(Ty);
+  CGM->OpenMPSupport.setKMPDependInfoType(Ty,
+                                          CGM->getContext().getTypeAlignInChars(QTy).getQuantity());
   return Ty;
 }
 // Special processing for __kmpc_omp_task_with_deps
@@ -1660,7 +1661,8 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
       EmitBlock(ContBlock);
       Idx = Builder.CreateLoad(Private, ".idx.");
       llvm::Value *NextIdx = Builder.CreateAdd(
-          Idx, llvm::ConstantInt::get(IdxTy, 1), ".next.idx.");
+          Idx, llvm::ConstantInt::get(IdxTy, 1), ".next.idx.",
+          false, QTy->isSignedIntegerOrEnumerationType());
       Builder.CreateStore(NextIdx, Private);
       //      for(llvm::SmallVector<const Expr *, 16>::const_iterator II =
       // Incs.begin(),
@@ -1969,22 +1971,27 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
                                            E = S.clauses().end();
            I != E; ++I) {
         if (OMPDependClause *ODC = dyn_cast_or_null<OMPDependClause>(*I)) {
-          DependClauses.push_back(ODC);
-          if (!DependCount) {
-            DependCount = CGF.EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
-          } else {
-            DependCount = CGF.Builder.CreateAdd(
-                DependCount,
-                CGF.EmitScalarExpr(ODC->getNumberOfContiguousSpaces()));
+          if (DependClauses.empty()) {
+            DependCount =
+                CGF.CreateMemTemp(getContext().getIntTypeForBitwidth(32, true), ".dep.size.");
+            CGF.Builder.CreateStore(llvm::Constant::getNullValue(Int32Ty), DependCount);
           }
+          DependClauses.push_back(ODC);
+          llvm::Value *LocalCount = CGF.EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
+          llvm::BasicBlock *TrueBr = CGF.createBasicBlock(".then.");
+          llvm::BasicBlock *FalseBr = CGF.createBasicBlock(".done.");
+          CGF.Builder.CreateCondBr(CGF.Builder.CreateIsNotNull(LocalCount), TrueBr, FalseBr);
+          CGF.EmitBlock(TrueBr);
+          CGF.Builder.CreateStore(
+              CGF.Builder.CreateNSWAdd(CGF.Builder.CreateLoad(DependCount), LocalCount),
+              DependCount);
+          CGF.EmitBlock(FalseBr);
         }
       }
       if (DependCount) {
         llvm::Type *DepTy = getKMPDependInfoType(&CGM);
         llvm::Type *IntPtrTy =
             CGF.ConvertTypeForMem(getContext().getIntPtrType());
-        llvm::Value *ByteCount = CGF.Builder.CreateMul(
-            DependCount, llvm::ConstantExpr::getSizeOf(DepTy));
         if (!CGF.DidCallStackSave) {
           // Save the stack.
           llvm::Value *Stack = CGF.CreateTempAlloca(Int8PtrTy, "saved_stack");
@@ -2000,9 +2007,22 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
           // FIXME: in general circumstances, this should be an EH cleanup.
           CGF.EHStack.pushCleanup<CallStackRestore>(NormalCleanup, Stack);
         }
-        llvm::Value *Addresses = CGF.Builder.CreateAlloca(Int8Ty, ByteCount);
+        // Be sure that size > 0.
+        llvm::Value *DepSize = CGF.Builder.CreateLoad(DependCount);
+        llvm::Value *NewDepSize =
+            CGF.Builder.CreateNSWAdd(DepSize, CGF.Builder.getInt32(1));
+        llvm::AllocaInst *Addresses =
+            CGF.Builder.CreateAlloca(DepTy, NewDepSize, ".dep.list.");
+        Addresses->setAlignment(CGM.OpenMPSupport.getKMPDependInfoTypeAlign());
         DependenceAddresses =
             CGF.Builder.CreateBitCast(Addresses, DepTy->getPointerTo());
+
+        llvm::BasicBlock *TrueBr = CGF.createBasicBlock(".dep.then.");
+        llvm::BasicBlock *FalseBr = CGF.createBasicBlock(".dep.done.");
+        CGF.Builder.CreateCondBr(CGF.Builder.CreateIsNotNull(DepSize),
+                                 TrueBr, FalseBr);
+        CGF.EmitBlock(TrueBr);
+
         llvm::AllocaInst *Counter =
             CGF.CreateMemTemp(getContext().getSizeType(), ".dep.count.addr");
         CGF.EmitStoreOfScalar(llvm::Constant::getNullValue(SizeTy),
@@ -2085,7 +2105,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
             CGF.Builder.CreateStore(llvm::ConstantInt::get(BoolTy, DepType),
                                     DepFlags);
             CounterVal = CGF.Builder.CreateAdd(
-                CounterVal, llvm::ConstantInt::get(DependCount->getType(), 1));
+                CounterVal, llvm::ConstantInt::get(SizeTy, 1));
             CGF.Builder.CreateStore(CounterVal, Counter);
             unsigned BCnt = ContBlocks.size() - 1;
             for (ArrayRef<Expr *>::reverse_iterator II = Indicies.rbegin(),
@@ -2096,7 +2116,8 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
                   llvm::Value *VDValAddr = CGF.GetAddrOfLocalVar(VD);
                   llvm::Value *VDVal = CGF.Builder.CreateLoad(VDValAddr);
                   VDVal = CGF.Builder.CreateAdd(
-                      VDVal, llvm::ConstantInt::get(VDVal->getType(), 1));
+                      VDVal, llvm::ConstantInt::get(VDVal->getType(), 1),
+                      "add", false, DRE->getType()->isSignedIntegerOrEnumerationType());
                   CGF.Builder.CreateStore(VDVal, VDValAddr);
                   CGF.EmitBranch(ContBlocks[BCnt]);
                   CGF.EmitBlock(ExitBlocks[BCnt], false);
@@ -2113,8 +2134,8 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
         llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), CGF);
         llvm::Value *RealArgs1[] = {
           Loc, GTid,
-          DependCount ? CGF.Builder.CreateIntCast(DependCount, Int32Ty, false)
-                      : llvm::ConstantInt::get(Int32Ty, 0),
+          DependCount ? cast<llvm::Value>(CGF.Builder.CreateLoad(DependCount))
+                      : cast<llvm::Value>(llvm::ConstantInt::get(Int32Ty, 0)),
           DependenceAddresses ? DependenceAddresses
                               : llvm::Constant::getNullValue(PtrDepTy),
           llvm::ConstantInt::get(Int32Ty, 0),
@@ -2173,21 +2194,26 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
                                          E = S.clauses().end();
          I != E; ++I) {
       if (OMPDependClause *ODC = dyn_cast_or_null<OMPDependClause>(*I)) {
-        DependClauses.push_back(ODC);
-        if (!DependCount) {
-          DependCount = EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
-        } else {
-          DependCount = Builder.CreateAdd(
-              DependCount,
-              EmitScalarExpr(ODC->getNumberOfContiguousSpaces()));
+        if (DependClauses.empty()) {
+          DependCount =
+              CreateMemTemp(getContext().getIntTypeForBitwidth(32, true), ".dep.size.");
+          Builder.CreateStore(llvm::Constant::getNullValue(Int32Ty), DependCount);
         }
+        DependClauses.push_back(ODC);
+        llvm::Value *LocalCount = EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
+        llvm::BasicBlock *TrueBr = createBasicBlock(".then.");
+        llvm::BasicBlock *FalseBr = createBasicBlock(".done.");
+        Builder.CreateCondBr(Builder.CreateIsNotNull(LocalCount), TrueBr, FalseBr);
+        EmitBlock(TrueBr);
+        Builder.CreateStore(
+            Builder.CreateNSWAdd(Builder.CreateLoad(DependCount), LocalCount),
+            DependCount);
+        EmitBlock(FalseBr);
       }
     }
     if (DependCount) {
       llvm::Type *DepTy = getKMPDependInfoType(&CGM);
       llvm::Type *IntPtrTy = ConvertTypeForMem(getContext().getIntPtrType());
-      llvm::Value *ByteCount = Builder.CreateMul(
-          DependCount, llvm::ConstantExpr::getSizeOf(DepTy));
       if (!DidCallStackSave) {
         // Save the stack.
         llvm::Value *Stack = CreateTempAlloca(Int8PtrTy, "saved_stack");
@@ -2203,9 +2229,22 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
         // FIXME: in general circumstances, this should be an EH cleanup.
         EHStack.pushCleanup<CallStackRestore>(NormalCleanup, Stack);
       }
-      llvm::Value *Addresses = Builder.CreateAlloca(Int8Ty, ByteCount);
+      // Be sure that size > 0.
+      llvm::Value *DepSize = Builder.CreateLoad(DependCount);
+      llvm::Value *NewDepSize =
+          Builder.CreateNSWAdd(DepSize, Builder.getInt32(1));
+      llvm::AllocaInst *Addresses =
+          Builder.CreateAlloca(DepTy, NewDepSize, ".dep.list.");
+      Addresses->setAlignment(CGM.OpenMPSupport.getKMPDependInfoTypeAlign());
       DependenceAddresses =
           Builder.CreateBitCast(Addresses, DepTy->getPointerTo());
+
+      llvm::BasicBlock *TrueBr = createBasicBlock(".dep.then.");
+      llvm::BasicBlock *FalseBr = createBasicBlock(".dep.done.");
+      Builder.CreateCondBr(Builder.CreateIsNotNull(DepSize),
+                           TrueBr, FalseBr);
+      EmitBlock(TrueBr);
+
       llvm::AllocaInst *Counter =
           CreateMemTemp(getContext().getSizeType(), ".dep.count.addr");
       EmitStoreOfScalar(llvm::Constant::getNullValue(SizeTy),
@@ -2288,7 +2327,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
           Builder.CreateStore(llvm::ConstantInt::get(BoolTy, DepType),
                               DepFlags);
           CounterVal = Builder.CreateAdd(
-              CounterVal, llvm::ConstantInt::get(DependCount->getType(), 1));
+              CounterVal, llvm::ConstantInt::get(SizeTy, 1));
           Builder.CreateStore(CounterVal, Counter);
           unsigned BCnt = ContBlocks.size() - 1;
           for (ArrayRef<Expr *>::reverse_iterator II = Indicies.rbegin(),
@@ -2299,7 +2338,8 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
                 llvm::Value *VDValAddr = GetAddrOfLocalVar(VD);
                 llvm::Value *VDVal = Builder.CreateLoad(VDValAddr);
                 VDVal = Builder.CreateAdd(
-                    VDVal, llvm::ConstantInt::get(VDVal->getType(), 1));
+                    VDVal, llvm::ConstantInt::get(VDVal->getType(), 1), "add",
+                    false, DRE->getType()->isSignedIntegerOrEnumerationType());
                 Builder.CreateStore(VDVal, VDValAddr);
                 EmitBranch(ContBlocks[BCnt]);
                 EmitBlock(ExitBlocks[BCnt], false);
@@ -2308,6 +2348,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
           }
         }
       }
+      EmitBlock(FalseBr);
     }
   }
   // CodeGen for "omp task {Associated statement}".
@@ -2370,8 +2411,8 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
       llvm::Type *PtrDepTy = getKMPDependInfoType(&CGM)->getPointerTo();
       llvm::Value *RealArgs1[] = {
         Loc, GTid, TaskTVal,
-        DependCount ? Builder.CreateIntCast(DependCount, Int32Ty, false)
-                    : llvm::ConstantInt::get(Int32Ty, 0),
+        DependCount ? cast<llvm::Value>(Builder.CreateLoad(DependCount))
+                    : cast<llvm::Value>(llvm::ConstantInt::get(Int32Ty, 0)),
         DependenceAddresses ? DependenceAddresses
                             : llvm::Constant::getNullValue(PtrDepTy),
         llvm::ConstantInt::get(Int32Ty, 0),
@@ -5432,7 +5473,9 @@ bool CodeGenFunction::CGPragmaOmpSimd::walkLocalVariablesToEmit(
           Result = CGF->Builder.CreateGEP(Start, Result);
         } else {
           Result = CGF->Builder.CreateIntCast(Result, Start->getType(), false);
-          Result = CGF->Builder.CreateAdd(Start, Result);
+          Result =
+              CGF->Builder.CreateAdd(Start, Result, "add", false,
+                                     QTy->isSignedIntegerOrEnumerationType());
         }
         CGF->Builder.CreateStore(Result, Private);
 
@@ -5542,7 +5585,9 @@ CodeGenFunction::CGPragmaOmpSimd::emitLinearFinal(CodeGenFunction &CGF) const {
           Result = CGF.Builder.CreateGEP(Start, Result);
         } else {
           Result = CGF.Builder.CreateIntCast(Result, Start->getType(), false);
-          Result = CGF.Builder.CreateAdd(Start, Result);
+          Result =
+              CGF.Builder.CreateAdd(Start, Result, "add", false,
+                  (*J)->getType()->isSignedIntegerOrEnumerationType());
         }
         CGF.EmitStoreOfScalar(Result, LV, false);
       }

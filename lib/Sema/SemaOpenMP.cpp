@@ -2001,10 +2001,14 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
       return false;
     NewEnd = Res.take();
 
-    Expr *NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Rem,
-                               IdxRVal, Ends[LoopIdBegin]).take();
-    if (!NewIncr)
-      return false;
+    Expr *NewIncr = IdxRVal;
+    if (StmtCount != 1) {
+      NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Rem,
+                           IdxRVal, Ends[LoopIdBegin]).take();
+      if (!NewIncr)
+        return false;
+    }
+
     NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, NewIncr,
                          Incrs[LoopIdBegin]).take();
     if (!NewIncr)
@@ -2067,10 +2071,14 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
                            NewDiv).take();
       if (!NewIncr)
         return false;
-      NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Rem, NewIncr,
-                           Ends[I]).take();
-      if (!NewIncr)
-        return false;
+
+      if (I + LoopIdStep != LoopIdEnd) {
+        NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Rem, NewIncr,
+                             Ends[I]).take();
+        if (!NewIncr)
+          return false;
+      }
+
       NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, NewIncr,
                            Incrs[I]).take();
       if (!NewIncr)
@@ -5757,6 +5765,7 @@ OMPClause *Sema::ActOnOpenMPDependClause(ArrayRef<Expr *> VarList,
   SmallVector<ArrayRef<Expr *>, 2> OutLengthsArray;
   unsigned SimpleAddrCounter = 0;
   Expr *CIECounter = 0;
+  QualType Int32Ty = Context.getIntTypeForBitwidth(32, true);
   for (ArrayRef<Expr *>::iterator I = VarList.begin(), E = VarList.end();
        I != E; ++I) {
     assert(*I && "Null expr in omp depend");
@@ -5796,9 +5805,21 @@ OMPClause *Sema::ActOnOpenMPDependClause(ArrayRef<Expr *> VarList,
     ArrayRef<Expr *> Lengths = Checker.getLengths();
     ArrayRef<Expr *> Indices = Checker.getIndices();
     if (ASE && Checker.HasIndicies()) {
-      if (!CIECounter)
-        CIECounter = ActOnIntegerConstant(SourceLocation(), 0).take();
-      Expr *Val = *Lengths.begin();
+      Expr *Zero =
+          PerformImplicitConversion(ActOnIntegerConstant(SourceLocation(), 0).take(),
+                                    Int32Ty,
+                                    AA_Casting).take();
+      Expr *Val =
+          PerformImplicitConversion(*Lengths.begin(),
+                                    Int32Ty,
+                                    AA_Casting).take();
+      ExprResult Cond =
+          CreateBuiltinBinOp(SourceLocation(), BO_GT, Val, Zero);
+      Val =
+          new (Context) ConditionalOperator(Cond.take(), SourceLocation(),
+                                            Val, SourceLocation(),
+                                            Zero, Int32Ty, VK_RValue,
+                                            OK_Ordinary);
       for (ArrayRef<Expr *>::iterator II = Lengths.begin() + 1,
                                       EE = Lengths.end();
            II != EE; ++II) {
@@ -5806,13 +5827,26 @@ OMPClause *Sema::ActOnOpenMPDependClause(ArrayRef<Expr *> VarList,
           Val = 0;
           break;
         }
-        Val = CreateBuiltinBinOp((*II)->getExprLoc(), BO_Mul, *II, Val).take();
+        Expr *NewVal = 
+          PerformImplicitConversion(*II, Int32Ty, AA_Casting).take();
+        Cond =
+            CreateBuiltinBinOp((*II)->getExprLoc(), BO_GT, NewVal, Zero);
+        NewVal =
+            new (Context) ConditionalOperator(Cond.take(), (*II)->getExprLoc(),
+                                              NewVal, (*II)->getExprLoc(),
+                                              Zero, Int32Ty, VK_RValue,
+                                              OK_Ordinary);
+        Val = CreateBuiltinBinOp((*II)->getExprLoc(), BO_Mul, NewVal, Val).take();
         if (!Val)
           break;
       }
       if (Val) {
-        CIECounter = CreateBuiltinBinOp(SourceLocation(), BO_Add, CIECounter,
-                                        Val).take();
+        if (CIECounter) {
+          CIECounter = CreateBuiltinBinOp(SourceLocation(), BO_Add, CIECounter,
+                                          Val).take();
+        } else {
+          CIECounter = Val;
+        }
         Vars.push_back(*I);
         OutIndices.push_back(
             SmallVector<Expr *, 2>(Indices.begin(), Indices.end()));
@@ -5836,15 +5870,17 @@ OMPClause *Sema::ActOnOpenMPDependClause(ArrayRef<Expr *> VarList,
     return 0;
   if (CIECounter) {
     Expr *SimpleCounter =
-        ActOnIntegerConstant(SourceLocation(), SimpleAddrCounter).take();
+        PerformImplicitConversion(ActOnIntegerConstant(SourceLocation(), SimpleAddrCounter).take(),
+                                  Int32Ty,
+                                  AA_Casting).take();
     CIECounter = CreateBuiltinBinOp(SourceLocation(), BO_Add, CIECounter,
                                     SimpleCounter).take();
   } else {
     CIECounter =
-        ActOnIntegerConstant(SourceLocation(), SimpleAddrCounter).take();
+        PerformImplicitConversion(ActOnIntegerConstant(SourceLocation(), SimpleAddrCounter).take(),
+                                  Int32Ty,
+                                  AA_Casting).take();
   }
-  CIECounter = PerformImplicitConversion(CIECounter, Context.getSizeType(),
-                                         AA_Casting).take();
 
   for (unsigned i = 0, e = Vars.size(); i < e; ++i) {
     OutIndicesArray.push_back(OutIndices[i]);

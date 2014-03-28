@@ -1397,10 +1397,14 @@ void CodeGenFunction::EmitVariablyModifiedType(QualType type) {
       break;
 
     case Type::Typedef:
+      type = cast<TypedefType>(ty)->desugar();
+      break;
     case Type::Decltype:
+      type = cast<DecltypeType>(ty)->desugar();
+      break;
     case Type::Auto:
-      // Stop walking: nothing to do.
-      return;
+      type = cast<AutoType>(ty)->getDeducedType();
+      break;
 
     case Type::TypeOfExpr:
       // Stop walking: emit typeof expression.
@@ -1411,7 +1415,7 @@ void CodeGenFunction::EmitVariablyModifiedType(QualType type) {
       type = cast<AtomicType>(ty)->getValueType();
       break;
     }
-  } while (type->isVariablyModifiedType());
+  } while (!type.isNull() && type->isVariablyModifiedType());
 }
 
 llvm::Value* CodeGenFunction::EmitVAListRef(const Expr* E) {

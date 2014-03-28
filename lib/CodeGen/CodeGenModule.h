@@ -1176,6 +1176,7 @@ public:
     OMPStackTy OpenMPStack;
     CodeGenModule &CGM;
     llvm::Type *KMPDependInfoType;
+    unsigned KMPDependInfoTypeAlign;
   public:
     OpenMPSupportStackTy(CodeGenModule &CGM)
       : OpenMPThreadPrivate(), OpenMPStack(), CGM(CGM), KMPDependInfoType(0) { }
@@ -1280,8 +1281,9 @@ public:
     void getUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch, llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter);
     void setParentUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch, llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter);
     void getParentUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch, llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter);
-    void setKMPDependInfoType(llvm::Type *Ty) { KMPDependInfoType = Ty; }
+    void setKMPDependInfoType(llvm::Type *Ty, unsigned Align) { KMPDependInfoType = Ty; KMPDependInfoTypeAlign = Align; }
     llvm::Type *getKMPDependInfoType() { return KMPDependInfoType; }
+    unsigned getKMPDependInfoTypeAlign() { return KMPDependInfoTypeAlign; }
   };
 
   OpenMPSupportStackTy OpenMPSupport;
