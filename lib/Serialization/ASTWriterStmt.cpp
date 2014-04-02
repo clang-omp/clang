@@ -1930,14 +1930,16 @@ void OMPClauseWriter::VisitOMPAlignedClause(OMPAlignedClause *C) {
 
 void OMPClauseWriter::VisitOMPDependClause(OMPDependClause *C) {
   Record.push_back(C->varlist_size());
-  Record.push_back(C->getNumHelpers());
   Record.push_back(C->getType());
   Writer.AddSourceLocation(C->getTypeLoc(), Record);
-  for (StmtRange I = C->children(); I ; ++I)
+  for (OMPDependClause::varlist_iterator I = C->varlist_begin(),
+                                         E = C->varlist_end();
+       I != E; ++I)
     Writer.AddStmt(*I);
-  for (unsigned i = 0, e = C->varlist_size(); i < e; ++i) {
-    Record.push_back(C->IndicesLengths[i]);
-  }
+  for (unsigned i = 0, e = C->varlist_size(); i != e; ++i)
+    Writer.AddStmt(C->getBegins(i));
+  for (unsigned i = 0, e = C->varlist_size(); i != e; ++i)
+    Writer.AddStmt(C->getSizeInBytes(i));
 }
 
 //===----------------------------------------------------------------------===//

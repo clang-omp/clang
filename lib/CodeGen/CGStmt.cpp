@@ -2243,11 +2243,21 @@ void CodeGenFunction::InitOpenMPFunction(llvm::Value *Context,
 
   const RecordDecl *RD = S.getCapturedRecordDecl();
 
-  for (RecordDecl::field_iterator I = RD->field_begin(),
-                                  E = RD->field_end();
-       I != E; ++I) {
-    if ((*I)->getType()->isVariablyModifiedType()) {
-      EmitVariablyModifiedType((*I)->getType());
+  QualType TagType = getContext().getTagDeclType(RD);
+  LValue Base = MakeNaturalAlignAddrLValue(Context, TagType);
+  RecordDecl::field_iterator CurField = RD->field_begin();
+  CapturedStmt::const_capture_iterator C = S.capture_begin();
+  for (CapturedStmt::capture_init_iterator I = S.capture_init_begin(),
+                                           E = S.capture_init_end();
+       I != E; ++I, ++C, ++CurField) {
+    QualType QTy = (*CurField)->getType();
+    if (QTy->isVariablyModifiedType()) {
+      EmitVariablyModifiedType(QTy);
+    }
+    if (C->capturesVariable()) {
+      const VarDecl *VD = C->getCapturedVar();
+      LValue LV = EmitLValueForField(Base, CapturedStmtInfo->lookup(VD));
+      CapturedStmtInfo->addCachedVar(VD, LV.getAddress());
     }
   }
 

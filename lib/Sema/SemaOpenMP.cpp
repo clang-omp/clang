@@ -557,7 +557,7 @@ void Sema::EndOpenMPDSABlock(Stmt *CurDirective) {
                 InitSeq.Perform(*this, Entity, InitKind, MultiExprArg());
             if (Res.isInvalid())
               continue;
-            DefaultInits.push_back(Res.take());
+            DefaultInits.push_back(ActOnFinishFullExpr(Res.take()).take());
           } else {
             DefaultInits.push_back(0);
           }
@@ -1000,6 +1000,8 @@ Sema::OMPDeclareReductionFunctionScope::ActOnOMPDeclareReductionFunction(
   RHS = S.DefaultLvalueConversion(RHS.take());
   LHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, LHS.take());
   RHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, RHS.take());
+  LHS = S.ActOnFinishFullExpr(LHS.take());
+  RHS = S.ActOnFinishFullExpr(RHS.take());
   S.AddInitializerToDecl(OmpOut, LHS.take(), true, false);
   S.AddInitializerToDecl(OmpIn, RHS.take(), true, false);
   return FD;
@@ -1111,6 +1113,7 @@ FunctionDecl *Sema::OMPDeclareReductionInitFunctionScope::
       S.BuildDeclRefExpr(ParRHS, ParRHS->getType(), VK_LValue, Loc);
   RHS = S.DefaultLvalueConversion(RHS.take());
   RHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, RHS.take());
+  RHS = S.ActOnFinishFullExpr(RHS.take());
   S.AddInitializerToDecl(OmpOrig, RHS.take(), true, false);
   return FD;
 }
@@ -1129,8 +1132,14 @@ void Sema::CreateDefaultDeclareReductionInitFunctionBody(FunctionDecl *FD,
         CreateBuiltinUnaryOp(Loc, UO_AddrOf, OmpPrivDREExpr);
     OmpPrivAddr = PerformImplicitConversion(OmpPrivAddr.take(),
                                             Context.VoidPtrTy, AA_Casting);
-    ExprResult OmpPrivSizeOf =
-        CreateUnaryExprOrTypeTraitExpr(OmpPrivDREExpr, Loc, UETT_SizeOf);
+    ExprResult OmpPrivSizeOf;
+    {
+      EnterExpressionEvaluationContext Unevaluated(*this, Sema::Unevaluated,
+                                                   Sema::ReuseLambdaContextDecl);
+
+      OmpPrivSizeOf =
+          CreateUnaryExprOrTypeTraitExpr(OmpPrivDREExpr, Loc, UETT_SizeOf);
+    }
     UnqualifiedId Name;
     CXXScopeSpec SS;
     SourceLocation TemplateKwLoc;
@@ -1152,7 +1161,8 @@ void Sema::CreateDefaultDeclareReductionInitFunctionBody(FunctionDecl *FD,
   ExprResult RHS =
       BuildDeclRefExpr(OmpPriv, OmpPriv->getType(), VK_LValue, Loc);
   ExprResult Res = BuildBinOp(0, Loc, BO_Assign, LHS.take(), RHS.take());
-  ExprResult S2 = IgnoredValueConversions(Res.take());
+  ExprResult S2 =
+      IgnoredValueConversions(ActOnFinishFullExpr(Res.take()).take());
   if (S1.isInvalid() || S2.isInvalid()) {
     FD->setBody(ActOnNullStmt(Loc).take());
     FD->setInvalidDecl();
@@ -1202,6 +1212,7 @@ void Sema::OMPDeclareReductionInitFunctionScope::setInit(Expr *E) {
   ExprResult RHS =
       S.BuildDeclRefExpr(OmpPriv, OmpPriv->getType(), VK_LValue, Loc);
   ExprResult Res = S.BuildBinOp(0, Loc, BO_Assign, LHS.take(), RHS.take());
+  Res = S.ActOnFinishFullExpr(Res.take());
   ExprResult S3 = S.IgnoredValueConversions(Res.take());
   if (S1.isInvalid() || S2.isInvalid() || S3.isInvalid()) {
     FD->setBody(S.ActOnNullStmt(Loc).take());
@@ -2017,7 +2028,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
                           VarCnts[LoopIdBegin], Inits[LoopIdBegin]).take();
     if (!NewFinal)
       return false;
-    NewFinal = ImpCastExprToType(NewFinal, Context.VoidTy, CK_ToVoid).take();
+    NewFinal = IgnoredValueConversions(NewFinal).take();
     if (!NewFinal)
       return false;
     Expr *NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul,
@@ -2030,7 +2041,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
                            VarCnts[LoopIdBegin], NewFinal1).take();
     if (!NewFinal1)
       return false;
-    NewFinal1 = ImpCastExprToType(NewFinal1, Context.VoidTy, CK_ToVoid).take();
+    NewFinal1 = IgnoredValueConversions(NewFinal1).take();
     if (!NewFinal1)
       return false;
     NewFinal =
@@ -2047,8 +2058,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
                                VarCnts[LoopIdBegin], Inits[LoopIdBegin]).take();
     if (!NewVarCntExpr)
       return false;
-    NewVarCntExpr =
-        ImpCastExprToType(NewVarCntExpr, Context.VoidTy, CK_ToVoid).take();
+    NewVarCntExpr = IgnoredValueConversions(NewVarCntExpr).take();
     if (!NewVarCntExpr)
       return false;
     Expr *NewVarCntExpr1 = BuildBinOp(
@@ -2057,8 +2067,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
         VarCnts[LoopIdBegin], NewIncr).take();
     if (!NewVarCntExpr1)
       return false;
-    NewVarCntExpr1 =
-        ImpCastExprToType(NewVarCntExpr1, Context.VoidTy, CK_ToVoid).take();
+    NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).take();
     if (!NewVarCntExpr1)
       return false;
     NewVarCntExpr = CreateBuiltinBinOp(StartLoc, BO_Comma, NewVarCntExpr,
@@ -2091,8 +2100,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
           CreateBuiltinBinOp(StartLoc, BO_Comma, NewFinal, NewFinal1).take();
       if (!NewFinal)
         return false;
-      NewFinal1 =
-          ImpCastExprToType(NewFinal1, Context.VoidTy, CK_ToVoid).take();
+      NewFinal1 = IgnoredValueConversions(NewFinal1).take();
       if (!NewFinal1)
         return false;
       NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, Ends[I],
@@ -2105,8 +2113,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
                      VarCnts[I], NewFinal1).take();
       if (!NewFinal1)
         return false;
-      NewFinal1 =
-          ImpCastExprToType(NewFinal1, Context.VoidTy, CK_ToVoid).take();
+      NewFinal1 = IgnoredValueConversions(NewFinal1).take();
       if (!NewFinal1)
         return false;
       NewFinal =
@@ -2124,8 +2131,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
                                   VarCnts[I], Inits[I]).take();
       if (!NewVarCntExpr1)
         return false;
-      NewVarCntExpr1 =
-          ImpCastExprToType(NewVarCntExpr1, Context.VoidTy, CK_ToVoid).take();
+      NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).take();
       if (!NewVarCntExpr1)
         return false;
       NewVarCntExpr = CreateBuiltinBinOp(StartLoc, BO_Comma, NewVarCntExpr,
@@ -2138,8 +2144,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
                      VarCnts[I], NewIncr).take();
       if (!NewVarCntExpr1)
         return false;
-      NewVarCntExpr1 =
-          ImpCastExprToType(NewVarCntExpr1, Context.VoidTy, CK_ToVoid).take();
+      NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).take();
       if (!NewVarCntExpr1)
         return false;
       NewVarCntExpr = CreateBuiltinBinOp(StartLoc, BO_Comma, NewVarCntExpr,
@@ -2151,9 +2156,11 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
       if (!NewDiv)
         return false;
     }
-    NewVarCntExpr =
-        ImpCastExprToType(NewVarCntExpr, Context.VoidTy, CK_ToVoid).take();
-    NewFinal = ImpCastExprToType(NewFinal, Context.VoidTy, CK_ToVoid).take();
+    NewVarCntExpr = IgnoredValueConversions(NewVarCntExpr).take();
+    NewFinal = IgnoredValueConversions(NewFinal).take();
+    NewFinal = ActOnFinishFullExpr(NewFinal).take();
+    NewVarCntExpr = ActOnFinishFullExpr(NewVarCntExpr).take();
+    NewEnd = ActOnFinishFullExpr(NewEnd).take();
   }
   return true;
 }
@@ -3219,11 +3226,10 @@ OMPClause *Sema::ActOnOpenMPNumThreadsClause(Expr *NumThreads,
     Value = DefaultLvalueConversion(Value.take());
     if (Value.isInvalid())
       return 0;
-    CastKind CK = PrepareScalarCast(Value, Context.IntTy);
-    if (CK != CK_NoOp)
-      Value = ImpCastExprToType(Value.take(), Context.IntTy, CK);
-    if (Value.isInvalid())
-      return 0;
+    Value =
+        PerformImplicitConversion(Value.take(),
+                                  Context.getIntTypeForBitwidth(32, true),
+                                  AA_Converting);
     ValExpr = Value.take();
   }
 
@@ -4047,7 +4053,7 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
     ExprResult Res = InitSeq.Perform(*this, Entity, InitKind, MultiExprArg());
     if (Res.isInvalid())
       continue;
-    DefaultInits.push_back(Res.take());
+    DefaultInits.push_back(ActOnFinishFullExpr(Res.take()).take());
     DSAStack->addDSA(VD, DE, OMPC_private);
     Vars.push_back(DE);
   }
@@ -4293,7 +4299,7 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
       if (Res.isInvalid())
         continue;
       PseudoVars.push_back(PseudoDE);
-      Inits.push_back(Res.take());
+      Inits.push_back(ActOnFinishFullExpr(Res.take()).take());
     } else {
       PseudoVars.push_back(0);
       Inits.push_back(0);
@@ -4510,7 +4516,7 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
         continue;
       PseudoVars2.push_back(PseudoDE2);
       Assignments.push_back(
-          ImpCastExprToType(Res.take(), Context.VoidTy, CK_ToVoid).take());
+          ActOnFinishFullExpr(IgnoredValueConversions(Res.take()).take()).take());
     } else {
       PseudoVars2.push_back(0);
       Assignments.push_back(0);
@@ -4704,7 +4710,7 @@ OMPClause *Sema::ActOnOpenMPCopyinClause(ArrayRef<Expr *> VarList,
         continue;
       PseudoVars2.push_back(PseudoDE2);
       Assignments.push_back(
-          ImpCastExprToType(Res.take(), Context.VoidTy, CK_ToVoid).take());
+          ActOnFinishFullExpr(IgnoredValueConversions(Res.take()).take()).take());
     } else {
       PseudoVars2.push_back(0);
       Assignments.push_back(0);
@@ -4858,7 +4864,7 @@ OMPClause *Sema::ActOnOpenMPCopyPrivateClause(ArrayRef<Expr *> VarList,
     PseudoVars1.push_back(PseudoDE1);
     PseudoVars2.push_back(PseudoDE2);
     Assignments.push_back(
-        ImpCastExprToType(Res.take(), Context.VoidTy, CK_ToVoid).take());
+        ActOnFinishFullExpr(IgnoredValueConversions(Res.take()).take()).take());
     DSAStack->addDSA(VD, DE, OMPC_copyprivate);
     Vars.push_back(DE);
   }
@@ -5369,7 +5375,7 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
       }
       if (Res.isInvalid())
         continue;
-      Res = ImpCastExprToType(Res.take(), Context.VoidTy, CK_ToVoid);
+      Res = IgnoredValueConversions(Res.take());
 
       Type = Type.getUnqualifiedType();
       if (RD) {
@@ -5388,12 +5394,13 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
             InitSeq.Perform(*this, Entity, InitKind, MultiExprArg());
         if (CPRes.isInvalid())
           continue;
-        DefaultInits.push_back(CPRes.take());
+        DefaultInits.push_back(
+            ActOnFinishFullExpr(CPRes.take()).take());
       } else {
         DefaultInits.push_back(0);
       }
       Vars.push_back(DE);
-      OpExprs.push_back(Res.take());
+      OpExprs.push_back(ActOnFinishFullExpr(Res.take()).take());
       HelperParams1.push_back(PtrDE1Expr);
       HelperParams2.push_back(PtrDE2Expr);
     }
@@ -5670,85 +5677,108 @@ namespace {
 class ArrayItemChecker : public StmtVisitor<ArrayItemChecker, bool> {
 private:
   Sema &SemaRef;
-  Expr *Size;
-  bool HasCIE;
-  bool FirstIndex;
-  SmallVector<Expr *, 2> Indices;
-  SmallVector<Expr *, 2> Lengths;
+  Expr *End;
 
 public:
-  bool VisitDeclRefExpr(DeclRefExpr *E) { return !isa<VarDecl>(E->getDecl()); }
-  bool VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
-    bool SizeAnalysis = false;
-    if (FirstIndex) {
-      SizeAnalysis = true;
-      FirstIndex = false;
+  bool VisitDeclRefExpr(DeclRefExpr *E) {
+    if (isa<VarDecl>(E->getDecl())) {
+      End = E;
+      return false;
     }
-    bool Result = Visit(E->getBase()->IgnoreImplicit());
+    return true;
+  }
+  bool VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
+    Expr *Base = E->getBase()->IgnoreImplicit();
+    bool Result = Visit(Base);
+    if (!End) return Result;
     if (CEANIndexExpr *CIE = dyn_cast_or_null<CEANIndexExpr>(E->getIdx())) {
-      llvm::APSInt Result;
+      llvm::APSInt Value;
       // OpenMP [2.11.1.1, Restrictions]
       //  List items used in dependent clauses cannot be zero-length array
       //  sections.
-      if (CIE->getLength()->EvaluateAsInt(Result, SemaRef.getASTContext()) &&
-          ((Result.isSigned() && Result.isNegative()) || !Result)) {
+      if (CIE->getLength()->EvaluateAsInt(Value, SemaRef.getASTContext()) &&
+          ((Value.isSigned() && Value.isNegative()) || !Value)) {
         SemaRef.Diag(CIE->getExprLoc(),
                      diag::err_omp_array_section_length_not_greater_zero)
             << CIE->getSourceRange();
-      } else {
-        if (SizeAnalysis) {
-          Size =
-              SemaRef.CreateUnaryExprOrTypeTraitExpr(
-                          SemaRef.Context.getTrivialTypeSourceInfo(
-                              E->getType()),
-                          SourceLocation(), UETT_SizeOf, SourceRange()).take();
-          Size = SemaRef.CreateBuiltinBinOp(SourceLocation(), BO_Mul, Size,
-                                            CIE->getLength()).take();
-          CIE->setIndexExpr(CIE->getLowerBound());
-        } else {
-          VarDecl *VD =
-              VarDecl::Create(SemaRef.getASTContext(),
-                              SemaRef.getCurLexicalContext(),
-                              SourceLocation(), SourceLocation(),
-                              &SemaRef.getASTContext().Idents.get(".depend.i"),
-                              CIE->getType(), 0, SC_None);
-          ExprResult InitExpr =
-              SemaRef.ActOnIntegerConstant(SourceLocation(), 0);
-          InitExpr =
-              SemaRef.PerformImplicitConversion(InitExpr.take(), CIE->getType(),
-                                                Sema::AA_Casting);
-          VD->setInit(InitExpr.take());
-          VD->addAttr(new (SemaRef.Context)
-                      OMPLocalAttr(SourceLocation(), SemaRef.Context));
-          VD->setReferenced();
-          DeclarationNameInfo NameInfo(VD->getDeclName(), SourceLocation());
-          Expr *DRE = DeclRefExpr::Create(
-              SemaRef.Context, NestedNameSpecifierLoc(), SourceLocation(), VD,
-              true, NameInfo, VD->getType(), VK_LValue, 0);
-          Indices.push_back(DRE);
-          Lengths.push_back(CIE->getLength());
-          Expr *Res = SemaRef.DefaultLvalueConversion(DRE).take();
-          Res = SemaRef.CreateBuiltinBinOp(SourceLocation(), BO_Add,
-                                           CIE->getLowerBound(), Res).take();
-          CIE->setIndexExpr(Res);
-          HasCIE = true;
-        }
+        End = 0;
+        return Result;
       }
-    } else if (SizeAnalysis) {
-      Size = SemaRef.CreateUnaryExprOrTypeTraitExpr(
-                         SemaRef.Context.getTrivialTypeSourceInfo(E->getType()),
-                         SourceLocation(), UETT_SizeOf, SourceRange()).take();
+      ExprResult Idx =
+          SemaRef.CreateBuiltinBinOp(SourceLocation(), BO_Add,
+                                     CIE->getLowerBound(), CIE->getLength());
+      if (Idx.isInvalid()) {
+        End = 0;
+        return Result;
+      }
+      Idx =
+          SemaRef.CreateBuiltinBinOp(SourceLocation(), BO_Sub,
+                                     Idx.take(),
+                                     SemaRef.ActOnIntegerConstant(SourceLocation(), 1).take());
+      if (Idx.isInvalid()) {
+        End = 0;
+        return Result;
+      }
+      End =
+          SemaRef.CreateBuiltinArraySubscriptExpr(End, SourceLocation(),
+                                                  Idx.take(), SourceLocation()).take();
+      CIE->setIndexExpr(CIE->getLowerBound());
+    } else if (End != Base) {
+      End =
+          SemaRef.CreateBuiltinArraySubscriptExpr(End, SourceLocation(),
+                                                  E->getIdx(), SourceLocation()).take();
+    } else {
+      End = E;
     }
     return Result;
   }
   bool VisitStmt(Stmt *S) { return true; }
 
-  ArrayItemChecker(Sema &SemaRef)
-      : SemaRef(SemaRef), Size(0), HasCIE(false), FirstIndex(true) {}
-  ArrayRef<Expr *> getIndices() { return Indices; }
-  ArrayRef<Expr *> getLengths() { return Lengths; }
-  bool HasIndicies() const { return HasCIE; }
-  Expr *GetSizeInBytes() { return Size; }
+  ArrayItemChecker(Sema &SemaRef) : SemaRef(SemaRef), End(0) {}
+  std::pair<Expr *, Expr*> CalculateSize(Expr *Begin) {
+    if (!Begin) return std::make_pair<Expr *, Expr *>(0, 0);
+    QualType CharPtrTy =
+        SemaRef.getASTContext().getPointerType(SemaRef.getASTContext().CharTy);
+    if (!End || Begin == End) {
+      Expr *Size;
+      {
+        EnterExpressionEvaluationContext Unevaluated(SemaRef, Sema::Unevaluated,
+                                                     Sema::ReuseLambdaContextDecl);
+
+        Size =
+            SemaRef.CreateUnaryExprOrTypeTraitExpr(Begin, SourceLocation(),
+                                                   UETT_SizeOf).take();
+      }
+      ExprResult AddrBegin =
+          SemaRef.CreateBuiltinUnaryOp(SourceLocation(), UO_AddrOf, Begin);
+      if (AddrBegin.isInvalid())
+        return std::make_pair<Expr *, Expr *>(0, 0);
+      AddrBegin =
+          SemaRef.ImpCastExprToType(AddrBegin.take(), CharPtrTy, CK_BitCast);
+      if (AddrBegin.isInvalid())
+        return std::make_pair<Expr *, Expr *>(0, 0);
+      Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.take()).take();
+      return std::make_pair(AB, Size);
+    }
+
+    ExprResult AddrEnd =
+        SemaRef.CreateBuiltinUnaryOp(SourceLocation(), UO_AddrOf, End);
+    if (AddrEnd.isInvalid())
+      return std::make_pair<Expr *, Expr *>(0, 0);
+    AddrEnd =
+        SemaRef.CreateBuiltinBinOp(SourceLocation(), BO_Add,
+                                   AddrEnd.take(),
+                                   SemaRef.ActOnIntegerConstant(SourceLocation(), 1).take());
+    if (AddrEnd.isInvalid())
+      return std::make_pair<Expr *, Expr *>(0, 0);
+    ExprResult AddrBegin =
+        SemaRef.CreateBuiltinUnaryOp(SourceLocation(), UO_AddrOf, Begin);
+    if (AddrBegin.isInvalid())
+      return std::make_pair<Expr *, Expr *>(0, 0);
+    Expr *AE = SemaRef.DefaultLvalueConversion(AddrEnd.take()).take();
+    Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.take()).take();
+    return std::make_pair(AB, AE);
+  }
 };
 }
 
@@ -5758,14 +5788,8 @@ OMPClause *Sema::ActOnOpenMPDependClause(ArrayRef<Expr *> VarList,
                                          OpenMPDependClauseType Ty,
                                          SourceLocation TyLoc) {
   SmallVector<Expr *, 4> Vars;
+  SmallVector<Expr *, 4> Begins;
   SmallVector<Expr *, 4> SizeInBytes;
-  SmallVector<SmallVector<Expr *, 2>, 2> OutIndices;
-  SmallVector<SmallVector<Expr *, 2>, 2> OutLengths;
-  SmallVector<ArrayRef<Expr *>, 2> OutIndicesArray;
-  SmallVector<ArrayRef<Expr *>, 2> OutLengthsArray;
-  unsigned SimpleAddrCounter = 0;
-  Expr *CIECounter = 0;
-  QualType Int32Ty = Context.getIntTypeForBitwidth(32, true);
   for (ArrayRef<Expr *>::iterator I = VarList.begin(), E = VarList.end();
        I != E; ++I) {
     assert(*I && "Null expr in omp depend");
@@ -5773,8 +5797,7 @@ OMPClause *Sema::ActOnOpenMPDependClause(ArrayRef<Expr *> VarList,
         (*I)->isInstantiationDependent()) {
       // It will be analyzed later.
       Vars.push_back(*I);
-      OutIndices.push_back(SmallVector<Expr *, 2>());
-      OutLengths.push_back(SmallVector<Expr *, 2>());
+      Begins.push_back(0);
       SizeInBytes.push_back(0);
       continue;
     }
@@ -5788,108 +5811,35 @@ OMPClause *Sema::ActOnOpenMPDependClause(ArrayRef<Expr *> VarList,
     // OpenMP  [2.9.3.3, Restrictions, p.1]
     //  A variable that is part of another variable (as an array or
     //  structure element) cannot appear in a private clause.
-    DeclRefExpr *DE = dyn_cast_or_null<DeclRefExpr>(*I);
-    ArraySubscriptExpr *ASE = dyn_cast_or_null<ArraySubscriptExpr>(*I);
+    Expr *VE = (*I)->IgnoreParenLValueCasts();
+
+    if (VE->isRValue()) {
+      Diag(ELoc, diag::err_omp_depend_arg_not_lvalue) << (*I)->getSourceRange();
+      continue;
+    }
+
+    DeclRefExpr *DE = dyn_cast_or_null<DeclRefExpr>(VE);
+    ArraySubscriptExpr *ASE = dyn_cast_or_null<ArraySubscriptExpr>(VE);
     ArrayItemChecker Checker(*this);
-    if ((!DE || !isa<VarDecl>(DE->getDecl())) && (!ASE || Checker.Visit(ASE))) {
+    if ((!DE || !isa<VarDecl>(DE->getDecl())) &&
+        (!ASE || Checker.Visit(ASE))) {
       Diag(ELoc, diag::err_omp_expected_var_name_or_array_item)
           << (*I)->getSourceRange();
       continue;
     }
 
-    if ((*I)->isRValue()) {
-      Diag(ELoc, diag::err_omp_depend_arg_not_lvalue) << (*I)->getSourceRange();
-      continue;
-    }
+    std::pair<Expr *, Expr  *> BeginSize  = Checker.CalculateSize(VE);
+    if (!BeginSize.first || !BeginSize.second) continue;
 
-    ArrayRef<Expr *> Lengths = Checker.getLengths();
-    ArrayRef<Expr *> Indices = Checker.getIndices();
-    if (ASE && Checker.HasIndicies()) {
-      Expr *Zero =
-          PerformImplicitConversion(ActOnIntegerConstant(SourceLocation(), 0).take(),
-                                    Int32Ty,
-                                    AA_Casting).take();
-      Expr *Val =
-          PerformImplicitConversion(*Lengths.begin(),
-                                    Int32Ty,
-                                    AA_Casting).take();
-      ExprResult Cond =
-          CreateBuiltinBinOp(SourceLocation(), BO_GT, Val, Zero);
-      Val =
-          new (Context) ConditionalOperator(Cond.take(), SourceLocation(),
-                                            Val, SourceLocation(),
-                                            Zero, Int32Ty, VK_RValue,
-                                            OK_Ordinary);
-      for (ArrayRef<Expr *>::iterator II = Lengths.begin() + 1,
-                                      EE = Lengths.end();
-           II != EE; ++II) {
-        if (*II == 0) {
-          Val = 0;
-          break;
-        }
-        Expr *NewVal = 
-          PerformImplicitConversion(*II, Int32Ty, AA_Casting).take();
-        Cond =
-            CreateBuiltinBinOp((*II)->getExprLoc(), BO_GT, NewVal, Zero);
-        NewVal =
-            new (Context) ConditionalOperator(Cond.take(), (*II)->getExprLoc(),
-                                              NewVal, (*II)->getExprLoc(),
-                                              Zero, Int32Ty, VK_RValue,
-                                              OK_Ordinary);
-        Val = CreateBuiltinBinOp((*II)->getExprLoc(), BO_Mul, NewVal, Val).take();
-        if (!Val)
-          break;
-      }
-      if (Val) {
-        if (CIECounter) {
-          CIECounter = CreateBuiltinBinOp(SourceLocation(), BO_Add, CIECounter,
-                                          Val).take();
-        } else {
-          CIECounter = Val;
-        }
-        Vars.push_back(*I);
-        OutIndices.push_back(
-            SmallVector<Expr *, 2>(Indices.begin(), Indices.end()));
-        OutLengths.push_back(
-            SmallVector<Expr *, 2>(Lengths.begin(), Lengths.end()));
-        SizeInBytes.push_back(Checker.GetSizeInBytes());
-      }
-    } else {
-      ++SimpleAddrCounter;
-      Vars.push_back(*I);
-      OutIndices.push_back(SmallVector<Expr *, 2>());
-      OutLengths.push_back(SmallVector<Expr *, 2>());
-      Expr *Size =
-          CreateUnaryExprOrTypeTraitExpr(DefaultLvalueConversion(*I).take(),
-                                         SourceLocation(), UETT_SizeOf).take();
-      SizeInBytes.push_back(Size);
-    }
+    Vars.push_back(VE);
+    Begins.push_back(BeginSize.first);
+    SizeInBytes.push_back(BeginSize.second);
   }
 
-  if (Vars.empty())
+  if (Vars.empty() || Vars.size() != Begins.size())
     return 0;
-  if (CIECounter) {
-    Expr *SimpleCounter =
-        PerformImplicitConversion(ActOnIntegerConstant(SourceLocation(), SimpleAddrCounter).take(),
-                                  Int32Ty,
-                                  AA_Casting).take();
-    CIECounter = CreateBuiltinBinOp(SourceLocation(), BO_Add, CIECounter,
-                                    SimpleCounter).take();
-  } else {
-    CIECounter =
-        PerformImplicitConversion(ActOnIntegerConstant(SourceLocation(), SimpleAddrCounter).take(),
-                                  Int32Ty,
-                                  AA_Casting).take();
-  }
-
-  for (unsigned i = 0, e = Vars.size(); i < e; ++i) {
-    OutIndicesArray.push_back(OutIndices[i]);
-    OutLengthsArray.push_back(OutLengths[i]);
-  }
-
-  return OMPDependClause::Create(Context, StartLoc, EndLoc, Vars, CIECounter,
-                                 OutIndicesArray, OutLengthsArray, SizeInBytes,
-                                 Ty, TyLoc);
+  return OMPDependClause::Create(Context, StartLoc, EndLoc, Vars,
+                                 Begins, SizeInBytes, Ty, TyLoc);
 }
 
 namespace {

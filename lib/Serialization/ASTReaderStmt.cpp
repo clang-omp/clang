@@ -1776,11 +1776,9 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_uniform:
     C = OMPUniformClause::CreateEmpty(Context, Record[Idx++]);
     break;
-  case OMPC_depend: {
-    unsigned N = Record[Idx++];
-    C = OMPDependClause::CreateEmpty(Context, N, Record[Idx++]);
+  case OMPC_depend:
+    C = OMPDependClause::CreateEmpty(Context, Record[Idx++]);
     break;
-  }
   default:
     assert(0 && "Unknown clause!");
     return 0;
@@ -2113,16 +2111,16 @@ void OMPClauseReader::VisitOMPDependClause(OMPDependClause *C) {
     Vars.push_back(Reader.ReadSubExpr());
   }
   C->setVars(Vars);
-  C->setNumberOfContiguousSpaces(Reader.ReadSubExpr());
   Vars.clear();
-  unsigned NumHelpers = C->getNumHelpers();
-  for (unsigned i = 0; i != NumHelpers; ++i) {
+  for (unsigned i = 0; i != NumVars; ++i) {
     Vars.push_back(Reader.ReadSubExpr());
   }
-  C->setHelperExprs(Vars);
-  for (unsigned i = 0; i < NumVars; ++i) {
-    C->IndicesLengths[i] = Record[Idx++];
+  C->setBegins(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
   }
+  C->setSizeInBytes(Vars);
 }
 
 //===----------------------------------------------------------------------===//

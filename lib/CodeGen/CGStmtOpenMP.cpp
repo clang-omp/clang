@@ -1812,6 +1812,96 @@ namespace {
   };
 }
 
+static std::pair<llvm::Value *, unsigned>
+ProcessDependAddresses(CodeGenFunction &CGF, const OMPTaskDirective &S) {
+  CodeGenModule &CGM = CGF.CGM;
+
+  llvm::Value *DependenceAddresses = 0;
+  unsigned ArraySize = 0;
+
+  SmallVector<const OMPDependClause *, 16> DependClauses;
+  for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
+                                       E = S.clauses().end();
+       I != E; ++I) {
+    if (OMPDependClause *ODC = dyn_cast_or_null<OMPDependClause>(*I)) {
+      ArraySize += ODC->varlist_size();
+      DependClauses.push_back(ODC);
+    }
+  }
+  if (ArraySize > 0) {
+    llvm::Type *IntPtrTy =
+        CGF.ConvertTypeForMem(CGF.getContext().getIntPtrType());
+    llvm::Type *BoolTy = CGF.ConvertTypeForMem(CGF.getContext().BoolTy);
+    llvm::Type *DepTy = getKMPDependInfoType(&CGM);
+    llvm::ArrayType *DepListTy = llvm::ArrayType::get(DepTy, ArraySize);
+
+    llvm::AllocaInst *Addresses = CGF.CreateTempAlloca(DepListTy, ".dep.list.");
+    Addresses->setAlignment(CGM.OpenMPSupport.getKMPDependInfoTypeAlign());
+    DependenceAddresses = CGF.Builder.CreateConstInBoundsGEP2_32(Addresses, 0, 0);
+
+    unsigned FieldCounter = 0;
+    for (SmallVectorImpl<const OMPDependClause *>::iterator
+             I = DependClauses.begin(),
+             E = DependClauses.end();
+         I != E; ++I) {
+      unsigned DepType = IN;
+      switch ((*I)->getType()) {
+      case OMPC_DEPEND_in:
+        DepType = IN;
+        break;
+      case OMPC_DEPEND_out:
+        DepType = OUT;
+        break;
+      case OMPC_DEPEND_inout:
+        DepType = INOUT;
+        break;
+      case OMPC_DEPEND_unknown:
+      case NUM_OPENMP_DEPENDENCE_TYPE:
+        llvm_unreachable("Unknown kind of dependency");
+        break;
+      }
+      for (unsigned i = 0, e = (*I)->varlist_size(); i < e; ++i, ++FieldCounter) {
+        llvm::Value *DepElPtr =
+            CGF.Builder.CreateConstInBoundsGEP2_32(Addresses, 0, FieldCounter);
+        // [CounterVal].base_addr = &expr;
+        llvm::Value *DepBaseAddr =
+            CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 0);
+        llvm::Value *BaseAddr =
+            CGF.EmitAnyExpr((*I)->getBegins(i)).getScalarVal();
+        BaseAddr = CGF.Builder.CreatePointerCast(BaseAddr, IntPtrTy);
+        CGF.Builder.CreateStore(BaseAddr, DepBaseAddr);
+        // [CounterVal].len = size;
+        llvm::Value *DepLen =
+            CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 1);
+        const Expr *Size = (*I)->getSizeInBytes(i);
+        if (Size->getType()->isAnyPointerType()) {
+          // Size is not a size, but the ending pointer
+          // Calculate the real size
+          llvm::Value *EndAddr = CGF.EmitScalarExpr(Size);
+          llvm::Value *BaseVal = CGF.Builder.CreatePtrToInt(BaseAddr, CGF.SizeTy);
+          llvm::Value *EndVal = CGF.Builder.CreatePtrToInt(EndAddr, CGF.SizeTy);
+          llvm::Value *Cond = CGF.Builder.CreateICmpUGT(EndVal, BaseVal);
+          llvm::Value *Res = CGF.Builder.CreateSelect(Cond,
+                                                      CGF.Builder.CreateSub(EndVal, BaseVal),
+                                                      llvm::Constant::getNullValue(CGF.SizeTy));
+          CGF.Builder.CreateStore(Res, DepLen);
+        } else {
+          CGF.Builder.CreateStore(CGF.EmitScalarExpr(Size), DepLen);
+        }
+        // [CounterVal].flags = size;
+        llvm::Value *DepFlags =
+            CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 2);
+        CGF.Builder.CreateStore(llvm::ConstantInt::get(BoolTy, DepType),
+                                DepFlags);
+      }
+    }
+  } else {
+    llvm::Type *DepTy = getKMPDependInfoType(&CGM);
+    DependenceAddresses = llvm::Constant::getNullValue(DepTy->getPointerTo());
+  }
+  return std::make_pair(DependenceAddresses, ArraySize);
+}
+
 /// Generate an instructions for '#pragma omp task' directive.
 void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   // Generate shared args for captured stmt.
@@ -1963,181 +2053,19 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
 
     if (CGM.OpenMPSupport.getParentUntied()) {
       // CodeGen for 'depend' clause.
-      llvm::Value *DependCount = 0;
       llvm::Value *DependenceAddresses = 0;
+      unsigned ArraySize = 0;
 
-      SmallVector<const OMPDependClause *, 16> DependClauses;
-      for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                           E = S.clauses().end();
-           I != E; ++I) {
-        if (OMPDependClause *ODC = dyn_cast_or_null<OMPDependClause>(*I)) {
-          if (DependClauses.empty()) {
-            DependCount =
-                CGF.CreateMemTemp(getContext().getIntTypeForBitwidth(32, true), ".dep.size.");
-            CGF.Builder.CreateStore(llvm::Constant::getNullValue(Int32Ty), DependCount);
-          }
-          DependClauses.push_back(ODC);
-          llvm::Value *LocalCount = CGF.EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
-          llvm::BasicBlock *TrueBr = CGF.createBasicBlock(".then.");
-          llvm::BasicBlock *FalseBr = CGF.createBasicBlock(".done.");
-          CGF.Builder.CreateCondBr(CGF.Builder.CreateIsNotNull(LocalCount), TrueBr, FalseBr);
-          CGF.EmitBlock(TrueBr);
-          CGF.Builder.CreateStore(
-              CGF.Builder.CreateNSWAdd(CGF.Builder.CreateLoad(DependCount), LocalCount),
-              DependCount);
-          CGF.EmitBlock(FalseBr);
-        }
-      }
-      if (DependCount) {
-        llvm::Type *DepTy = getKMPDependInfoType(&CGM);
-        llvm::Type *IntPtrTy =
-            CGF.ConvertTypeForMem(getContext().getIntPtrType());
-        if (!CGF.DidCallStackSave) {
-          // Save the stack.
-          llvm::Value *Stack = CGF.CreateTempAlloca(Int8PtrTy, "saved_stack");
-
-          llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave);
-          llvm::Value *V = CGF.Builder.CreateCall(F);
-
-          CGF.Builder.CreateStore(V, Stack);
-
-          CGF.DidCallStackSave = true;
-
-          // Push a cleanup block and restore the stack there.
-          // FIXME: in general circumstances, this should be an EH cleanup.
-          CGF.EHStack.pushCleanup<CallStackRestore>(NormalCleanup, Stack);
-        }
-        // Be sure that size > 0.
-        llvm::Value *DepSize = CGF.Builder.CreateLoad(DependCount);
-        llvm::Value *NewDepSize =
-            CGF.Builder.CreateNSWAdd(DepSize, CGF.Builder.getInt32(1));
-        llvm::AllocaInst *Addresses =
-            CGF.Builder.CreateAlloca(DepTy, NewDepSize, ".dep.list.");
-        Addresses->setAlignment(CGM.OpenMPSupport.getKMPDependInfoTypeAlign());
-        DependenceAddresses =
-            CGF.Builder.CreateBitCast(Addresses, DepTy->getPointerTo());
-
-        llvm::BasicBlock *TrueBr = CGF.createBasicBlock(".dep.then.");
-        llvm::BasicBlock *FalseBr = CGF.createBasicBlock(".dep.done.");
-        CGF.Builder.CreateCondBr(CGF.Builder.CreateIsNotNull(DepSize),
-                                 TrueBr, FalseBr);
-        CGF.EmitBlock(TrueBr);
-
-        llvm::AllocaInst *Counter =
-            CGF.CreateMemTemp(getContext().getSizeType(), ".dep.count.addr");
-        CGF.EmitStoreOfScalar(llvm::Constant::getNullValue(SizeTy),
-                              Counter,
-                              false,
-                              getContext().getTypeAlignInChars(getContext().getSizeType()).getQuantity(),
-                              getContext().getSizeType());
-        for (SmallVectorImpl<const OMPDependClause *>::iterator
-                 I = DependClauses.begin(),
-                 E = DependClauses.end();
-             I != E; ++I) {
-          ArrayRef<const Expr *> Vars = (*I)->getVars();
-          unsigned DepType = IN;
-          switch ((*I)->getType()) {
-          case OMPC_DEPEND_in:
-            DepType = IN;
-            break;
-          case OMPC_DEPEND_out:
-            DepType = OUT;
-            break;
-          case OMPC_DEPEND_inout:
-            DepType = INOUT;
-            break;
-          case OMPC_DEPEND_unknown:
-          case NUM_OPENMP_DEPENDENCE_TYPE:
-            llvm_unreachable("Unknown kind of dependency");
-            break;
-          }
-          for (unsigned i = 0, e = (*I)->varlist_size(); i < e; ++i) {
-            SmallVector<llvm::BasicBlock *, 16> ContBlocks;
-            SmallVector<llvm::BasicBlock *, 16> ThenBlocks;
-            SmallVector<llvm::BasicBlock *, 16> ExitBlocks;
-            ArrayRef<Expr *> Indicies = (*I)->getIndicies(i);
-            ArrayRef<Expr *> Lengths = (*I)->getLengths(i);
-            for (ArrayRef<Expr *>::iterator II = Indicies.begin(),
-                                            EE = Indicies.end(),
-                                            IL = Lengths.begin();
-                 II != EE; ++II, ++IL) {
-              if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
-                if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
-                  CGF.EmitVarDecl(*VD);
-                  ContBlocks.push_back(CGF.createBasicBlock(".dep.cont."));
-                  ThenBlocks.push_back(CGF.createBasicBlock(".dep.then."));
-                  ExitBlocks.push_back(CGF.createBasicBlock(".dep.exit."));
-                  CGF.EmitBlock(ContBlocks.back());
-                  llvm::Value *VDValAddr = CGF.GetAddrOfLocalVar(VD);
-                  llvm::Value *VDVal = CGF.Builder.CreateLoad(VDValAddr);
-                  llvm::Value *Length = CGF.EmitScalarExpr(*IL);
-                  llvm::Value *Cond = 0;
-                  if ((*IL)->getType()->hasUnsignedIntegerRepresentation()) {
-                    Cond = CGF.Builder.CreateICmpULT(VDVal, Length);
-                  } else {
-                    Cond = CGF.Builder.CreateICmpSLT(VDVal, Length);
-                  }
-                  CGF.Builder.CreateCondBr(Cond, ThenBlocks.back(),
-                                           ExitBlocks.back());
-                  CGF.EmitBlock(ThenBlocks.back());
-                }
-              }
-            }
-            llvm::Value *CounterVal =
-                CGF.Builder.CreateLoad(Counter, ".dep.count.");
-            llvm::Value *DepElPtr =
-                CGF.Builder.CreateGEP(DependenceAddresses, CounterVal);
-            // [CounterVal].base_addr = &expr;
-            llvm::Value *DepBaseAddr =
-                CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 0);
-            llvm::Value *BaseAddr = CGF.EmitLValue(Vars[i]).getAddress();
-            BaseAddr = CGF.Builder.CreatePointerCast(BaseAddr, IntPtrTy);
-            CGF.Builder.CreateStore(BaseAddr, DepBaseAddr);
-            // [CounterVal].len = size;
-            llvm::Value *DepLen =
-                CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 1);
-            const Expr *Size = (*I)->getSizeInBytes(i);
-            CGF.Builder.CreateStore(CGF.EmitScalarExpr(Size), DepLen);
-            // [CounterVal].flags = size;
-            llvm::Value *DepFlags =
-                CGF.Builder.CreateConstGEP2_32(DepElPtr, 0, 2);
-            llvm::Type *BoolTy = CGF.ConvertTypeForMem(getContext().BoolTy);
-            CGF.Builder.CreateStore(llvm::ConstantInt::get(BoolTy, DepType),
-                                    DepFlags);
-            CounterVal = CGF.Builder.CreateAdd(
-                CounterVal, llvm::ConstantInt::get(SizeTy, 1));
-            CGF.Builder.CreateStore(CounterVal, Counter);
-            unsigned BCnt = ContBlocks.size() - 1;
-            for (ArrayRef<Expr *>::reverse_iterator II = Indicies.rbegin(),
-                                                    EE = Indicies.rend();
-                 II != EE; ++II, --BCnt) {
-              if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
-                if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
-                  llvm::Value *VDValAddr = CGF.GetAddrOfLocalVar(VD);
-                  llvm::Value *VDVal = CGF.Builder.CreateLoad(VDValAddr);
-                  VDVal = CGF.Builder.CreateAdd(
-                      VDVal, llvm::ConstantInt::get(VDVal->getType(), 1),
-                      "add", false, DRE->getType()->isSignedIntegerOrEnumerationType());
-                  CGF.Builder.CreateStore(VDVal, VDValAddr);
-                  CGF.EmitBranch(ContBlocks[BCnt]);
-                  CGF.EmitBlock(ExitBlocks[BCnt], false);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      if (DependCount != 0) {
+      llvm::tie(DependenceAddresses, ArraySize) =
+          ProcessDependAddresses(CGF, S);
+      if (ArraySize != 0) {
         llvm::Type *PtrDepTy = getKMPDependInfoType(&CGM)->getPointerTo();
         llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), CGF);
         llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), CGF);
         llvm::Value *RealArgs1[] = {
           Loc, GTid,
-          DependCount ? cast<llvm::Value>(CGF.Builder.CreateLoad(DependCount))
-                      : cast<llvm::Value>(llvm::ConstantInt::get(Int32Ty, 0)),
-          DependenceAddresses ? DependenceAddresses
-                              : llvm::Constant::getNullValue(PtrDepTy),
+          llvm::ConstantInt::get(Int32Ty, ArraySize),
+          DependenceAddresses,
           llvm::ConstantInt::get(Int32Ty, 0),
           llvm::Constant::getNullValue(PtrDepTy)
         };
@@ -2186,170 +2114,11 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   CGM.OpenMPSupport.endOpenMPRegion();
 
   // CodeGen for 'depend' clause.
-  llvm::Value *DependCount = 0;
   llvm::Value *DependenceAddresses = 0;
+  unsigned ArraySize = 0;
   if (!CGM.OpenMPSupport.getUntied()) {
-    SmallVector<const OMPDependClause *, 16> DependClauses;
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I) {
-      if (OMPDependClause *ODC = dyn_cast_or_null<OMPDependClause>(*I)) {
-        if (DependClauses.empty()) {
-          DependCount =
-              CreateMemTemp(getContext().getIntTypeForBitwidth(32, true), ".dep.size.");
-          Builder.CreateStore(llvm::Constant::getNullValue(Int32Ty), DependCount);
-        }
-        DependClauses.push_back(ODC);
-        llvm::Value *LocalCount = EmitScalarExpr(ODC->getNumberOfContiguousSpaces());
-        llvm::BasicBlock *TrueBr = createBasicBlock(".then.");
-        llvm::BasicBlock *FalseBr = createBasicBlock(".done.");
-        Builder.CreateCondBr(Builder.CreateIsNotNull(LocalCount), TrueBr, FalseBr);
-        EmitBlock(TrueBr);
-        Builder.CreateStore(
-            Builder.CreateNSWAdd(Builder.CreateLoad(DependCount), LocalCount),
-            DependCount);
-        EmitBlock(FalseBr);
-      }
-    }
-    if (DependCount) {
-      llvm::Type *DepTy = getKMPDependInfoType(&CGM);
-      llvm::Type *IntPtrTy = ConvertTypeForMem(getContext().getIntPtrType());
-      if (!DidCallStackSave) {
-        // Save the stack.
-        llvm::Value *Stack = CreateTempAlloca(Int8PtrTy, "saved_stack");
-
-        llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave);
-        llvm::Value *V = Builder.CreateCall(F);
-
-        Builder.CreateStore(V, Stack);
-
-        DidCallStackSave = true;
-
-        // Push a cleanup block and restore the stack there.
-        // FIXME: in general circumstances, this should be an EH cleanup.
-        EHStack.pushCleanup<CallStackRestore>(NormalCleanup, Stack);
-      }
-      // Be sure that size > 0.
-      llvm::Value *DepSize = Builder.CreateLoad(DependCount);
-      llvm::Value *NewDepSize =
-          Builder.CreateNSWAdd(DepSize, Builder.getInt32(1));
-      llvm::AllocaInst *Addresses =
-          Builder.CreateAlloca(DepTy, NewDepSize, ".dep.list.");
-      Addresses->setAlignment(CGM.OpenMPSupport.getKMPDependInfoTypeAlign());
-      DependenceAddresses =
-          Builder.CreateBitCast(Addresses, DepTy->getPointerTo());
-
-      llvm::BasicBlock *TrueBr = createBasicBlock(".dep.then.");
-      llvm::BasicBlock *FalseBr = createBasicBlock(".dep.done.");
-      Builder.CreateCondBr(Builder.CreateIsNotNull(DepSize),
-                           TrueBr, FalseBr);
-      EmitBlock(TrueBr);
-
-      llvm::AllocaInst *Counter =
-          CreateMemTemp(getContext().getSizeType(), ".dep.count.addr");
-      EmitStoreOfScalar(llvm::Constant::getNullValue(SizeTy),
-                        Counter,
-                        false,
-                        getContext().getTypeAlignInChars(getContext().getSizeType()).getQuantity(),
-                        getContext().getSizeType());
-      for (SmallVectorImpl<const OMPDependClause *>::iterator
-               I = DependClauses.begin(),
-               E = DependClauses.end();
-           I != E; ++I) {
-        ArrayRef<const Expr *> Vars = (*I)->getVars();
-        unsigned DepType = IN;
-        switch ((*I)->getType()) {
-        case OMPC_DEPEND_in:
-          DepType = IN;
-          break;
-        case OMPC_DEPEND_out:
-          DepType = OUT;
-          break;
-        case OMPC_DEPEND_inout:
-          DepType = INOUT;
-          break;
-        case OMPC_DEPEND_unknown:
-        case NUM_OPENMP_DEPENDENCE_TYPE:
-          llvm_unreachable("Unknown kind of dependency");
-          break;
-        }
-        for (unsigned i = 0, e = (*I)->varlist_size(); i < e; ++i) {
-          SmallVector<llvm::BasicBlock *, 16> ContBlocks;
-          SmallVector<llvm::BasicBlock *, 16> ThenBlocks;
-          SmallVector<llvm::BasicBlock *, 16> ExitBlocks;
-          ArrayRef<Expr *> Indicies = (*I)->getIndicies(i);
-          ArrayRef<Expr *> Lengths = (*I)->getLengths(i);
-          for (ArrayRef<Expr *>::iterator II = Indicies.begin(),
-                                          EE = Indicies.end(),
-                                          IL = Lengths.begin();
-               II != EE; ++II, ++IL) {
-            if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
-              if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
-                EmitVarDecl(*VD);
-                ContBlocks.push_back(createBasicBlock(".dep.cont."));
-                ThenBlocks.push_back(createBasicBlock(".dep.then."));
-                ExitBlocks.push_back(createBasicBlock(".dep.exit."));
-                EmitBlock(ContBlocks.back());
-                llvm::Value *VDValAddr = GetAddrOfLocalVar(VD);
-                llvm::Value *VDVal = Builder.CreateLoad(VDValAddr);
-                llvm::Value *Length = EmitScalarExpr(*IL);
-                llvm::Value *Cond = 0;
-                if ((*IL)->getType()->hasUnsignedIntegerRepresentation()) {
-                  Cond = Builder.CreateICmpULT(VDVal, Length);
-                } else {
-                  Cond = Builder.CreateICmpSLT(VDVal, Length);
-                }
-                Builder.CreateCondBr(Cond, ThenBlocks.back(),
-                                     ExitBlocks.back());
-                EmitBlock(ThenBlocks.back());
-              }
-            }
-          }
-          llvm::Value *CounterVal =
-              Builder.CreateLoad(Counter, ".dep.count.");
-          llvm::Value *DepElPtr =
-              Builder.CreateGEP(DependenceAddresses, CounterVal);
-          // [CounterVal].base_addr = &expr;
-          llvm::Value *DepBaseAddr =
-              Builder.CreateConstGEP2_32(DepElPtr, 0, 0);
-          llvm::Value *BaseAddr = EmitLValue(Vars[i]).getAddress();
-          BaseAddr = Builder.CreatePointerCast(BaseAddr, IntPtrTy);
-          Builder.CreateStore(BaseAddr, DepBaseAddr);
-          // [CounterVal].len = size;
-          llvm::Value *DepLen =
-              Builder.CreateConstGEP2_32(DepElPtr, 0, 1);
-          const Expr *Size = (*I)->getSizeInBytes(i);
-          Builder.CreateStore(EmitScalarExpr(Size), DepLen);
-          // [CounterVal].flags = size;
-          llvm::Value *DepFlags =
-              Builder.CreateConstGEP2_32(DepElPtr, 0, 2);
-          llvm::Type *BoolTy = ConvertTypeForMem(getContext().BoolTy);
-          Builder.CreateStore(llvm::ConstantInt::get(BoolTy, DepType),
-                              DepFlags);
-          CounterVal = Builder.CreateAdd(
-              CounterVal, llvm::ConstantInt::get(SizeTy, 1));
-          Builder.CreateStore(CounterVal, Counter);
-          unsigned BCnt = ContBlocks.size() - 1;
-          for (ArrayRef<Expr *>::reverse_iterator II = Indicies.rbegin(),
-                                                  EE = Indicies.rend();
-               II != EE; ++II, --BCnt) {
-            if (DeclRefExpr *DRE = dyn_cast_or_null<DeclRefExpr>(*II)) {
-              if (VarDecl *VD = dyn_cast_or_null<VarDecl>(DRE->getDecl())) {
-                llvm::Value *VDValAddr = GetAddrOfLocalVar(VD);
-                llvm::Value *VDVal = Builder.CreateLoad(VDValAddr);
-                VDVal = Builder.CreateAdd(
-                    VDVal, llvm::ConstantInt::get(VDVal->getType(), 1), "add",
-                    false, DRE->getType()->isSignedIntegerOrEnumerationType());
-                Builder.CreateStore(VDVal, VDValAddr);
-                EmitBranch(ContBlocks[BCnt]);
-                EmitBlock(ExitBlocks[BCnt], false);
-              }
-            }
-          }
-        }
-      }
-      EmitBlock(FalseBr);
-    }
+    llvm::tie(DependenceAddresses, ArraySize) =
+        ProcessDependAddresses(*this, S);
   }
   // CodeGen for "omp task {Associated statement}".
   CGM.OpenMPSupport.startOpenMPRegion(false);
@@ -2411,10 +2180,8 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
       llvm::Type *PtrDepTy = getKMPDependInfoType(&CGM)->getPointerTo();
       llvm::Value *RealArgs1[] = {
         Loc, GTid, TaskTVal,
-        DependCount ? cast<llvm::Value>(Builder.CreateLoad(DependCount))
-                    : cast<llvm::Value>(llvm::ConstantInt::get(Int32Ty, 0)),
-        DependenceAddresses ? DependenceAddresses
-                            : llvm::Constant::getNullValue(PtrDepTy),
+        llvm::ConstantInt::get(Int32Ty, ArraySize),
+        DependenceAddresses,
         llvm::ConstantInt::get(Int32Ty, 0),
         llvm::Constant::getNullValue(PtrDepTy)
       };

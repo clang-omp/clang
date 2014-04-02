@@ -217,6 +217,9 @@ public:
 
     static bool classof(const CGCapturedStmtInfo *) { return true; }
 
+    virtual void addCachedVar(const VarDecl *VD, llvm::Value *Addr) { }
+    virtual llvm::Value *getCachedVar(const VarDecl *VD) { return 0; }
+
   private:
     /// \brief The kind of captured statement being generated.
     CapturedRegionKind Kind;
@@ -242,6 +245,14 @@ public:
       : CGCapturedStmtInfo(S, K)/*, CGM(CGM)*/ { setContextValue(Context); }
 
     virtual ~CGOpenMPCapturedStmtInfo() { };
+
+    virtual void addCachedVar(const VarDecl *VD, llvm::Value *Addr) { CachedVars[VD] = Addr; }
+    virtual llvm::Value *getCachedVar(const VarDecl *VD) { return CachedVars[VD]; }
+  private:
+
+    /// \brief Keep the map between VarDecl and FieldDecl.
+    llvm::SmallDenseMap<const VarDecl *, llvm::Value *> CachedVars;
+
   };
 
   CGCapturedStmtInfo *CapturedStmtInfo;

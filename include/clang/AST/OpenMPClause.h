@@ -2090,10 +2090,6 @@ class OMPDependClause : public OMPVarListClause<OMPDependClause> {
   OpenMPDependClauseType Type;
   /// \brief Location of the dependence type.
   SourceLocation TypeLoc;
-  // Array of indices/lengths for each item in depend list.
-  unsigned *IndicesLengths;
-  // Total number of helper expressions.
-  unsigned NumHelpers;
 
   /// \brief Set Type for the clause.
   ///
@@ -2116,37 +2112,23 @@ class OMPDependClause : public OMPVarListClause<OMPDependClause> {
   /// \param TyLoc Location of the type.
   ///
   OMPDependClause(SourceLocation StartLoc, SourceLocation EndLoc, unsigned N,
-                  OpenMPDependClauseType Ty, SourceLocation TyLoc,
-                  unsigned *IndicesLengths, unsigned NumHelpers)
-      : OMPVarListClause<OMPDependClause>(OMPC_depend, StartLoc, EndLoc, N),
-        Type(Ty), TypeLoc(TyLoc), IndicesLengths(IndicesLengths),
-        NumHelpers(NumHelpers) {}
+                  OpenMPDependClauseType Ty, SourceLocation TyLoc)
+    : OMPVarListClause<OMPDependClause>(OMPC_depend, StartLoc, EndLoc, N),
+      Type(Ty), TypeLoc(TyLoc) { }
 
   /// \brief Build an empty clause.
   ///
   /// \param N Number of variables.
   ///
-  explicit OMPDependClause(unsigned N, unsigned *IndicesLengths,
-                           unsigned NumHelpers)
-      : OMPVarListClause<OMPDependClause>(OMPC_depend, SourceLocation(),
-                                          SourceLocation(), N),
-        Type(OMPC_DEPEND_unknown), TypeLoc(SourceLocation()),
-        IndicesLengths(IndicesLengths), NumHelpers(NumHelpers) {}
+  explicit OMPDependClause(unsigned N)
+    : OMPVarListClause<OMPDependClause>(OMPC_depend, SourceLocation(),
+                                        SourceLocation(), N),
+      Type(OMPC_DEPEND_unknown), TypeLoc(SourceLocation()) { }
 
-  /// \brief Set the number of contiguous items in clause.
-  void setNumberOfContiguousSpaces(Expr *E) { *varlist_end() = E; }
-
-  /// \brief Sets helper expressions for the clause.
-  void setHelperExprs(ArrayRef<Expr *> Exprs);
-
-  /// \brief Fetches the list of variables associated with this clause.
-  llvm::MutableArrayRef<Expr *> getHelperExprs() {
-    return llvm::MutableArrayRef<Expr *>(
-        reinterpret_cast<Expr **>(varlist_end()) + 1, NumHelpers);
-  }
-
-  /// \brief Returns total number of helpers expressions.
-  unsigned getNumHelpers() const { return NumHelpers; }
+  /// \brief Sets begins for the clause.
+  void setBegins(ArrayRef<Expr *> Begins);
+  /// \brief Sets size in bytes for the clause.
+  void setSizeInBytes(ArrayRef<Expr *> SizeInBytes);
 
 public:
   /// \brief Creates clause with a list of variables \a VL and type \a Ty.
@@ -2158,47 +2140,35 @@ public:
   /// \param Ty reduction operator.
   /// \param TyLoc Location of the operator.
   ///
-  static OMPDependClause *
-  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
-         ArrayRef<Expr *> VL, Expr *NumContiguous,
-         ArrayRef<ArrayRef<Expr *> > Indices,
-         ArrayRef<ArrayRef<Expr *> > Lengths, ArrayRef<Expr *> SizeInBytes,
-         OpenMPDependClauseType Ty, SourceLocation TyLoc);
+  static OMPDependClause *Create(const ASTContext &C,
+                                 SourceLocation StartLoc,
+                                 SourceLocation EndLoc,
+                                 ArrayRef<Expr *> VL,
+                                 ArrayRef<Expr *> Begins,
+                                 ArrayRef<Expr *> SizeInBytes,
+                                 OpenMPDependClauseType Ty,
+                                 SourceLocation TyLoc);
   /// \brief Creates an empty clause with the place for \a N variables.
   ///
   /// \param C AST context.
   /// \param N The number of variables.
   ///
-  static OMPDependClause *CreateEmpty(const ASTContext &C, unsigned N,
-                                      unsigned NumHelpers);
+  static OMPDependClause *CreateEmpty(const ASTContext &C, unsigned N);
 
-  /// \brief Get the number of contiguous items in clause.
-  const Expr *getNumberOfContiguousSpaces() const LLVM_READONLY {
-    return *varlist_end();
-  }
-  /// \brief Get the number of contiguous items in clause.
-  Expr *getNumberOfContiguousSpaces() LLVM_READONLY { return *varlist_end(); }
   /// \brief Fetches dependence type for the clause.
   OpenMPDependClauseType getType() const LLVM_READONLY { return Type; }
 
   /// \brief Fetches location of clause dependence type.
   SourceLocation getTypeLoc() const LLVM_READONLY { return TypeLoc; }
 
-  /// \brief Fetches the list of indices for the specified index.
-  ArrayRef<Expr *> getIndicies(unsigned Index) LLVM_READONLY;
-  ArrayRef<Expr *> getIndicies(unsigned Index) const LLVM_READONLY {
-    return const_cast<OMPDependClause *>(this)->getIndicies(Index);
+  /// \brief Fetches begins for the specified index.
+  Expr *getBegins(unsigned Index) LLVM_READONLY;
+  Expr *getBegins(unsigned Index) const  LLVM_READONLY {
+    return const_cast<OMPDependClause *>(this)->getBegins(Index);
   }
-
-  /// \brief Fetches the list of lengths for the specified index.
-  ArrayRef<Expr *> getLengths(unsigned Index) LLVM_READONLY;
-  ArrayRef<Expr *> getLengths(unsigned Index) const LLVM_READONLY {
-    return const_cast<OMPDependClause *>(this)->getLengths(Index);
-  }
-
   /// \brief Fetches the size in bytes for the specified index.
   Expr *getSizeInBytes(unsigned Index) LLVM_READONLY;
-  Expr *getSizeInBytes(unsigned Index) const LLVM_READONLY {
+  Expr *getSizeInBytes(unsigned Index) const  LLVM_READONLY {
     return const_cast<OMPDependClause *>(this)->getSizeInBytes(Index);
   }
 
@@ -2208,7 +2178,8 @@ public:
 
   StmtRange children() {
     return StmtRange(reinterpret_cast<Stmt **>(varlist_begin()),
-                     reinterpret_cast<Stmt **>(varlist_end()) + 1 + NumHelpers);
+                     reinterpret_cast<Stmt **>(varlist_end()) +
+                     2 * varlist_size());
   }
 };
 

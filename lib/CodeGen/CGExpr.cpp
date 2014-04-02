@@ -1751,6 +1751,9 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
       // CodeGen for OpenMP private variables - works only in CapturedStmt.
       else if (llvm::Value *Val = CGM.OpenMPSupport.getOpenMPPrivateVar(VD))
         return MakeAddrLValue(Val, T, Alignment);
+      else if (CapturedStmtInfo)
+        if (llvm::Value *Val = CapturedStmtInfo->getCachedVar(VD))
+          return MakeAddrLValue(Val, T, Alignment);
     }
 
     const Expr *Init = VD->getAnyInitializer(VD);

@@ -1427,94 +1427,52 @@ OMPDependClause *OMPDependClause::Create(const ASTContext &C,
                                          SourceLocation StartLoc,
                                          SourceLocation EndLoc,
                                          ArrayRef<Expr *> VL,
-                                         Expr *NumContiguous,
-                                         ArrayRef<ArrayRef<Expr *> > Indices,
-                                         ArrayRef<ArrayRef<Expr *> > Lengths,
+                                         ArrayRef<Expr *> Begins,
                                          ArrayRef<Expr *> SizeInBytes,
                                          OpenMPDependClauseType Ty,
                                          SourceLocation TyLoc) {
-  unsigned *NewIndicesLengths =
-    static_cast<unsigned *>(C.Allocate(VL.size() * sizeof(unsigned),
-                                       llvm::alignOf<unsigned>()));
-  unsigned Size = llvm::RoundUpToAlignment(sizeof(OMPDependClause),
-                                           llvm::alignOf<Expr *>()) +
-                  sizeof(Expr *) * (VL.size() + 1);
-  unsigned NumHelpers = 0;
-  SmallVector<Expr *, 16> Helpers;
-  NumHelpers += VL.size();
-  Helpers.append(SizeInBytes.begin(), SizeInBytes.end());
-  for (unsigned i = 0, e = VL.size(); i < e; ++i) {
-    NewIndicesLengths[i] = Indices[i].size();
-    NumHelpers += NewIndicesLengths[i] * 2;
-    Helpers.append(Indices[i].begin(), Indices[i].end());
-    Helpers.append(Lengths[i].begin(), Lengths[i].end());
-  }
-  void *Mem = C.Allocate(Size + NumHelpers * sizeof(Expr *));
-  OMPDependClause *Clause = new (Mem) OMPDependClause(StartLoc, EndLoc,
-                                                      VL.size(), Ty, TyLoc,
-                                                      NewIndicesLengths,
-                                                      NumHelpers);
-  Clause->setVars(VL);
-  Clause->setNumberOfContiguousSpaces(NumContiguous);
-  Clause->setHelperExprs(Helpers);
-  return Clause;
-}
-
-OMPDependClause *OMPDependClause::CreateEmpty(const ASTContext &C, unsigned N,
-                                              unsigned NumHelpers) {
-  unsigned *NewIndicesLengths =
-    static_cast<unsigned *>(C.Allocate(N * sizeof(unsigned),
-                                       llvm::alignOf<unsigned>()));
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPDependClause),
                                                   llvm::alignOf<Expr *>()) +
-                         sizeof(Expr *) * (N + 1) +
-                         sizeof(Expr *) * NumHelpers,
-                         llvm::alignOf<OMPDependClause>());
-  OMPDependClause *Clause = new (Mem) OMPDependClause(N, NewIndicesLengths,
-                                                      NumHelpers);
+                         sizeof(Expr *) * VL.size() * 3);
+  OMPDependClause *Clause = new (Mem) OMPDependClause(StartLoc, EndLoc,
+                                                      VL.size(), Ty, TyLoc);
+  Clause->setVars(VL);
+  Clause->setBegins(Begins);
+  Clause->setSizeInBytes(SizeInBytes);
   return Clause;
 }
 
-void OMPDependClause::setHelperExprs(ArrayRef<Expr *> Exprs) {
-  assert(Exprs.size() == NumHelpers &&
+OMPDependClause *OMPDependClause::CreateEmpty(const ASTContext &C, unsigned N) {
+  void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPDependClause),
+                                                  llvm::alignOf<Expr *>()) +
+                         sizeof(Expr *) * N * 3);
+  OMPDependClause *Clause = new (Mem) OMPDependClause(N);
+  return Clause;
+}
+
+void OMPDependClause::setBegins(ArrayRef<Expr *> Begins) {
+  assert(Begins.size() == varlist_size() &&
          "Number of exprs is not the same as the preallocated buffer");
-  std::copy(Exprs.begin(), Exprs.end(), getHelperExprs().begin());
+  std::copy(Begins.begin(), Begins.end(), varlist_end());
 }
 
-ArrayRef<Expr *> OMPDependClause::getIndicies(unsigned Index) {
-  assert(Index < varlist_size() &&
-         "Index greter or equal maximum number of expressions.");
-  unsigned StartIndex = 0;
-  unsigned Size = IndicesLengths[Index];
-  unsigned NumVars = varlist_size();
-  for (unsigned i = 0; i < Index && i < NumVars; ++i) {
-    StartIndex += IndicesLengths[i];
-  }
-  return ArrayRef<Expr *>(
-          reinterpret_cast<Expr **>(varlist_end()) + 1 + NumVars +
-            StartIndex * 2,
-          Size);
+void OMPDependClause::setSizeInBytes(ArrayRef<Expr *> SizeInBytes) {
+  assert(SizeInBytes.size() == varlist_size() &&
+         "Number of exprs is not the same as the preallocated buffer");
+  std::copy(SizeInBytes.begin(), SizeInBytes.end(),
+            varlist_end() + varlist_size());
 }
 
-ArrayRef<Expr *> OMPDependClause::getLengths(unsigned Index) {
+Expr *OMPDependClause::getBegins(unsigned Index) {
   assert(Index < varlist_size() &&
          "Index greter or equal maximum number of expressions.");
-  unsigned StartIndex = 0;
-  unsigned Size = IndicesLengths[Index];
-  unsigned NumVars = varlist_size();
-  for (unsigned i = 0; i < Index && i < NumVars; ++i) {
-    StartIndex += IndicesLengths[i];
-  }
-  return ArrayRef<Expr *>(
-          reinterpret_cast<Expr **>(varlist_end()) + 1 + NumVars +
-            StartIndex * 2 + Size,
-          Size);
+  return varlist_end()[Index];
 }
 
 Expr *OMPDependClause::getSizeInBytes(unsigned Index) {
   assert(Index < varlist_size() &&
          "Index greter or equal maximum number of expressions.");
-  return (reinterpret_cast<Expr **>(varlist_end()) + 1)[Index];
+  return varlist_end()[varlist_size() + Index];
 }
 
 void OMPExecutableDirective::setClauses(ArrayRef<OMPClause *> CL) {
