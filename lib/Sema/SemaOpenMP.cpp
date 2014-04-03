@@ -1633,39 +1633,26 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
         return StmtError();
       }
     }
-
-    switch (Kind) {
-    case OMPD_taskyield:
-    case OMPD_barrier:
-    case OMPD_taskwait:
-    case OMPD_flush:
-    case OMPD_cancel:
-    case OMPD_cancellation_point:
-      break;
-    case OMPD_task: {
-      assert(AStmt && isa<CapturedStmt>(AStmt) &&
-             "Captured statement expected");
-      // Check default data sharing attributes for captured variables.
-      DSAAttrChecker DSAChecker(DSAStack, *this, cast<CapturedStmt>(AStmt));
-      DSAChecker.Visit(cast<CapturedStmt>(AStmt)->getCapturedStmt());
-      if (DSAChecker.isErrorFound())
-        return StmtError();
-      if (DSAChecker.getImplicitFirstprivate().size() > 0) {
-        if (OMPClause *Implicit = ActOnOpenMPFirstPrivateClause(
-                DSAChecker.getImplicitFirstprivate(), SourceLocation(),
-                SourceLocation())) {
-          ClausesWithImplicit.push_back(Implicit);
-          if (Implicit &&
-              cast<OMPFirstPrivateClause>(Implicit)->varlist_size() !=
-                  DSAChecker.getImplicitFirstprivate().size())
-            ErrorFound = true;
-        } else
+  }
+  if (Kind == OMPD_task) {
+    assert(AStmt && isa<CapturedStmt>(AStmt) &&
+           "Captured statement expected");
+    // Check default data sharing attributes for captured variables.
+    DSAAttrChecker DSAChecker(DSAStack, *this, cast<CapturedStmt>(AStmt));
+    DSAChecker.Visit(cast<CapturedStmt>(AStmt)->getCapturedStmt());
+    if (DSAChecker.isErrorFound())
+      return StmtError();
+    if (DSAChecker.getImplicitFirstprivate().size() > 0) {
+      if (OMPClause *Implicit = ActOnOpenMPFirstPrivateClause(
+              DSAChecker.getImplicitFirstprivate(), SourceLocation(),
+              SourceLocation())) {
+        ClausesWithImplicit.push_back(Implicit);
+        if (Implicit &&
+            cast<OMPFirstPrivateClause>(Implicit)->varlist_size() !=
+                DSAChecker.getImplicitFirstprivate().size())
           ErrorFound = true;
-      }
-      break;
-    }
-    default:
-      break;
+      } else
+        ErrorFound = true;
     }
   }
   ClausesWithImplicit.append(Clauses.begin(), Clauses.end());

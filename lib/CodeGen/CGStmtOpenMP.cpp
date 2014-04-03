@@ -938,8 +938,10 @@ static llvm::GlobalVariable *CreateRuntimeVariable(CodeGenModule &CGM,
       llvm::GlobalVariable::NotThreadLocal, AddrSpace);
 }
 
-/// Generate an instructions for '#pragma omp parallel' directive.
-void CodeGenFunction::EmitOMPParallelDirective(const OMPParallelDirective &S) {
+void
+CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
+                                              OpenMPDirectiveKind SKind,
+                                              const OMPExecutableDirective &S) {
   // Generate shared args for captured stmt.
   CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
   llvm::Value *Arg = GenerateCapturedStmtArgument(*CS);
@@ -954,14 +956,14 @@ void CodeGenFunction::EmitOMPParallelDirective(const OMPParallelDirective &S) {
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I)
+    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
       EmitInitOMPClause(*(*I), S);
 
   // CodeGen for clauses (task init).
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I)
+    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
       EmitAfterInitOMPClause(*(*I), S);
 
   // Generate microtask.
@@ -1026,30 +1028,48 @@ void CodeGenFunction::EmitOMPParallelDirective(const OMPParallelDirective &S) {
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I)
+      if (*I && (!isAllowedClauseForDirective(SKind, (*I)->getClauseKind()) ||
+                 (*I)->getClauseKind() == OMPC_firstprivate))
         CGF.EmitPreOMPClause(*(*I), S);
 
-    CGF.EmitStmt(CS->getCapturedStmt());
+    switch (DKind) {
+    case OMPD_parallel:
+      CGF.EmitStmt(CS->getCapturedStmt());
+      break;
+    case OMPD_parallel_sections:
+      CGF.EmitOMPSectionsDirective(OMPD_parallel_sections, OMPD_sections, S);
+      break;
+    case OMPD_parallel_for:
+    case OMPD_parallel_for_simd:
+      CGF.EmitOMPDirectiveWithLoop(DKind, SKind, S);
+      break;
+    default:
+      break;
+    }
     CGF.EnsureInsertPoint();
 
     // CodeGen for clauses (call end).
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I)
+      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
         CGF.EmitPostOMPClause(*(*I), S);
 
     // CodeGen for clauses (closing steps).
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I)
+      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
         CGF.EmitCloseOMPClause(*(*I), S);
   }
 
   CGF.EnsureInsertPoint();
-  CGF.EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier),
-                                     S.getLocEnd(), KMP_IDENT_BARRIER_IMPL);
+  // Implicit barrier for simple parallel region only.
+  // Others (combined) directives already has implicit barriers.
+  if (DKind == OMPD_parallel) {
+    CGF.EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier),
+                                       S.getLocEnd(), KMP_IDENT_BARRIER_IMPL);
+  }
 
   EmitFirstprivateInsert(CGF, S.getLocStart());
 
@@ -1071,297 +1091,34 @@ void CodeGenFunction::EmitOMPParallelDirective(const OMPParallelDirective &S) {
   }
 
   // CodeGen for clauses (task finalize).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I)
+  for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
+                                       E = S.clauses().end();
+       I != E; ++I)
+    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
       EmitFinalOMPClause(*(*I), S);
 
   // Remove list of private globals from the stack.
   CGM.OpenMPSupport.endOpenMPRegion();
+}
+
+/// Generate an instructions for '#pragma omp parallel' directive.
+void CodeGenFunction::EmitOMPParallelDirective(const OMPParallelDirective &S) {
+  EmitOMPDirectiveWithParallel(OMPD_parallel, OMPD_unknown, S);
 }
 
 /// Generate an instructions for '#pragma omp parallel for' directive.
 void CodeGenFunction::EmitOMPParallelForDirective(const OMPParallelForDirective &S) {
-  // Generate shared args for captured stmt.
-  CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
-  llvm::Value *Arg = GenerateCapturedStmtArgument(*CS);
-
-  // Init list of private globals in the stack.
-  CGM.OpenMPSupport.startOpenMPRegion(true);
-  CGM.OpenMPSupport.setMergeable(false);
-  CGM.OpenMPSupport.setOrdered(false);
-  CGM.OpenMPSupport.setScheduleChunkSize(KMP_SCH_DEFAULT, 0);
-
-  // CodeGen for clauses (task init).
-  for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                       E = S.clauses().end();
-       I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_for, (*I)->getClauseKind()))
-      EmitInitOMPClause(*(*I), S);
-
-  // CodeGen for clauses (task init).
-  for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                       E = S.clauses().end();
-       I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_for, (*I)->getClauseKind()))
-      EmitAfterInitOMPClause(*(*I), S);
-
-  // Generate microtask.
-  // void .omp_microtask.(int32_t *, int32_t *, void */*AutoGenRecord **/arg3) {
-  //  captured_stmt(arg3);
-  // }
-  IdentifierInfo *Id = &getContext().Idents.get(".omp_microtask.");
-  QualType PtrIntTy = getContext().getPointerType(getContext().IntTy);
-  SmallVector<QualType, 4> FnArgTypes;
-  FnArgTypes.push_back(PtrIntTy);
-  FnArgTypes.push_back(PtrIntTy);
-  FnArgTypes.push_back(getContext().VoidPtrTy);
-  FunctionProtoType::ExtProtoInfo EPI;
-  EPI.ExceptionSpecType = EST_BasicNoexcept;
-  QualType FnTy =
-      getContext().getFunctionType(getContext().VoidTy, FnArgTypes, EPI);
-  TypeSourceInfo *TI =
-      getContext().getTrivialTypeSourceInfo(FnTy, SourceLocation());
-  FunctionDecl *FD = FunctionDecl::Create(
-      getContext(), getContext().getTranslationUnitDecl(), CS->getLocStart(),
-      SourceLocation(), Id, FnTy, TI, SC_Static, false, false, false);
-  TypeSourceInfo *PtrIntTI =
-      getContext().getTrivialTypeSourceInfo(PtrIntTy, SourceLocation());
-  TypeSourceInfo *PtrVoidTI = getContext().getTrivialTypeSourceInfo(
-      getContext().VoidPtrTy, SourceLocation());
-  ParmVarDecl *Arg1 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, PtrIntTy, PtrIntTI, SC_Auto, 0);
-  ParmVarDecl *Arg2 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, PtrIntTy, PtrIntTI, SC_Auto, 0);
-  ParmVarDecl *Arg3 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, getContext().VoidPtrTy, PtrVoidTI, SC_Auto, 0);
-  CodeGenFunction CGF(CGM, true);
-  const CGFunctionInfo &FI = getTypes().arrangeFunctionDeclaration(FD);
-  llvm::Function *Fn = llvm::Function::Create(getTypes().GetFunctionType(FI),
-                                              llvm::GlobalValue::PrivateLinkage,
-                                              FD->getName(), &CGM.getModule());
-  CGM.SetInternalFunctionAttributes(CurFuncDecl, Fn, FI);
-  FunctionArgList FnArgs;
-  FnArgs.push_back(Arg1);
-  FnArgs.push_back(Arg2);
-  FnArgs.push_back(Arg3);
-  CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
-  CGF.StartFunction(FD, getContext().VoidTy, Fn, FI, FnArgs, SourceLocation());
-  CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg1),
-                         ".__kmpc_global_thread_num.");
-
-  // Emit call to the helper function.
-  llvm::Value *Arg3Val =
-      CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg3), "arg3");
-  QualType QTy = getContext().getRecordType(CS->getCapturedRecordDecl());
-  llvm::Type *ConvertedType =
-      CGF.getTypes().ConvertTypeForMem(QTy)->getPointerTo();
-  llvm::Value *RecArg =
-      CGF.Builder.CreatePointerCast(Arg3Val, ConvertedType, "(anon)arg3");
-
-  // CodeGen for clauses (call start).
-  {
-    OpenMPRegionRAII OMPRegion(CGF, RecArg, *CS);
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && (!isAllowedClauseForDirective(OMPD_for, (*I)->getClauseKind()) ||
-                 (*I)->getClauseKind() == OMPC_firstprivate))
-        CGF.EmitPreOMPClause(*(*I), S);
-
-    CGF.EmitOMPDirectiveWithLoop(OMPD_parallel_for, OMPD_for, S);
-    CGF.EnsureInsertPoint();
-
-    // CodeGen for clauses (call end).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(OMPD_for, (*I)->getClauseKind()))
-        CGF.EmitPostOMPClause(*(*I), S);
-
-    // CodeGen for clauses (closing steps).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(OMPD_for, (*I)->getClauseKind()))
-        CGF.EmitCloseOMPClause(*(*I), S);
-  }
-
-    CGF.EnsureInsertPoint();
-
-  EmitFirstprivateInsert(CGF, S.getLocStart());
-
-  CGF.FinishFunction();
-
-  // CodeGen for "omp parallel {Associated statement}".
-  {
-    RunCleanupsScope MainBlock(*this);
-
-    llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
-    llvm::Type *KmpcMicroTy =
-        llvm::TypeBuilder<kmpc_micro, false>::get(getLLVMContext());
-    llvm::Value *RealArgs[] = { Loc, Builder.getInt32(2),
-                                CGF.Builder.CreateBitCast(
-                                    Fn, KmpcMicroTy, "(kmpc_micro_ty)helper"),
-                                Arg };
-    // __kmpc_fork_call(&loc, argc/*2*/, microtask, arg);
-    EmitRuntimeCall(OPENMPRTL_FUNC(fork_call), makeArrayRef(RealArgs));
-  }
-
-  // CodeGen for clauses (task finalize).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_for, (*I)->getClauseKind()))
-      EmitFinalOMPClause(*(*I), S);
-
-  // Remove list of private globals from the stack.
-  CGM.OpenMPSupport.endOpenMPRegion();
+  EmitOMPDirectiveWithParallel(OMPD_parallel_for, OMPD_for, S);
 }
 
 /// Generate an instructions for '#pragma omp parallel for simd' directive.
 void CodeGenFunction::EmitOMPParallelForSimdDirective(const OMPParallelForSimdDirective &S) {
-  // Generate shared args for captured stmt.
-  CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
-  llvm::Value *Arg = GenerateCapturedStmtArgument(*CS);
+  EmitOMPDirectiveWithParallel(OMPD_parallel_for_simd, OMPD_for_simd, S);
+}
 
-  // Init list of private globals in the stack.
-  CGM.OpenMPSupport.startOpenMPRegion(true);
-  CGM.OpenMPSupport.setMergeable(false);
-  CGM.OpenMPSupport.setOrdered(false);
-  CGM.OpenMPSupport.setScheduleChunkSize(KMP_SCH_DEFAULT, 0);
-
-  // CodeGen for clauses (task init).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_for_simd, (*I)->getClauseKind()))
-      EmitInitOMPClause(*(*I), S);
-
-  // CodeGen for clauses (task init).
-  for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                       E = S.clauses().end();
-       I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_for_simd, (*I)->getClauseKind()))
-      EmitAfterInitOMPClause(*(*I), S);
-
-  // Generate microtask.
-  // void .omp_microtask.(int32_t *, int32_t *, void */*AutoGenRecord **/arg3) {
-  //  captured_stmt(arg3);
-  // }
-  IdentifierInfo *Id = &getContext().Idents.get(".omp_microtask.");
-  QualType PtrIntTy = getContext().getPointerType(getContext().IntTy);
-  SmallVector<QualType, 4> FnArgTypes;
-  FnArgTypes.push_back(PtrIntTy);
-  FnArgTypes.push_back(PtrIntTy);
-  FnArgTypes.push_back(getContext().VoidPtrTy);
-  FunctionProtoType::ExtProtoInfo EPI;
-  EPI.ExceptionSpecType = EST_BasicNoexcept;
-  QualType FnTy =
-      getContext().getFunctionType(getContext().VoidTy, FnArgTypes, EPI);
-  TypeSourceInfo *TI =
-      getContext().getTrivialTypeSourceInfo(FnTy, SourceLocation());
-  FunctionDecl *FD = FunctionDecl::Create(
-      getContext(), getContext().getTranslationUnitDecl(), CS->getLocStart(),
-      SourceLocation(), Id, FnTy, TI, SC_Static, false, false, false);
-  TypeSourceInfo *PtrIntTI =
-      getContext().getTrivialTypeSourceInfo(PtrIntTy, SourceLocation());
-  TypeSourceInfo *PtrVoidTI = getContext().getTrivialTypeSourceInfo(
-      getContext().VoidPtrTy, SourceLocation());
-  ParmVarDecl *Arg1 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, PtrIntTy, PtrIntTI, SC_Auto, 0);
-  ParmVarDecl *Arg2 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, PtrIntTy, PtrIntTI, SC_Auto, 0);
-  ParmVarDecl *Arg3 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, getContext().VoidPtrTy, PtrVoidTI, SC_Auto, 0);
-  CodeGenFunction CGF(CGM, true);
-  const CGFunctionInfo &FI = getTypes().arrangeFunctionDeclaration(FD);
-  llvm::Function *Fn = llvm::Function::Create(getTypes().GetFunctionType(FI),
-                                              llvm::GlobalValue::PrivateLinkage,
-                                              FD->getName(), &CGM.getModule());
-  CGM.SetInternalFunctionAttributes(CurFuncDecl, Fn, FI);
-  FunctionArgList FnArgs;
-  FnArgs.push_back(Arg1);
-  FnArgs.push_back(Arg2);
-  FnArgs.push_back(Arg3);
-  CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
-  CGF.StartFunction(FD, getContext().VoidTy, Fn, FI, FnArgs, SourceLocation());
-  CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg1),
-                         ".__kmpc_global_thread_num.");
-
-  // Emit call to the helper function.
-  llvm::Value *Arg3Val =
-      CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg3), "arg3");
-  QualType QTy = getContext().getRecordType(CS->getCapturedRecordDecl());
-  llvm::Type *ConvertedType =
-      CGF.getTypes().ConvertTypeForMem(QTy)->getPointerTo();
-  llvm::Value *RecArg =
-      CGF.Builder.CreatePointerCast(Arg3Val, ConvertedType, "(anon)arg3");
-
-  // CodeGen for clauses (call start).
-  {
-    OpenMPRegionRAII OMPRegion(CGF, RecArg, *CS);
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && (!isAllowedClauseForDirective(OMPD_for_simd, (*I)->getClauseKind()) ||
-                 (*I)->getClauseKind() == OMPC_firstprivate))
-        CGF.EmitPreOMPClause(*(*I), S);
-
-    CGF.EmitOMPDirectiveWithLoop(OMPD_parallel_for_simd, OMPD_for_simd, S);
-    CGF.EnsureInsertPoint();
-
-    // CodeGen for clauses (call end).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(OMPD_for_simd, (*I)->getClauseKind()))
-        CGF.EmitPostOMPClause(*(*I), S);
-
-    // CodeGen for clauses (closing steps).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(OMPD_for_simd, (*I)->getClauseKind()))
-        CGF.EmitCloseOMPClause(*(*I), S);
-  }
-
-  CGF.EnsureInsertPoint();
-  EmitFirstprivateInsert(CGF, S.getLocStart());
-
-  CGF.FinishFunction();
-
-  // CodeGen for "omp parallel {Associated statement}".
-  {
-    RunCleanupsScope MainBlock(*this);
-
-    llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
-    llvm::Type *KmpcMicroTy =
-        llvm::TypeBuilder<kmpc_micro, false>::get(getLLVMContext());
-    llvm::Value *RealArgs[] = { Loc, Builder.getInt32(2),
-                                CGF.Builder.CreateBitCast(
-                                    Fn, KmpcMicroTy, "(kmpc_micro_ty)helper"),
-                                Arg };
-    // __kmpc_fork_call(&loc, argc/*2*/, microtask, arg);
-    EmitRuntimeCall(OPENMPRTL_FUNC(fork_call), makeArrayRef(RealArgs));
-  }
-
-  // CodeGen for clauses (task finalize).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_for_simd, (*I)->getClauseKind()))
-      EmitFinalOMPClause(*(*I), S);
-
-  // Remove list of private globals from the stack.
-  CGM.OpenMPSupport.endOpenMPRegion();
+/// Generate an instructions for '#pragma omp parallel sections' directive.
+void CodeGenFunction::EmitOMPParallelSectionsDirective(const OMPParallelSectionsDirective &S) {
+  EmitOMPDirectiveWithParallel(OMPD_parallel_sections, OMPD_sections, S);
 }
 
 /// Generate instruction for OpenMP loop-like directives.
@@ -2385,148 +2142,6 @@ void CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
       EmitFinalOMPClause(*(*I), S);
 
   EnsureInsertPoint();
-
-  // Remove list of private globals from the stack.
-  CGM.OpenMPSupport.endOpenMPRegion();
-}
-
-/// Generate an instructions for '#pragma omp parallel sections' directive.
-void CodeGenFunction::EmitOMPParallelSectionsDirective(const OMPParallelSectionsDirective &S) {
-  // Generate shared args for captured stmt.
-  CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
-  llvm::Value *Arg = GenerateCapturedStmtArgument(*CS);
-
-  // Init list of private globals in the stack.
-  CGM.OpenMPSupport.startOpenMPRegion(true);
-  CGM.OpenMPSupport.setMergeable(false);
-  CGM.OpenMPSupport.setOrdered(false);
-  CGM.OpenMPSupport.setScheduleChunkSize(KMP_SCH_DEFAULT, 0);
-
-  // CodeGen for clauses (task init).
-  for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                       E = S.clauses().end();
-       I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_sections, (*I)->getClauseKind()))
-      EmitInitOMPClause(*(*I), S);
-
-  // CodeGen for clauses (task init).
-  for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                       E = S.clauses().end();
-       I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_sections, (*I)->getClauseKind()))
-      EmitAfterInitOMPClause(*(*I), S);
-
-  // Generate microtask.
-  // void .omp_microtask.(int32_t *, int32_t *, void */*AutoGenRecord **/arg3) {
-  //  captured_stmt(arg3);
-  // }
-  IdentifierInfo *Id = &getContext().Idents.get(".omp_microtask.");
-  QualType PtrIntTy = getContext().getPointerType(getContext().IntTy);
-  SmallVector<QualType, 4> FnArgTypes;
-  FnArgTypes.push_back(PtrIntTy);
-  FnArgTypes.push_back(PtrIntTy);
-  FnArgTypes.push_back(getContext().VoidPtrTy);
-  FunctionProtoType::ExtProtoInfo EPI;
-  EPI.ExceptionSpecType = EST_BasicNoexcept;
-  QualType FnTy =
-      getContext().getFunctionType(getContext().VoidTy, FnArgTypes, EPI);
-  TypeSourceInfo *TI =
-      getContext().getTrivialTypeSourceInfo(FnTy, SourceLocation());
-  FunctionDecl *FD = FunctionDecl::Create(
-      getContext(), getContext().getTranslationUnitDecl(), CS->getLocStart(),
-      SourceLocation(), Id, FnTy, TI, SC_Static, false, false, false);
-  TypeSourceInfo *PtrIntTI =
-      getContext().getTrivialTypeSourceInfo(PtrIntTy, SourceLocation());
-  TypeSourceInfo *PtrVoidTI = getContext().getTrivialTypeSourceInfo(
-      getContext().VoidPtrTy, SourceLocation());
-  ParmVarDecl *Arg1 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, PtrIntTy, PtrIntTI, SC_Auto, 0);
-  ParmVarDecl *Arg2 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, PtrIntTy, PtrIntTI, SC_Auto, 0);
-  ParmVarDecl *Arg3 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, getContext().VoidPtrTy, PtrVoidTI, SC_Auto, 0);
-  CodeGenFunction CGF(CGM, true);
-  const CGFunctionInfo &FI = getTypes().arrangeFunctionDeclaration(FD);
-  llvm::Function *Fn = llvm::Function::Create(getTypes().GetFunctionType(FI),
-                                              llvm::GlobalValue::PrivateLinkage,
-                                              FD->getName(), &CGM.getModule());
-  CGM.SetInternalFunctionAttributes(CurFuncDecl, Fn, FI);
-  FunctionArgList FnArgs;
-  FnArgs.push_back(Arg1);
-  FnArgs.push_back(Arg2);
-  FnArgs.push_back(Arg3);
-  CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
-  CGF.StartFunction(FD, getContext().VoidTy, Fn, FI, FnArgs, SourceLocation());
-  CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg1),
-                         ".__kmpc_global_thread_num.");
-
-  // Emit call to the helper function.
-  llvm::Value *Arg3Val =
-      CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg3), "arg3");
-  QualType QTy = getContext().getRecordType(CS->getCapturedRecordDecl());
-  llvm::Type *ConvertedType =
-      CGF.getTypes().ConvertTypeForMem(QTy)->getPointerTo();
-  llvm::Value *RecArg =
-      CGF.Builder.CreatePointerCast(Arg3Val, ConvertedType, "(anon)arg3");
-
-  // CodeGen for clauses (call start).
-  {
-    OpenMPRegionRAII OMPRegion(CGF, RecArg, *CS);
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && (!isAllowedClauseForDirective(OMPD_sections, (*I)->getClauseKind()) ||
-                 (*I)->getClauseKind() == OMPC_firstprivate))
-        CGF.EmitPreOMPClause(*(*I), S);
-
-    CGF.EmitOMPSectionsDirective(OMPD_parallel_sections, OMPD_sections, S);
-    CGF.EnsureInsertPoint();
-
-    // CodeGen for clauses (call end).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(OMPD_sections, (*I)->getClauseKind()))
-        CGF.EmitPostOMPClause(*(*I), S);
-
-    // CodeGen for clauses (closing steps).
-    for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                         E = S.clauses().end();
-         I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(OMPD_sections, (*I)->getClauseKind()))
-        CGF.EmitCloseOMPClause(*(*I), S);
-  }
-
-  CGF.EnsureInsertPoint();
-
-  EmitFirstprivateInsert(CGF, S.getLocStart());
-
-  CGF.FinishFunction();
-
-  // CodeGen for "omp parallel {Associated statement}".
-  {
-    RunCleanupsScope MainBlock(*this);
-
-    llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
-    llvm::Type *KmpcMicroTy =
-        llvm::TypeBuilder<kmpc_micro, false>::get(getLLVMContext());
-    llvm::Value *RealArgs[] = { Loc, Builder.getInt32(2),
-                                CGF.Builder.CreateBitCast(
-                                    Fn, KmpcMicroTy, "(kmpc_micro_ty)helper"),
-                                Arg };
-    // __kmpc_fork_call(&loc, argc/*2*/, microtask, arg);
-    EmitRuntimeCall(OPENMPRTL_FUNC(fork_call), makeArrayRef(RealArgs));
-  }
-
-  // CodeGen for clauses (task finalize).
-  for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
-                                       E = S.clauses().end();
-       I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(OMPD_sections, (*I)->getClauseKind()))
-      EmitFinalOMPClause(*(*I), S);
 
   // Remove list of private globals from the stack.
   CGM.OpenMPSupport.endOpenMPRegion();
