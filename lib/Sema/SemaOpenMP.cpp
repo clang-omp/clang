@@ -1879,6 +1879,13 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
   //  The collapse clause may be used to specify how many loops are
   //  associated with the loop construct.
   //
+  NewVar = 0;
+  NewEnd = 0;
+  NewVarCntExpr = 0;
+  NewFinal = 0;
+  VarCnts.clear();
+  FunctionDecl *FD = getCurFunctionDecl();
+  if (FD && FD->isDependentContext()) return true;
   SmallVector<Expr *, 4> Ends;
   SmallVector<Expr *, 4> Incrs;
   SmallVector<Expr *, 4> Inits;
