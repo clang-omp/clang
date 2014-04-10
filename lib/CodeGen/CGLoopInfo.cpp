@@ -52,7 +52,7 @@ static llvm::MDNode *CreateMetadata(llvm::LLVMContext &Ctx,
     case LoopAttributes::LVEC_DISABLE:
       Value *Vals[] = {
         MDString::get(Ctx, "llvm.vectorizer.enable"),
-        ConstantInt::get(Type::getInt32Ty(Ctx), EnableLoopVectorizer)
+        ConstantInt::get(Type::getInt1Ty(Ctx), EnableLoopVectorizer)
       };
       Args.push_back(MDNode::get(Ctx, Vals));
       break;
