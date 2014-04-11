@@ -59,6 +59,7 @@ const int KMP_IDENT_BARRIER_IMPL_FOR = 0x0040;
 const int KMP_IDENT_BARRIER_IMPL_SECTIONS = 0x00C0;
 const int KMP_IDENT_BARRIER_IMPL_SINGLE = 0x0140;
 typedef int32_t(__kmpc_cancel_barrier)(ident_t *loc, int32_t global_tid);
+typedef void(__kmpc_barrier)(ident_t *loc, int32_t global_tid);
 const int KMP_CANCEL_NOREQ = 0;
 const int KMP_CANCEL_PARALLEL = 1;
 const int KMP_CANCEL_LOOP = 2;
@@ -854,6 +855,7 @@ DEFAULT_GET_OPENMP_FUNC(fork_call)
 DEFAULT_GET_OPENMP_FUNC(push_num_threads)
 DEFAULT_GET_OPENMP_FUNC(push_proc_bind)
 DEFAULT_GET_OPENMP_FUNC(cancel_barrier)
+DEFAULT_GET_OPENMP_FUNC(barrier)
 DEFAULT_GET_OPENMP_FUNC(cancellationpoint)
 DEFAULT_GET_OPENMP_FUNC(cancel)
 DEFAULT_GET_OPENMP_FUNC(omp_taskyield)
@@ -893,6 +895,53 @@ DEFAULT_GET_OPENMP_FUNC(omp_task_complete_if0)
 DEFAULT_GET_OPENMP_FUNC(omp_task_parts)
 DEFAULT_GET_OPENMP_FUNC(taskgroup)
 DEFAULT_GET_OPENMP_FUNC(end_taskgroup)
+
+static void EmitCancelArgs(CodeGenFunction &CGF,
+                           OpenMPDirectiveKind ConstructType,
+                           SourceLocation SLoc,
+                           llvm::Value *&Loc, llvm::Value *&GTid,
+                           llvm::Value *&Kind) {
+  Loc = CGF.CGM.CreateIntelOpenMPRTLLoc(SLoc, CGF);
+  GTid = CGF.CGM.CreateOpenMPGlobalThreadNum(SLoc, CGF);
+  int CKind = KMP_CANCEL_NOREQ;
+  switch (ConstructType) {
+  case OMPD_parallel:
+    CKind = KMP_CANCEL_PARALLEL;
+    break;
+  case OMPD_for:
+    CKind = KMP_CANCEL_LOOP;
+    break;
+  case OMPD_sections:
+    CKind = KMP_CANCEL_SECTIONS;
+    break;
+  case OMPD_taskgroup:
+    CKind = KMP_CANCEL_TASKGROUP;
+    break;
+  default:
+    llvm_unreachable("Unknown construct type in cancel directive");
+    break;
+  }
+  Kind = CGF.Builder.getInt32(CKind);
+}
+
+static void EmitCancellationPoint(
+    CodeGenFunction &CGF,
+    SourceLocation Loc,
+    ArrayRef<llvm::Value*> Args,
+    llvm::BasicBlock *ExitBB, llvm::BasicBlock *ContBB,
+    CodeGenFunction::JumpDest FinalBB = CodeGenFunction::JumpDest()) {
+  CodeGenModule &CGM = CGF.CGM;
+  llvm::Value *CallRes =
+      CGF.Builder.CreateIsNotNull(
+          CGF.EmitRuntimeCall(OPENMPRTL_FUNC(cancellationpoint), Args));
+  CGF.Builder.CreateCondBr(CallRes, ExitBB, ContBB);
+  if (FinalBB.isValid()) {
+    CGF.EmitBlock(ExitBB);
+    CGF.EmitOMPCancelBarrier(Loc, KMP_IDENT_BARRIER_IMPL, true);
+    CGF.EmitBranchThroughCleanup(FinalBB);
+    CGF.EmitBlock(ContBB);
+  }
+}
 
 namespace {
 /// \brief RAII object that save current insert position and then restores it.
@@ -937,9 +986,7 @@ static void SetFirstprivateInsertPt(CodeGenFunction &CGF) {
 static void EmitFirstprivateInsert(CodeGenFunction &CGF, SourceLocation Loc) {
   if (CGF.FirstprivateInsertPt) {
     BuilderInsertPositionRAII PosRAII(CGF.Builder, CGF.FirstprivateInsertPt);
-    CodeGenModule &CGM = CGF.CGM;
-    CGF.EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier),
-                                       Loc, KMP_IDENT_BARRIER_IMPL);
+    CGF.EmitOMPBarrier(Loc, KMP_IDENT_BARRIER_IMPL);
   }
 }
 
@@ -955,6 +1002,44 @@ static llvm::GlobalVariable *CreateRuntimeVariable(CodeGenModule &CGM,
       llvm::Constant::getNullValue(Ty), MangledName, 0,
       llvm::GlobalVariable::NotThreadLocal, AddrSpace);
 }
+
+void CodeGenFunction::EmitOMPBarrier(SourceLocation L,
+                                     unsigned Flags) {
+  EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(barrier),
+                                 L, Flags);
+}
+
+void CodeGenFunction::EmitOMPCancelBarrier(SourceLocation L,
+                                           unsigned Flags,
+                                           bool IgnoreResult) {
+  if (OMPCancelMap.empty()) {
+    EmitOMPBarrier(L, Flags);
+  } else {
+    llvm::Value *CallRes =
+        EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier),
+                                       L, Flags);
+    if (!IgnoreResult) {
+      JumpDest FinalBB;
+      if (OMPCancelMap.count(OMPD_for))
+        FinalBB = OMPCancelMap[OMPD_for];
+      else if (OMPCancelMap.count(OMPD_sections))
+        FinalBB = OMPCancelMap[OMPD_sections];
+      else if (OMPCancelMap.count(OMPD_parallel))
+        FinalBB = OMPCancelMap[OMPD_parallel];
+      else
+        FinalBB = OMPCancelMap[OMPD_taskgroup];
+
+      llvm::BasicBlock *ExitBB = createBasicBlock("omp.cancel_barrier.exit");
+      llvm::BasicBlock *ContBB = createBasicBlock("omp.cancel_barrier.cont");
+      llvm::Value *Cond = Builder.CreateIsNotNull(CallRes);
+      Builder.CreateCondBr(Cond, ExitBB, ContBB);
+      EmitBlock(ExitBB);
+      EmitBranchThroughCleanup(FinalBB);
+      EmitBlock(ContBB);
+    }
+  }
+}
+
 
 void
 CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
@@ -1028,6 +1113,9 @@ CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
   FnArgs.push_back(Arg3);
   CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
   CGF.StartFunction(FD, getContext().VoidTy, Fn, FI, FnArgs, SourceLocation());
+
+  CGF.OMPCancelMap[OMPD_parallel] = CGF.ReturnBlock;
+
   CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg1),
                          ".__kmpc_global_thread_num.");
 
@@ -1085,8 +1173,7 @@ CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
   // Implicit barrier for simple parallel region only.
   // Others (combined) directives already has implicit barriers.
   if (DKind == OMPD_parallel) {
-    CGF.EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier),
-                                       S.getLocEnd(), KMP_IDENT_BARRIER_IMPL);
+    CGF.EmitOMPCancelBarrier(S.getLocEnd(), KMP_IDENT_BARRIER_IMPL);
   }
 
   EmitFirstprivateInsert(CGF, S.getLocStart());
@@ -1457,7 +1544,10 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
       } else {
         RunCleanupsScope Scope(*this);
         if (IsInnerLoopGen || !IsComplexParallelLoop) {
+          if (SKind == OMPD_for)
+            OMPCancelMap[OMPD_for] = getJumpDestInCurrentScope(EndBB);
           EmitStmt(Body);
+          OMPCancelMap.erase(OMPD_for);
         } else {
           const Expr *LowerBound = getLowerBoundFromLoopDirective(&S);
           const Expr *UpperBound = getUpperBoundFromLoopDirective(&S);
@@ -1538,8 +1628,7 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
 
   if (!IsDistributeLoop &&
       (CGM.OpenMPSupport.hasLastPrivate() || !CGM.OpenMPSupport.getNoWait()))
-    EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier),
-                                   S.getLocEnd(), KMP_IDENT_BARRIER_IMPL_FOR);
+    EmitOMPCancelBarrier(S.getLocEnd(), KMP_IDENT_BARRIER_IMPL_FOR);
   // CodeGen for clauses (call end).
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
@@ -1840,6 +1929,9 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   FnArgs.push_back(Arg2);
   CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
   CGF.StartFunction(FD, getContext().IntTy, Fn, FI, FnArgs, SourceLocation());
+
+  CGF.OMPCancelMap[OMPD_taskgroup] = CGF.ReturnBlock;
+
   llvm::AllocaInst *GTid =
       CGF.CreateMemTemp(getContext().IntTy, ".__kmpc_global_thread_num.");
   CGF.EmitStoreOfScalar(CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg1)),
@@ -2152,6 +2244,8 @@ void CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
   llvm::BasicBlock *SectionEndBB = createBasicBlock("omp.section.fini");
   llvm::SwitchInst *SectionSwitch =
       Builder.CreateSwitch(Idx, SectionEndBB, NumberOfSections + 1);
+  if (SKind == OMPD_sections)
+    OMPCancelMap[OMPD_sections] = getJumpDestInCurrentScope(EndBB);
   CompoundStmt::const_body_iterator I = AStmt->body_begin();
   for (unsigned i = 0; i <= NumberOfSections; ++i, ++I) {
     RunCleanupsScope ThenScope(*this);
@@ -2163,6 +2257,7 @@ void CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
     EmitBranch(SectionEndBB);
   }
   EmitBlock(SectionEndBB, true);
+  OMPCancelMap.erase(SKind);
 
   llvm::Value *NextIdx =
       Builder.CreateAdd(Builder.CreateLoad(IterVar, ".idx."),
@@ -2181,8 +2276,7 @@ void CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
   CGM.OpenMPSupport.setLastIterVar(PLast);
 
   if (CGM.OpenMPSupport.hasLastPrivate() || !CGM.OpenMPSupport.getNoWait())
-    EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier), S.getLocEnd(),
-                                   KMP_IDENT_BARRIER_IMPL_SECTIONS);
+    EmitOMPCancelBarrier(S.getLocEnd(), KMP_IDENT_BARRIER_IMPL_SECTIONS);
 
   // CodeGen for clauses (call end).
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
@@ -3305,8 +3399,7 @@ CodeGenFunction::EmitPostOMPLastPrivateClause(const OMPLastPrivateClause &C,
     }
     Builder.SetInsertPoint(LPEndBB);
     if (!CGM.OpenMPSupport.getNoWait())
-      EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier), S.getLocEnd(),
-                                     KMP_IDENT_BARRIER_IMPL);
+      EmitOMPCancelBarrier(S.getLocEnd(), KMP_IDENT_BARRIER_IMPL);
   }
   ArrayRef<const Expr *>::iterator AssignIter = C.getAssignments().begin();
   ArrayRef<const Expr *>::iterator VarIter1 = C.getPseudoVars1().begin();
@@ -4024,8 +4117,7 @@ void CodeGenFunction::EmitOMPConditionalIfHelper(
 /// '#pragma omp barrier' directive.
 void CodeGenFunction::EmitOMPBarrierDirective(const OMPBarrierDirective &S) {
   // EmitUntiedPartIdInc(*this);
-  EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier), S.getLocStart(),
-                                 KMP_IDENT_BARRIER_EXPL);
+  EmitOMPCancelBarrier(S.getLocStart(), KMP_IDENT_BARRIER_EXPL);
   // EmitUntiedBranchEnd(*this);
   // EmitUntiedTaskSwitch(*this, false);
 }
@@ -4091,57 +4183,55 @@ void CodeGenFunction::EmitOMPFlushDirective(const OMPFlushDirective &S) {
 
 /// '#pragma omp cancel' directive.
 void CodeGenFunction::EmitOMPCancelDirective(const OMPCancelDirective &S) {
-  llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
-  llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), *this);
-  int Kind = KMP_CANCEL_NOREQ;
-  switch (S.getConstructType()) {
-  case OMPD_parallel:
-    Kind = KMP_CANCEL_PARALLEL;
-    break;
-  case OMPD_for:
-    Kind = KMP_CANCEL_LOOP;
-    break;
-  case OMPD_sections:
-    Kind = KMP_CANCEL_SECTIONS;
-    break;
-  case OMPD_taskgroup:
-    Kind = KMP_CANCEL_TASKGROUP;
-    break;
-  default:
-    llvm_unreachable("Unknown construct type in cancellation point");
-    break;
+  llvm::Value *Loc;
+  llvm::Value *GTid;
+  llvm::Value *Kind;
+  EmitCancelArgs(*this, S.getConstructType(), S.getLocStart(), Loc, GTid, Kind);
+
+  llvm::Value *RealArgs[] = { Loc, GTid, Kind };
+
+  llvm::BasicBlock *ContBB = createBasicBlock("omp.cancel.continue");
+  llvm::BasicBlock *ExitBB = createBasicBlock("omp.cancel.exit");
+  if (!S.clauses().empty()) {
+    assert(S.clauses().size() == 1 && isa<OMPIfClause>(S.clauses().front()) &&
+           "Wrong number or type of clause in omp cancel directive");
+    const OMPIfClause *Clause = cast<OMPIfClause>(S.clauses().front());
+    llvm::BasicBlock *ThenBB = createBasicBlock("omp.cancel.then");
+    llvm::BasicBlock *ElseBB = createBasicBlock("omp.cancel.else");
+    EmitBranchOnBoolExpr(Clause->getCondition(), ThenBB, ElseBB);
+    EmitBlock(ElseBB);
+    EmitCancellationPoint(*this, S.getLocStart(), RealArgs, ExitBB, ContBB);
+    EmitBlock(ThenBB);
   }
-  llvm::Value *RealArgs[] = { Loc, GTid, Builder.getInt32(Kind) };
-  EmitRuntimeCall(OPENMPRTL_FUNC(cancel), RealArgs);
-  llvm_unreachable("Not supportd yet");
+
+  llvm::Value *CallRes =
+      Builder.CreateIsNotNull(EmitRuntimeCall(OPENMPRTL_FUNC(cancel),
+                                              RealArgs));
+  Builder.CreateCondBr(CallRes, ExitBB, ContBB);
+  EmitBlock(ExitBB);
+  assert(OMPCancelMap.count(S.getConstructType()) &&
+         "No exit point for cancel");
+  EmitOMPCancelBarrier(S.getLocStart(), KMP_IDENT_BARRIER_IMPL, true);
+  EmitBranchThroughCleanup(OMPCancelMap[S.getConstructType()]);
+  EmitBlock(ContBB);
 }
 
 /// '#pragma omp cancellation point' directive.
 void CodeGenFunction::EmitOMPCancellationPointDirective(
     const OMPCancellationPointDirective &S) {
-  llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
-  llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), *this);
-  int Kind = KMP_CANCEL_NOREQ;
-  switch (S.getConstructType()) {
-  case OMPD_parallel:
-    Kind = KMP_CANCEL_PARALLEL;
-    break;
-  case OMPD_for:
-    Kind = KMP_CANCEL_LOOP;
-    break;
-  case OMPD_sections:
-    Kind = KMP_CANCEL_SECTIONS;
-    break;
-  case OMPD_taskgroup:
-    Kind = KMP_CANCEL_TASKGROUP;
-    break;
-  default:
-    llvm_unreachable("Unknown construct type in cancellation point");
-    break;
-  }
-  llvm::Value *RealArgs[] = { Loc, GTid, Builder.getInt32(Kind) };
-  EmitRuntimeCall(OPENMPRTL_FUNC(cancellationpoint), RealArgs);
-  llvm_unreachable("Not supportd yet");
+  llvm::Value *Loc;
+  llvm::Value *GTid;
+  llvm::Value *Kind;
+  EmitCancelArgs(*this, S.getConstructType(), S.getLocStart(), Loc, GTid, Kind);
+
+  llvm::Value *RealArgs[] = { Loc, GTid, Kind };
+
+  llvm::BasicBlock *ExitBB = createBasicBlock("omp.cancellationpoint.exit");
+  llvm::BasicBlock *ContBB = createBasicBlock("omp.cancellationpoint.continue");
+  assert(OMPCancelMap.count(S.getConstructType()) &&
+         "No exit point for cancellation point");
+  EmitCancellationPoint(*this, S.getLocStart(), RealArgs, ExitBB, ContBB,
+                        OMPCancelMap[S.getConstructType()]);
 }
 
 /// Atomic OMP Directive -- pattern match and emit one RTL call.
@@ -4572,8 +4662,7 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
 
   if (!HasCopyPrivate && !CGM.OpenMPSupport.getNoWait()) {
     // Note: __kmpc_copyprivate already has a couple of barriers internally.
-    EmitOMPCallWithLocAndTidHelper(OPENMPRTL_FUNC(cancel_barrier), S.getLocEnd(),
-                                   KMP_IDENT_BARRIER_IMPL_SINGLE);
+    EmitOMPCancelBarrier(S.getLocEnd(), KMP_IDENT_BARRIER_IMPL_SINGLE);
   }
 
   // Remove list of private globals from the stack.
