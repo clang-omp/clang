@@ -6391,7 +6391,6 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
                       TestChecker.isLessOp() ? CheckValue : InitValue,
                       TestChecker.isLessOp() ? InitValue : CheckValue);
   }
-
   if (Diff.isUsable() && TestChecker.isStrictOp()) {
     Diff = BuildBinOp(DSAStack->getCurScope(), InitLoc, BO_Sub, Diff.take(),
                       ActOnIntegerConstant(SourceLocation(), 1).take());
@@ -6404,17 +6403,20 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
     Diff =
         BuildBinOp(DSAStack->getCurScope(), InitLoc, BO_Div, Diff.take(), Step);
   }
-  if (Diff.isInvalid() || !Diff.get()->getType()->isIntegerType()) {
-    NewEnd = Diff.get();
-    if (!NewEnd->isTypeDependent() && !NewEnd->isValueDependent() &&
-        !NewEnd->isInstantiationDependent()) {
-      Diag(S->getLocStart(), diag::err_omp_for_wrong_count);
-      return true;
-    }
-  }
-  NewEnd = Diff.take();
-  NewIncr = Step;
-  InitVal = InitValue;
+  bool Signed = Type->hasSignedIntegerRepresentation();
+  uint64_t TypeSize = Context.getTypeSize(Type);
+  if (TypeSize < 32)
+    TypeSize = 32;
+  else if (TypeSize > 64)
+    TypeSize = 64;
+  QualType DiffType = Context.getIntTypeForBitwidth(TypeSize, Signed);
+  TypeSourceInfo *TSI = Context.getTrivialTypeSourceInfo(DiffType);
+  NewEnd = BuildCStyleCastExpr(SourceLocation(), TSI,
+                               SourceLocation(), Diff.take()).take();
+  NewIncr = BuildCStyleCastExpr(SourceLocation(), TSI,
+                                SourceLocation(), Step).take();
+  InitVal =
+      PerformImplicitConversion(InitValue, Type, AA_Initializing, true).take();
   // NamedDecl *ND = Var;
   VarCnt =
       DeclRefExpr::Create(Context, NestedNameSpecifierLoc(), SourceLocation(),

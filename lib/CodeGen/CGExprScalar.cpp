@@ -225,6 +225,7 @@ public:
   }
 
   Value *VisitCEANIndexExpr(CEANIndexExpr *E) {
+    assert (E->getIndexExpr() && "Index expr is not set");
     return CGF.EmitScalarExpr(E->getIndexExpr());
   }
 
