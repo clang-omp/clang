@@ -394,7 +394,7 @@ if( CLANG_BUILT_STANDALONE AND MSVC_VERSION EQUAL 1600 )
   endif()
 endif()
 
-set(BUG_REPORT_URL "http://llvm.org/bugs/" CACHE STRING
+set(BUG_REPORT_URL "https://github.com/clang-omp/clang/issues" CACHE STRING
   "Default URL where bug reports are to be submitted.")
 
 set(CLANG_ORDER_FILE "" CACHE FILEPATH
