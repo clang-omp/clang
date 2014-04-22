@@ -6638,8 +6638,20 @@ TreeTransform<Derived>::TransformOMPExecutableDirective(
   }
   StmtResult AssociatedStmt;
   if (D->hasAssociatedStmt() && D->getAssociatedStmt()) {
-    AssociatedStmt =
-      getDerived().TransformStmt(D->getAssociatedStmt());
+    CapturedStmt *S = cast<CapturedStmt>(D->getAssociatedStmt());
+    SourceLocation Loc = S->getLocStart();
+    unsigned NumParams = S->getCapturedDecl()->getNumParams();
+    getSema().ActOnCapturedRegionStart(Loc, /*CurScope*/0,
+                                       S->getCapturedRegionKind(), NumParams);
+    StmtResult Body = getDerived().TransformStmt(S->getCapturedStmt());
+
+    if (Body.isInvalid()) {
+      getSema().ActOnCapturedRegionError();
+      return StmtError();
+    }
+
+    getSema().MarkOpenMPClauses(TClauses);
+    AssociatedStmt = getSema().ActOnCapturedRegionEnd(Body.take());
     if (!AssociatedStmt.isUsable())
       return StmtError();
   } else if (D->hasAssociatedStmt())
