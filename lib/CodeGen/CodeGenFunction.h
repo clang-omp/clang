@@ -2115,12 +2115,8 @@ public:
                               const OMPExecutableDirective &S);
   void EmitPreOMPPrivateClause(const OMPPrivateClause &C,
                                const OMPExecutableDirective &S);
-  void EmitPostOMPPrivateClause(const OMPPrivateClause &C,
-                                const OMPExecutableDirective &S);
   void EmitPreOMPFirstPrivateClause(const OMPFirstPrivateClause &C,
                                     const OMPExecutableDirective &S);
-  void EmitPostOMPFirstPrivateClause(const OMPFirstPrivateClause &C,
-                                     const OMPExecutableDirective &S);
   void EmitPreOMPLastPrivateClause(const OMPLastPrivateClause &C,
                                    const OMPExecutableDirective &S);
   void EmitPostOMPLastPrivateClause(const OMPLastPrivateClause &C,

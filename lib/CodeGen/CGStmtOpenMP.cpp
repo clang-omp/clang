@@ -2480,12 +2480,8 @@ void CodeGenFunction::EmitPostOMPClause(const OMPClause &C,
   case OMPC_aligned:
   case OMPC_safelen:
   case OMPC_depend:
-    break;
   case OMPC_private:
-    EmitPostOMPPrivateClause(cast<OMPPrivateClause>(C), S);
-    break;
   case OMPC_firstprivate:
-    EmitPostOMPFirstPrivateClause(cast<OMPFirstPrivateClause>(C), S);
     break;
   case OMPC_lastprivate:
     EmitPostOMPLastPrivateClause(cast<OMPLastPrivateClause>(C), S);
@@ -2970,6 +2966,7 @@ void CodeGenFunction::EmitPreOMPPrivateClause(const OMPPrivateClause &C,
       LocalVarsDeclGuard Grd(*this, true);
       AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
       Private = Emission.getAllocatedAddress();
+      EmitAutoVarCleanups(Emission);
     }
     // CodeGen for classes with the default constructor.
     if (((!PTask || CurFn != PTask) && !isTrivialInitializer(*InitIter)) ||
@@ -3018,49 +3015,6 @@ void CodeGenFunction::EmitPreOMPPrivateClause(const OMPPrivateClause &C,
       }
     }
     CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
-  }
-}
-
-void
-CodeGenFunction::EmitPostOMPPrivateClause(const OMPPrivateClause &C,
-                                          const OMPExecutableDirective &S) {
-  // ~Type1(tmp1);
-  // ~Type2(tmp2);
-  // ...
-  //
-  for (OMPPrivateClause::varlist_const_iterator I = C.varlist_begin(),
-                                                E = C.varlist_end();
-       I != E; ++I) {
-    // Get element type.
-    const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(*I)->getDecl());
-    QualType QTy = (*I)->getType();
-    const Type *MainTy = QTy.getTypePtr();
-    const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
-    const Type *PrevTy = MainTy;
-    while (Ty != 0) {
-      PrevTy = Ty;
-      Ty = Ty->getArrayElementTypeNoTypeQual();
-    }
-    Ty = PrevTy;
-    llvm::Value *Private = CGM.OpenMPSupport.getTopOpenMPPrivateVar(VD);
-    if (!Private)
-      continue;
-    CGM.OpenMPSupport.delOpenMPPrivateVar(VD);
-    // CodeGen for classes with the default constructor.
-    if (CXXRecordDecl *RD = Ty->getAsCXXRecordDecl()) {
-      // Find destructor.
-      CXXDestructorDecl *Dtor = RD->getDestructor();
-      if (Dtor && !Dtor->isTrivial()) {
-        if (MainTy->getAsArrayTypeUnsafe()) {
-          // Destroy array.
-          emitDestroy(Private, QTy, getDestroyer(QualType::DK_cxx_destructor),
-                      false);
-        } else {
-          // Destroy single object.
-          EmitCXXDestructorCall(Dtor, Dtor_Complete, false, false, Private);
-        }
-      }
-    }
   }
 }
 
@@ -3121,6 +3075,7 @@ CodeGenFunction::EmitPreOMPFirstPrivateClause(const OMPFirstPrivateClause &C,
       LocalVarsDeclGuard Grd(*this, true);
       AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
       Private = Emission.getAllocatedAddress();
+      EmitAutoVarCleanups(Emission);
     }
     // CodeGen for classes with the copy constructor.
     RunCleanupsScope InitBlock(*this);
@@ -3202,70 +3157,6 @@ CodeGenFunction::EmitPreOMPFirstPrivateClause(const OMPFirstPrivateClause &C,
     SetFirstprivateInsertPt(*this);
 }
 
-void CodeGenFunction::EmitPostOMPFirstPrivateClause(
-    const OMPFirstPrivateClause &C, const OMPExecutableDirective &S) {
-  // ~Type1(tmp1);
-  // ~Type2(tmp2);
-  // ...
-  //
-  for (OMPFirstPrivateClause::varlist_const_iterator I = C.varlist_begin(),
-                                                     E = C.varlist_end();
-       I != E; ++I) {
-    // Get element type.
-    const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(*I)->getDecl());
-    llvm::Value *Private = CGM.OpenMPSupport.getTopOpenMPPrivateVar(VD);
-    if (!Private)
-      continue;
-    bool LastPrivateFound = false;
-    for (ArrayRef<OMPClause *>::iterator LI = S.clauses().begin(),
-                                         LE = S.clauses().end();
-         LI != LE; ++LI) {
-      if (const OMPLastPrivateClause *LC =
-              dyn_cast<OMPLastPrivateClause>(*LI)) {
-        for (OMPFirstPrivateClause::varlist_const_iterator
-                 VI = LC->varlist_begin(),
-                 VE = LC->varlist_end();
-             VI != VE; ++VI) {
-          if (VD == cast<DeclRefExpr>(*VI)->getDecl()) {
-            LastPrivateFound = true;
-            break;
-          }
-        }
-      }
-      if (LastPrivateFound)
-        break;
-    }
-    // Lastprivate cleanup is processed by lastprivate clause.
-    if (LastPrivateFound)
-      continue;
-    QualType QTy = (*I)->getType();
-    const Type *MainTy = QTy.getTypePtr();
-    const Type *Ty = MainTy->getArrayElementTypeNoTypeQual();
-    const Type *PrevTy = MainTy;
-    while (Ty != 0) {
-      PrevTy = Ty;
-      Ty = Ty->getArrayElementTypeNoTypeQual();
-    }
-    Ty = PrevTy;
-    CGM.OpenMPSupport.delOpenMPPrivateVar(VD);
-    // CodeGen for classes with the destructor.
-    if (CXXRecordDecl *RD = Ty->getAsCXXRecordDecl()) {
-      // Find destructor.
-      CXXDestructorDecl *Dtor = RD->getDestructor();
-      if (Dtor && !Dtor->isTrivial()) {
-        if (MainTy->getAsArrayTypeUnsafe()) {
-          // Destroy array.
-          emitDestroy(Private, QTy, getDestroyer(QualType::DK_cxx_destructor),
-                      false);
-        } else {
-          // Destroy single object.
-          EmitCXXDestructorCall(Dtor, Dtor_Complete, false, false, Private);
-        }
-      }
-    }
-  }
-}
-
 void
 CodeGenFunction::EmitPreOMPLastPrivateClause(const OMPLastPrivateClause &C,
                                              const OMPExecutableDirective &S) {
@@ -3321,6 +3212,7 @@ CodeGenFunction::EmitPreOMPLastPrivateClause(const OMPLastPrivateClause &C,
       LocalVarsDeclGuard Grd(*this, true);
       AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
       Private = Emission.getAllocatedAddress();
+      EmitAutoVarCleanups(Emission);
     }
     // CodeGen for classes with the default constructor.
     if (!isTrivialInitializer(*InitIter) ||
@@ -3510,24 +3402,6 @@ CodeGenFunction::EmitPostOMPLastPrivateClause(const OMPLastPrivateClause &C,
     LPBB = Builder.GetInsertBlock();
     LPIP = Builder.GetInsertPoint();
     Builder.restoreIP(SavedIP);
-    if (!CGM.OpenMPSupport.isNewTask() &&
-        CGM.OpenMPSupport.getPrevOpenMPPrivateVar(VD) == Private)
-      continue;
-    // CodeGen for classes with the destructor.
-    if (CXXRecordDecl *RD = Ty->getAsCXXRecordDecl()) {
-      // Find destructor.
-      CXXDestructorDecl *Dtor = RD->getDestructor();
-      if (Dtor && !Dtor->isTrivial()) {
-        if (MainTy->getAsArrayTypeUnsafe()) {
-          // Destroy array.
-          emitDestroy(Private, QTy, getDestroyer(QualType::DK_cxx_destructor),
-                      false);
-        } else {
-          // Destroy single object.
-          EmitCXXDestructorCall(Dtor, Dtor_Complete, false, false, Private);
-        }
-      }
-    }
   }
   CGM.OpenMPSupport.setLastprivateIP(LPBB, LPIP, LPEndBB);
 }
@@ -3624,6 +3498,7 @@ CodeGenFunction::EmitPreOMPReductionClause(const OMPReductionClause &C,
       LocalVarsDeclGuard Grd(*this, true);
       AutoVarEmission Emission = EmitAutoVarAlloca(*VD);
       Private = cast<llvm::AllocaInst>(Emission.getAllocatedAddress());
+      EmitAutoVarCleanups(Emission);
     }
     //         CreateMemTemp(QTy, CGM.getMangledName(VD) + ".reduction.");
 
@@ -4011,16 +3886,6 @@ CodeGenFunction::EmitPostOMPReductionClause(const OMPReductionClause &C,
     IP2 = Builder.GetInsertPoint();
     RedBB2 = Builder.GetInsertBlock();
     Builder.restoreIP(SavedIP);
-    // CodeGen for classes with the destructor.
-    const Type *Ty = QTy.getTypePtr();
-    if (CXXRecordDecl *RD = Ty->getAsCXXRecordDecl()) {
-      // Find destructor.
-      CXXDestructorDecl *Dtor = RD->getDestructor();
-      if (Dtor && !Dtor->isTrivial()) {
-        // Destroy single object.
-        EmitCXXDestructorCall(Dtor, Dtor_Complete, false, false, Private);
-      }
-    }
   }
   CGM.OpenMPSupport.setReductionIPs(RedBB1, IP1, RedBB2, IP2);
 }
