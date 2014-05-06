@@ -12328,6 +12328,11 @@ void Sema::MarkVariableReferenced(SourceLocation Loc, VarDecl *Var) {
 
 static void MarkExprReferenced(Sema &SemaRef, SourceLocation Loc,
                                Decl *D, Expr *E, bool OdrUse) {
+
+  if (SemaRef.IsDeclContextInOpenMPTarget(SemaRef.CurContext)) {
+    SemaRef.CheckDeclIsAllowedInOpenMPTarget(E, D);
+  }
+
   if (VarDecl *Var = dyn_cast<VarDecl>(D)) {
     DoMarkVarDeclReferenced(SemaRef, Loc, Var, E);
     return;

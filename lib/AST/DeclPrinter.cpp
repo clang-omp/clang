@@ -85,6 +85,7 @@ namespace {
     void VisitOMPThreadPrivateDecl(OMPThreadPrivateDecl *D);
     void VisitOMPDeclareSimdDecl(OMPDeclareSimdDecl *D);
     void VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D);
+    void VisitOMPDeclareTargetDecl(OMPDeclareTargetDecl *D);
 
     void PrintTemplateParameters(const TemplateParameterList *Params,
                                  const TemplateArgumentList *Args = 0);
@@ -296,7 +297,8 @@ void DeclPrinter::VisitDeclContext(DeclContext *DC, bool Indent) {
 
     // FIXME: Need to be able to tell the DeclPrinter when
     const char *Terminator = 0;
-    if (isa<OMPThreadPrivateDecl>(*D) || isa<OMPDeclareReductionDecl>(*D))
+    if (isa<OMPThreadPrivateDecl>(*D) || isa<OMPDeclareReductionDecl>(*D) ||
+        isa<OMPDeclareTargetDecl>(*D))
       Terminator = 0;
     else if (isa<OMPDeclareSimdDecl>(*D)) {
       if (FunctionDecl *Func = dyn_cast_or_null<FunctionDecl>(
@@ -1286,5 +1288,11 @@ void DeclPrinter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
       Out << "\n";
     }
   }
+}
+
+void DeclPrinter::VisitOMPDeclareTargetDecl(OMPDeclareTargetDecl *D) {
+  Out << "#pragma omp declare target\n";
+  VisitDeclContext(D);
+  Out << "#pragma omp end declare target\n";
 }
 

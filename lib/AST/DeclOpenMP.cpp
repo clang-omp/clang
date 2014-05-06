@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 /// \file
-/// \brief This file implements OMPThreadPrivateDecl, OMPDeclareReduction
-/// classes.
+/// \brief This file implements OMPThreadPrivateDecl, OMPDeclareReduction,
+/// OMPDeclareTarget classes.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -24,18 +24,17 @@ using namespace clang;
 // OMPThreadPrivateDecl Implementation.
 //===----------------------------------------------------------------------===//
 
-void OMPThreadPrivateDecl::anchor() { }
+void OMPThreadPrivateDecl::anchor() {}
 
 OMPThreadPrivateDecl *OMPThreadPrivateDecl::Create(ASTContext &C,
                                                    DeclContext *DC,
                                                    SourceLocation L,
                                                    ArrayRef<Expr *> VL) {
-  unsigned Size = sizeof(OMPThreadPrivateDecl) +
-                  (VL.size() * sizeof(Expr *));
+  unsigned Size = sizeof(OMPThreadPrivateDecl) + (VL.size() * sizeof(Expr *));
 
   void *Mem = C.Allocate(Size, llvm::alignOf<OMPThreadPrivateDecl>());
-  OMPThreadPrivateDecl *D = new (Mem) OMPThreadPrivateDecl(OMPThreadPrivate,
-                                                           DC, L);
+  OMPThreadPrivateDecl *D =
+      new (Mem) OMPThreadPrivateDecl(OMPThreadPrivate, DC, L);
   D->NumVars = VL.size();
   D->setVars(VL);
   return D;
@@ -47,8 +46,8 @@ OMPThreadPrivateDecl *OMPThreadPrivateDecl::CreateDeserialized(ASTContext &C,
   unsigned Size = sizeof(OMPThreadPrivateDecl) + (N * sizeof(Expr *));
 
   void *Mem = AllocateDeserializedDecl(C, ID, Size);
-  OMPThreadPrivateDecl *D = new (Mem) OMPThreadPrivateDecl(OMPThreadPrivate,
-                                                           0, SourceLocation());
+  OMPThreadPrivateDecl *D =
+      new (Mem) OMPThreadPrivateDecl(OMPThreadPrivate, 0, SourceLocation());
   D->NumVars = N;
   return D;
 }
@@ -64,69 +63,63 @@ void OMPThreadPrivateDecl::setVars(ArrayRef<Expr *> VL) {
 // OMPDeclareSimd Implementation.
 //===----------------------------------------------------------------------===//
 
-void OMPDeclareSimdDecl::anchor() { }
+void OMPDeclareSimdDecl::anchor() {}
 
 unsigned OMPDeclareSimdDecl::getFirstVariantOffset() {
   unsigned Size = sizeof(OMPDeclareSimdDecl);
-  Size =
-    llvm::RoundUpToAlignment(Size,
-                             llvm::alignOf<OMPDeclareSimdDecl::SimdVariant>());
+  Size = llvm::RoundUpToAlignment(
+      Size, llvm::alignOf<OMPDeclareSimdDecl::SimdVariant>());
   return Size;
 }
 
 unsigned OMPDeclareSimdDecl::getFirstClauseOffset(unsigned NV) {
   unsigned ESize = llvm::RoundUpToAlignment(
-                     sizeof(OMPDeclareSimdDecl::SimdVariant),
-                     llvm::alignOf<OMPDeclareSimdDecl::SimdVariant>());
+      sizeof(OMPDeclareSimdDecl::SimdVariant),
+      llvm::alignOf<OMPDeclareSimdDecl::SimdVariant>());
   unsigned Size = getFirstVariantOffset() + ESize * NV;
   Size = llvm::RoundUpToAlignment(Size, llvm::alignOf<OMPClause *>());
   return Size;
 }
 
 unsigned OMPDeclareSimdDecl::getTotalSize(unsigned NV, unsigned NC) {
-  unsigned ESize = llvm::RoundUpToAlignment(
-                     sizeof(OMPClause*), llvm::alignOf<OMPClause *>());
+  unsigned ESize = llvm::RoundUpToAlignment(sizeof(OMPClause *),
+                                            llvm::alignOf<OMPClause *>());
   unsigned Size = getFirstClauseOffset(NV) + ESize * NC;
   Size = llvm::RoundUpToAlignment(Size, llvm::alignOf<OMPDeclareSimdDecl>());
   return Size;
 }
 
-void OMPDeclareSimdDecl::setVariants(
-       ArrayRef<OMPDeclareSimdDecl::SimdVariant> SV) {
+void
+OMPDeclareSimdDecl::setVariants(ArrayRef<OMPDeclareSimdDecl::SimdVariant> SV) {
   assert(SV.size() == NumVariants &&
          "Number of variants is not the same as the preallocated buffer");
   unsigned Offset = getFirstVariantOffset();
   OMPDeclareSimdDecl::SimdVariant *Data =
-    reinterpret_cast<OMPDeclareSimdDecl::SimdVariant *>(
-      reinterpret_cast<char *>(this) + Offset);
+      reinterpret_cast<OMPDeclareSimdDecl::SimdVariant *>(
+          reinterpret_cast<char *>(this) + Offset);
   for (unsigned i = 0; i < NumVariants; ++i)
     Data[i] = SV[i];
 }
 
-void OMPDeclareSimdDecl::setClauses(
-       ArrayRef<OMPClause *> CL) {
+void OMPDeclareSimdDecl::setClauses(ArrayRef<OMPClause *> CL) {
   assert(CL.size() == NumClauses &&
          "Number of clauses is not the same as the preallocated buffer");
   unsigned Offset = getFirstClauseOffset(NumVariants);
   OMPClause **Data =
-    reinterpret_cast<OMPClause **>(
-      reinterpret_cast<char *>(this) + Offset);
+      reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) + Offset);
   for (unsigned i = 0; i < NumClauses; ++i)
     Data[i] = CL[i];
 }
 
-OMPDeclareSimdDecl *OMPDeclareSimdDecl::Create(
-                      ASTContext &C,
-                      DeclContext *DC,
-                      SourceLocation L,
-                      Decl *FuncDecl,
-                      unsigned NV,
-                      ArrayRef<OMPClause *> CL) {
+OMPDeclareSimdDecl *OMPDeclareSimdDecl::Create(ASTContext &C, DeclContext *DC,
+                                               SourceLocation L, Decl *FuncDecl,
+                                               unsigned NV,
+                                               ArrayRef<OMPClause *> CL) {
   unsigned NC = CL.size();
   unsigned Size = getTotalSize(NV, NC);
   void *Mem = C.Allocate(Size, llvm::alignOf<OMPDeclareSimdDecl>());
-  OMPDeclareSimdDecl *D = new (Mem) OMPDeclareSimdDecl(
-                                      OMPDeclareSimd, DC, L, NV, NC);
+  OMPDeclareSimdDecl *D =
+      new (Mem) OMPDeclareSimdDecl(OMPDeclareSimd, DC, L, NV, NC);
   D->FuncDecl = FuncDecl;
   D->setClauses(CL);
   return D;
@@ -138,8 +131,8 @@ OMPDeclareSimdDecl *OMPDeclareSimdDecl::CreateDeserialized(ASTContext &C,
                                                            unsigned NC) {
   unsigned Size = getTotalSize(NV, NC);
   void *Mem = AllocateDeserializedDecl(C, ID, Size);
-  OMPDeclareSimdDecl *D = new (Mem) OMPDeclareSimdDecl(OMPDeclareSimd, 0,
-                                      SourceLocation(), NV, NC);
+  OMPDeclareSimdDecl *D =
+      new (Mem) OMPDeclareSimdDecl(OMPDeclareSimd, 0, SourceLocation(), NV, NC);
   D->FuncDecl = 0;
   return D;
 }
@@ -148,56 +141,79 @@ OMPDeclareSimdDecl *OMPDeclareSimdDecl::CreateDeserialized(ASTContext &C,
 // OMPDeclareReductionDecl Implementation.
 //===----------------------------------------------------------------------===//
 
-void OMPDeclareReductionDecl::anchor() { }
+void OMPDeclareReductionDecl::anchor() {}
 
 unsigned OMPDeclareReductionDecl::getFirstElementOffset() {
   unsigned Size = sizeof(OMPDeclareReductionDecl);
   // Realign
-  Size =
-    llvm::RoundUpToAlignment(Size,
-                             llvm::alignOf<OMPDeclareReductionDecl::ReductionData>());
+  Size = llvm::RoundUpToAlignment(
+      Size, llvm::alignOf<OMPDeclareReductionDecl::ReductionData>());
   return Size;
 }
 
-OMPDeclareReductionDecl *
-OMPDeclareReductionDecl::Create(ASTContext &C, DeclContext *DC,
-                                SourceLocation L,
-                                DeclarationName Name,
-                                unsigned N) {
+OMPDeclareReductionDecl *OMPDeclareReductionDecl::Create(ASTContext &C,
+                                                         DeclContext *DC,
+                                                         SourceLocation L,
+                                                         DeclarationName Name,
+                                                         unsigned N) {
   unsigned Size = getFirstElementOffset() +
                   N * sizeof(OMPDeclareReductionDecl::ReductionData);
 
   void *Mem = C.Allocate(Size);
-  OMPDeclareReductionDecl *D = new (Mem) OMPDeclareReductionDecl(OMPDeclareReduction,
-                                                                 DC, L,
-                                                                 Name);
+  OMPDeclareReductionDecl *D =
+      new (Mem) OMPDeclareReductionDecl(OMPDeclareReduction, DC, L, Name);
   D->NumTypes = N;
   return D;
 }
 
-OMPDeclareReductionDecl *OMPDeclareReductionDecl::CreateDeserialized(ASTContext &C,
-                                                                     unsigned ID,
-                                                                     unsigned N) {
+OMPDeclareReductionDecl *
+OMPDeclareReductionDecl::CreateDeserialized(ASTContext &C, unsigned ID,
+                                            unsigned N) {
   unsigned Size = getFirstElementOffset() +
                   N * sizeof(OMPDeclareReductionDecl::ReductionData);
 
   void *Mem = AllocateDeserializedDecl(C, ID, Size);
-  OMPDeclareReductionDecl *D = new (Mem) OMPDeclareReductionDecl(OMPDeclareReduction,
-                                                                 0, SourceLocation(),
-                                                                 DeclarationName());
+  OMPDeclareReductionDecl *D = new (Mem) OMPDeclareReductionDecl(
+      OMPDeclareReduction, 0, SourceLocation(), DeclarationName());
   D->NumTypes = N;
   return D;
 }
 
 void OMPDeclareReductionDecl::setData(
-                           ArrayRef<OMPDeclareReductionDecl::ReductionData> RD) {
+    ArrayRef<OMPDeclareReductionDecl::ReductionData> RD) {
   assert(RD.size() == NumTypes &&
          "Number of inits is not the same as the preallocated buffer");
   unsigned Size = getFirstElementOffset();
   OMPDeclareReductionDecl::ReductionData *Data =
-    reinterpret_cast<OMPDeclareReductionDecl::ReductionData *>(
-                               reinterpret_cast<char *>(this) + Size);
+      reinterpret_cast<OMPDeclareReductionDecl::ReductionData *>(
+          reinterpret_cast<char *>(this) + Size);
   for (unsigned i = 0; i < NumTypes; ++i)
     Data[i] = RD[i];
-  //std::copy(RD.begin(), RD.end(), Data);
+  // std::copy(RD.begin(), RD.end(), Data);
+}
+
+//===----------------------------------------------------------------------===//
+// OMPDeclareTargetDecl Implementation.
+//===----------------------------------------------------------------------===//
+
+void OMPDeclareTargetDecl::anchor() {}
+
+OMPDeclareTargetDecl *
+OMPDeclareTargetDecl::Create(ASTContext &C, DeclContext *DC, SourceLocation L) {
+  void *Mem = C.Allocate(sizeof(OMPDeclareTargetDecl),
+                         llvm::alignOf<OMPDeclareTargetDecl>());
+  OMPDeclareTargetDecl *D =
+      new (Mem) OMPDeclareTargetDecl(OMPDeclareTarget, DC, L);
+  return D;
+}
+
+OMPDeclareTargetDecl *OMPDeclareTargetDecl::CreateDeserialized(ASTContext &C,
+                                                               unsigned ID) {
+  // Realign
+  unsigned Size = llvm::RoundUpToAlignment(
+      sizeof(OMPDeclareTargetDecl), llvm::alignOf<OMPDeclareTargetDecl>());
+  void *Mem = AllocateDeserializedDecl(C, ID, Size);
+  OMPDeclareTargetDecl *D =
+      new (Mem) OMPDeclareTargetDecl(OMPDeclareTarget, 0, SourceLocation());
+  return D;
 }

@@ -278,8 +278,7 @@ StmtProfiler::VisitOMPExecutableDirective(const OMPExecutableDirective *S) {
       P.Visit(*I);
 }
 
-void
-StmtProfiler::VisitOMPParallelDirective(const OMPParallelDirective *S) {
+void StmtProfiler::VisitOMPParallelDirective(const OMPParallelDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 
@@ -288,104 +287,114 @@ StmtProfiler::VisitOMPParallelForDirective(const OMPParallelForDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 
-void
-StmtProfiler::VisitOMPParallelForSimdDirective(const OMPParallelForSimdDirective *S) {
+void StmtProfiler::VisitOMPParallelForSimdDirective(
+    const OMPParallelForSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPForDirective(const OMPForDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPSimdDirective(const OMPSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPForSimdDirective(const OMPForSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPDistributeSimdDirective(
+    const OMPDistributeSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPDistributeParallelForDirective(
+    const OMPDistributeParallelForDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPDistributeParallelForSimdDirective(
+    const OMPDistributeParallelForSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPSectionsDirective(const OMPSectionsDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPParallelSectionsDirective(
+    const OMPParallelSectionsDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPSectionDirective(const OMPSectionDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPSingleDirective(const OMPSingleDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTaskDirective(const OMPTaskDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTaskyieldDirective(const OMPTaskyieldDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPMasterDirective(const OMPMasterDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPCriticalDirective(const OMPCriticalDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPBarrierDirective(const OMPBarrierDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTaskwaitDirective(const OMPTaskwaitDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTaskgroupDirective(const OMPTaskgroupDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPAtomicDirective(const OMPAtomicDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPFlushDirective(const OMPFlushDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPCancelDirective(const OMPCancelDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPCancellationPointDirective(
+    const OMPCancellationPointDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPOrderedDirective(const OMPOrderedDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTeamsDirective(const OMPTeamsDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 
 void
-StmtProfiler::VisitOMPForDirective(const OMPForDirective *S) {
+StmtProfiler::VisitOMPDistributeDirective(const OMPDistributeDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 
-void
-StmtProfiler::VisitOMPSimdDirective(const OMPSimdDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPForSimdDirective(const OMPForSimdDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPSectionsDirective(const OMPSectionsDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPParallelSectionsDirective(const OMPParallelSectionsDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPSectionDirective(const OMPSectionDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPSingleDirective(const OMPSingleDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPTaskDirective(const OMPTaskDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPTaskyieldDirective(const OMPTaskyieldDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPMasterDirective(const OMPMasterDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPCriticalDirective(const OMPCriticalDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPBarrierDirective(const OMPBarrierDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPTaskwaitDirective(const OMPTaskwaitDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPTaskgroupDirective(const OMPTaskgroupDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPAtomicDirective(const OMPAtomicDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPFlushDirective(const OMPFlushDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPOrderedDirective(const OMPOrderedDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPCancelDirective(const OMPCancelDirective *S) {
-  VisitOMPExecutableDirective(S);
-}
-
-void
-StmtProfiler::VisitOMPCancellationPointDirective(
-                            const OMPCancellationPointDirective *S) {
+void StmtProfiler::VisitOMPTargetDirective(const OMPTargetDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 

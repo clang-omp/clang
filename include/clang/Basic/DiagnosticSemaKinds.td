@@ -674,7 +674,7 @@ def warn_objc_property_default_assign_on_object : Warning<
   InGroup<ObjCPropertyNoAttribute>;
 def warn_property_attr_mismatch : Warning<
   "property attribute in class extension does not match the primary class">;
-def warn_property_implicitly_mismatched : Warning <
+def warn_property_implicitly_mismatched : Warning<
   "primary property declaration is implicitly strong while redeclaration "
   "in class extension is weak">,
   InGroup<DiagGroup<"objc-property-implicit-mismatch">>;
@@ -704,7 +704,7 @@ def warn_auto_synthesizing_protocol_property :Warning<
   "auto property synthesis will not synthesize property"
   " declared in a protocol">,
   InGroup<DiagGroup<"objc-protocol-property-synthesis">>;
-def warn_no_autosynthesis_shared_ivar_property : Warning <
+def warn_no_autosynthesis_shared_ivar_property : Warning<
   "auto property synthesis will not synthesize property "
   "'%0' because it cannot share an ivar with another synthesized property">,
   InGroup<ObjCNoPropertyAutoSynthesis>;
@@ -717,7 +717,7 @@ def warn_autosynthesis_property_ivar_match :Warning<
   "autosynthesized property %0 will use %select{|synthesized}1 instance variable "
   "%2, not existing instance variable %3">,
   InGroup<DiagGroup<"objc-autosynthesis-property-ivar-name-match">>;
-def warn_missing_explicit_synthesis : Warning <
+def warn_missing_explicit_synthesis : Warning<
   "auto property synthesis is synthesizing property not explicitly synthesized">,
   InGroup<DiagGroup<"objc-missing-property-synthesis">>, DefaultIgnore;
 def warn_property_getter_owning_mismatch : Warning<
@@ -780,23 +780,23 @@ def warn_arc_perform_selector_leaks : Warning<
   InGroup<DiagGroup<"arc-performSelector-leaks">>;
 def err_gc_weak_property_strong_type : Error<
   "weak attribute declared on a __strong type property in GC mode">;
-def warn_receiver_is_weak : Warning <
+def warn_receiver_is_weak : Warning<
   "weak %select{receiver|property|implicit property}0 may be "
   "unpredictably set to nil">,
   InGroup<DiagGroup<"receiver-is-weak">>, DefaultIgnore;
 def note_arc_assign_to_strong : Note<
   "assign the value to a strong variable to keep the object alive during use">;
-def warn_arc_repeated_use_of_weak : Warning <
+def warn_arc_repeated_use_of_weak : Warning<
   "weak %select{variable|property|implicit property|instance variable}0 %1 is "
   "accessed multiple times in this %select{function|method|block|lambda}2 "
   "but may be unpredictably set to nil; assign to a strong variable to keep "
   "the object alive">,
   InGroup<ARCRepeatedUseOfWeak>, DefaultIgnore;
-def warn_implicitly_retains_self : Warning <
+def warn_implicitly_retains_self : Warning<
   "block implicitly retains 'self'; explicitly mention 'self' to indicate "
   "this is intended behavior">,
   InGroup<DiagGroup<"implicit-retain-self">>, DefaultIgnore;
-def warn_arc_possible_repeated_use_of_weak : Warning <
+def warn_arc_possible_repeated_use_of_weak : Warning<
   "weak %select{variable|property|implicit property|instance variable}0 %1 may "
   "be accessed multiple times in this %select{function|method|block|lambda}2 "
   "and may be unpredictably set to nil; assign to a strong variable to keep "
@@ -1642,7 +1642,7 @@ def err_range_on_array_parameter : Error<
 def err_for_range_dereference : Error<
   "invalid range expression of type %0; did you mean to dereference it "
   "with '*'?">;
-def note_for_range_invalid_iterator : Note <
+def note_for_range_invalid_iterator : Note<
   "in implicit call to 'operator%select{!=|*|++}0' for iterator of type %1">;
 def note_for_range_begin_end : Note<
   "selected '%select{begin|end}0' %select{function|template }1%2 with iterator type %3">;
@@ -2026,7 +2026,7 @@ def err_attribute_weakref_not_global_context : Error<
   "weakref declaration of '%0' must be in a global context">;
 def err_attribute_weakref_without_alias : Error<
   "weakref declaration of '%0' must also have an alias attribute">;
-def err_alias_not_supported_on_darwin : Error <
+def err_alias_not_supported_on_darwin : Error<
   "only weak aliases are supported on darwin">;
 def err_alias_to_undefined : Error<
   "alias must point to a defined variable or function">;
@@ -3515,7 +3515,7 @@ def note_cannot_inherit : Note<
 def warn_not_enough_argument : Warning<
   "not enough variable arguments in %0 declaration to fit a sentinel">,
   InGroup<Sentinel>;
-def warn_missing_sentinel : Warning <
+def warn_missing_sentinel : Warning<
   "missing sentinel in %select{function call|method dispatch|block call}0">,
   InGroup<Sentinel>;
 def note_sentinel_here : Note<
@@ -3618,7 +3618,7 @@ def err_extern_c_global_conflict : Error<
   "conflicts with declaration %select{in global scope|with C language linkage}0">;
 def note_extern_c_global_conflict : Note<
   "declared %select{in global scope|with C language linkage}0 here">;
-def warn_weak_import : Warning <
+def warn_weak_import : Warning<
   "an already-declared variable is made a weak_import declaration %0">;
 def warn_static_non_static : ExtWarn<
   "static declaration of %0 follows non-static declaration">;
@@ -4582,7 +4582,7 @@ def ext_typecheck_comparison_of_distinct_pointers : ExtWarn<
   InGroup<CompareDistinctPointerType>;
 def ext_typecheck_cond_incompatible_operands : ExtWarn<
   "incompatible operand types (%0 and %1)">;
-def err_cond_voidptr_arc : Error <
+def err_cond_voidptr_arc : Error<
   "operands to conditional of types%diff{ $ and $|}0,1 are incompatible "
   "in ARC mode">;
 def err_typecheck_comparison_of_distinct_pointers : Error<
@@ -5789,11 +5789,11 @@ def err_invalid_conversion_between_vector_and_scalar : Error<
 def err_only_constructors_take_base_inits : Error<
   "only constructors take base initializers">;
 
-def err_multiple_mem_initialization : Error <
+def err_multiple_mem_initialization : Error<
   "multiple initializations given for non-static member %0">;
-def err_multiple_mem_union_initialization : Error <
+def err_multiple_mem_union_initialization : Error<
   "initializing multiple members of union">;
-def err_multiple_base_initialization : Error <
+def err_multiple_base_initialization : Error<
   "multiple initializations given for base %0">;
 
 def err_mem_init_not_member_or_class : Error<
@@ -6127,7 +6127,7 @@ def warn_format_argument_needs_cast : Warning<
   "values of type '%0' should not be used as format arguments; add an explicit "
   "cast to %1 instead">,
   InGroup<Format>;
-def warn_printf_positional_arg_exceeds_data_args : Warning <
+def warn_printf_positional_arg_exceeds_data_args : Warning<
   "data argument position '%0' exceeds the number of data arguments (%1)">,
   InGroup<Format>;
 def warn_format_zero_positional_specifier : Warning<
@@ -6820,6 +6820,16 @@ def err_omp_prohibited_region : Error<
   "region cannot be%select{| closely}0 nested inside %1 region%select{| with name %3}2">;
 def err_omp_prohibited_ordered_region : Error<
   "region must be closely nested inside loop or parallel loop region with 'ordered' clause">;
+def err_omp_prohibited_cancel_region : Error<
+  "region must be nested inside a taskgroup region">;
+def err_omp_prohibited_cancel_region_nowait : Error<
+  "region cannot be nested inside region with 'nowait' clause">;
+def err_omp_prohibited_cancel_region_ordered : Error<
+  "region cannot be nested inside region with 'ordered' clause">;
+def err_omp_prohibited_distribute_region : Error<
+  "region must be closely nested inside a teams region">;
+def err_omp_prohibited_teams_region : Error<
+  "region must be closely nested inside a target region">;
 def err_omp_atomic_more_one_clause : Error<
   "directive '#pragma omp atomic' cannot contain more than one 'read', 'write', 'update' or 'capture' clause">;
 def err_omp_atomic_not_expression : Error<
@@ -6866,12 +6876,23 @@ def err_omp_expected_var_name_or_array_item : Error<
   "expected variable name or an array item">;
 def err_omp_depend_arg_not_lvalue : Error<
   "argument expression must be an l-value">;
-def err_omp_prohibited_cancel_region : Error <
-  "region must be nested inside a taskgroup region">;
-def err_omp_prohibited_cancel_region_nowait : Error <
-  "region cannot be nested inside region with 'nowait' clause">;
-def err_omp_prohibited_cancel_region_ordered : Error <
-  "region cannot be nested inside region with 'ordered' clause">;
+def err_omp_teams_not_single_in_target : Error<
+  "the teams construct must be the only construct inside of target region">;
+def err_omp_region_not_file_context : Error<
+  "directive must be at file or namespace scope">;
+def warn_omp_not_in_target_context : Warning<
+  "declaration is not declared in any declare target region">,
+  InGroup<SourceUsesOpenMP>, DefaultWarn;
+def err_omp_threadprivate_in_target : Error<
+  "threadprivate variables cannot be used in target constructs">;
+def err_omp_map_shared_storage : Error<
+  "variable already marked as mapped in current construct">;
+def err_omp_not_mappable_type : Error<
+  "type %0 is not mappable to target">;
+def note_omp_polymorphic_in_target : Note<
+  "mappable type cannot be polymorphic">;
+def note_omp_static_member_in_target : Note<
+  "mappable type cannot contain static members">;
 } // end of OpenMP category
 
 let CategoryName = "Related Result Type Issue" in {

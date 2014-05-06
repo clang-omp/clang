@@ -1360,7 +1360,6 @@ DEF_TRAVERSE_DECL(OMPDeclareSimdDecl, {
     if (D->getFunction()) { TRY_TO(TraverseDecl(D->getFunction())); }
   })
 
-
 DEF_TRAVERSE_DECL(OMPDeclareReductionDecl, {
     for (OMPDeclareReductionDecl::datalist_iterator I = D->datalist_begin(),
                                                     E = D->datalist_end();
@@ -1370,6 +1369,8 @@ DEF_TRAVERSE_DECL(OMPDeclareReductionDecl, {
       TRY_TO(TraverseStmt(I->InitFunction));
     }
   })
+
+DEF_TRAVERSE_DECL(OMPDeclareTargetDecl, { })
 
 // A helper method for TemplateDecl's children.
 template<typename Derived>
@@ -2366,6 +2367,18 @@ DEF_TRAVERSE_STMT(OMPForSimdDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 
+DEF_TRAVERSE_STMT(OMPDistributeSimdDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPDistributeParallelForDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPDistributeParallelForSimdDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
 DEF_TRAVERSE_STMT(OMPSectionsDirective, {
   return TraverseOMPExecutableDirective(S);
 })
@@ -2423,11 +2436,23 @@ DEF_TRAVERSE_STMT(OMPOrderedDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 
+DEF_TRAVERSE_STMT(OMPTeamsDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPDistributeDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
 DEF_TRAVERSE_STMT(OMPCancelDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 
 DEF_TRAVERSE_STMT(OMPCancellationPointDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTargetDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 

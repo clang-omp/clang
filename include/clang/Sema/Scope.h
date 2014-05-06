@@ -309,7 +309,11 @@ public:
 
   /// \brief Determines whether this scope is the OpenMP directive scope
   bool isOpenMPDirectiveScope() const {
-    return (getFlags() & Scope::OpenMPDirectiveScope);
+    for (const Scope *S = this; S; S = S->getParent()) {
+      if (S->getFlags() & Scope::OpenMPDirectiveScope)
+        return true;
+    }
+    return false;
   }
 
   /// containedInPrototypeScope - Return true if this or a parent scope

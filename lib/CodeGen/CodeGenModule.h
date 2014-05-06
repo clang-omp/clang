@@ -1104,6 +1104,9 @@ public:
   /// \brief Emit vector variants and metadata for 'omp declare simd'.
   ///
   void EmitOMPDeclareSimd(const OMPDeclareSimdDecl *D);
+  /// \brief Emit declare target decls.
+  ///
+  void EmitOMPDeclareTarget(const OMPDeclareTargetDecl *D);
 
   /// \brief Creates a structure with the location info for Intel OpenMP RTL.
   llvm::Value *CreateIntelOpenMPRTLLoc(SourceLocation Loc,
@@ -1169,6 +1172,8 @@ public:
       llvm::Type *TaskPrivateTy;
       QualType TaskPrivateQTy;
       llvm::Value *TaskPrivateBase;
+      llvm::Value *NumTeams;
+      llvm::Value *ThreadLimit;
       OMPStackElemTy(CodeGenModule &CGM);
       ~OMPStackElemTy();
     };
@@ -1277,13 +1282,17 @@ public:
     void setPTask(llvm::Value *Task, llvm::Value *TaskT, llvm::Type *PTy, QualType PQTy, llvm::Value *PB);
     void getPTask(llvm::Value *&Task, llvm::Value *&TaskT, llvm::Type *&PTy, QualType &PQTy, llvm::Value *&PB);
     llvm::DenseMap<const ValueDecl *, FieldDecl *> &getTaskFields();
-    void setUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch, llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter);
+    void setUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch, llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter, CodeGenFunction *CGF);
     void getUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch, llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter);
-    void setParentUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch, llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter);
-    void getParentUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch, llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter);
+    void setParentUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch, llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter, CodeGenFunction *CGF);
+    void getParentUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch, llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter, CodeGenFunction *&CGF);
     void setKMPDependInfoType(llvm::Type *Ty, unsigned Align) { KMPDependInfoType = Ty; KMPDependInfoTypeAlign = Align; }
     llvm::Type *getKMPDependInfoType() { return KMPDependInfoType; }
     unsigned getKMPDependInfoTypeAlign() { return KMPDependInfoTypeAlign; }
+    void setNumTeams(llvm::Value *Num);
+    void setThreadLimit(llvm::Value *Num);
+    llvm::Value *getNumTeams();
+    llvm::Value *getThreadLimit();
   };
 
   OpenMPSupportStackTy OpenMPSupport;

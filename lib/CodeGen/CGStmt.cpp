@@ -142,77 +142,97 @@ void CodeGenFunction::EmitStmt(const Stmt *S) {
     EmitCapturedStmt(*CS, CS->getCapturedRegionKind());
     }
     break;
-
-  // "One-call" OMP Directives
-  case Stmt::OMPBarrierDirectiveClass:
-    EmitOMPBarrierDirective(cast<OMPBarrierDirective>(*S));
-    break;
-  case Stmt::OMPTaskyieldDirectiveClass:
-    EmitOMPTaskyieldDirective(cast<OMPTaskyieldDirective>(*S));
-    break;
-  case Stmt::OMPTaskwaitDirectiveClass:
-    EmitOMPTaskwaitDirective(cast<OMPTaskwaitDirective>(*S));
-    break;
-  case Stmt::OMPFlushDirectiveClass:
-    EmitOMPFlushDirective(cast<OMPFlushDirective>(*S));
-    break;
-  // Atomic OMP Directive -- pattern match and emit one call
-  case Stmt::OMPAtomicDirectiveClass:
-    EmitOMPAtomicDirective(cast<OMPAtomicDirective>(*S));
-    break;
-  // "Two-calls" OMP Directives
-  case Stmt::OMPMasterDirectiveClass:
-    EmitOMPMasterDirective(cast<OMPMasterDirective>(*S));
-    break;
-  case Stmt::OMPSingleDirectiveClass:
-    EmitOMPSingleDirective(cast<OMPSingleDirective>(*S));
-    break;
-  case Stmt::OMPCriticalDirectiveClass:
-    EmitOMPCriticalDirective(cast<OMPCriticalDirective>(*S));
-    break;
-  case Stmt::OMPOrderedDirectiveClass:
-    EmitOMPOrderedDirective(cast<OMPOrderedDirective>(*S));
-    break;
-  // A more advanced stuff
-  case Stmt::OMPParallelDirectiveClass:
-    EmitOMPParallelDirective(cast<OMPParallelDirective>(*S));
-    break;
-  case Stmt::OMPParallelForDirectiveClass:
-    EmitOMPParallelForDirective(cast<OMPParallelForDirective>(*S));
-    break;
-  case Stmt::OMPParallelForSimdDirectiveClass:
-    EmitOMPParallelForSimdDirective(cast<OMPParallelForSimdDirective>(*S));
-    break;
-  case Stmt::OMPSimdDirectiveClass:
-    EmitOMPSimdDirective(cast<OMPSimdDirective>(*S));
-    break;
-  case Stmt::OMPForSimdDirectiveClass:
-    EmitOMPForSimdDirective(cast<OMPForSimdDirective>(*S));
-    break;
-  case Stmt::OMPTaskDirectiveClass:
-    EmitOMPTaskDirective(cast<OMPTaskDirective>(*S));
-    break;
-  case Stmt::OMPForDirectiveClass:
-    EmitOMPForDirective(cast<OMPForDirective>(*S));
-    break;
-  case Stmt::OMPSectionsDirectiveClass:
-    EmitOMPSectionsDirective(cast<OMPSectionsDirective>(*S));
-    break;
-  case Stmt::OMPParallelSectionsDirectiveClass:
-    EmitOMPParallelSectionsDirective(cast<OMPParallelSectionsDirective>(*S));
-    break;
-  case Stmt::OMPSectionDirectiveClass:
-    EmitOMPSectionDirective(cast<OMPSectionDirective>(*S));
-    break;
-  case Stmt::OMPTaskgroupDirectiveClass:
-    EmitOMPTaskgroupDirective(cast<OMPTaskgroupDirective>(*S));
-    break;
-  case Stmt::OMPCancelDirectiveClass:
-    EmitOMPCancelDirective(cast<OMPCancelDirective>(*S));
-    break;
-  case Stmt::OMPCancellationPointDirectiveClass:
-    EmitOMPCancellationPointDirective(cast<OMPCancellationPointDirective>(*S));
-    break;
+    // "One-call" OMP Directives
+    case Stmt::OMPBarrierDirectiveClass:
+      EmitOMPBarrierDirective(cast<OMPBarrierDirective>(*S));
+      break;
+    case Stmt::OMPTaskyieldDirectiveClass:
+      EmitOMPTaskyieldDirective(cast<OMPTaskyieldDirective>(*S));
+      break;
+    case Stmt::OMPTaskwaitDirectiveClass:
+      EmitOMPTaskwaitDirective(cast<OMPTaskwaitDirective>(*S));
+      break;
+    case Stmt::OMPFlushDirectiveClass:
+      EmitOMPFlushDirective(cast<OMPFlushDirective>(*S));
+      break;
+    // Atomic OMP Directive -- pattern match and emit one call
+    case Stmt::OMPAtomicDirectiveClass:
+      EmitOMPAtomicDirective(cast<OMPAtomicDirective>(*S));
+      break;
+    // "Two-calls" OMP Directives
+    case Stmt::OMPMasterDirectiveClass:
+      EmitOMPMasterDirective(cast<OMPMasterDirective>(*S));
+      break;
+    case Stmt::OMPSingleDirectiveClass:
+      EmitOMPSingleDirective(cast<OMPSingleDirective>(*S));
+      break;
+    case Stmt::OMPCriticalDirectiveClass:
+      EmitOMPCriticalDirective(cast<OMPCriticalDirective>(*S));
+      break;
+    case Stmt::OMPOrderedDirectiveClass:
+      EmitOMPOrderedDirective(cast<OMPOrderedDirective>(*S));
+      break;
+    // A more advanced stuff
+    case Stmt::OMPParallelDirectiveClass:
+      EmitOMPParallelDirective(cast<OMPParallelDirective>(*S));
+      break;
+    case Stmt::OMPParallelForDirectiveClass:
+      EmitOMPParallelForDirective(cast<OMPParallelForDirective>(*S));
+      break;
+    case Stmt::OMPSimdDirectiveClass:
+      EmitOMPSimdDirective(cast<OMPSimdDirective>(*S));
+      break;
+    case Stmt::OMPForSimdDirectiveClass:
+      EmitOMPForSimdDirective(cast<OMPForSimdDirective>(*S));
+      break;
+    case Stmt::OMPParallelForSimdDirectiveClass:
+      EmitOMPParallelForSimdDirective(cast<OMPParallelForSimdDirective>(*S));
+      break;
+    case Stmt::OMPDistributeSimdDirectiveClass:
+      EmitOMPDistributeSimdDirective(cast<OMPDistributeSimdDirective>(*S));
+      break;
+    case Stmt::OMPDistributeParallelForDirectiveClass:
+      EmitOMPDistributeParallelForDirective(
+          cast<OMPDistributeParallelForDirective>(*S));
+      break;
+    case Stmt::OMPDistributeParallelForSimdDirectiveClass:
+      EmitOMPDistributeParallelForSimdDirective(
+          cast<OMPDistributeParallelForSimdDirective>(*S));
+      break;
+    case Stmt::OMPTaskDirectiveClass:
+      EmitOMPTaskDirective(cast<OMPTaskDirective>(*S));
+      break;
+    case Stmt::OMPForDirectiveClass:
+      EmitOMPForDirective(cast<OMPForDirective>(*S));
+      break;
+    case Stmt::OMPSectionsDirectiveClass:
+      EmitOMPSectionsDirective(cast<OMPSectionsDirective>(*S));
+      break;
+    case Stmt::OMPParallelSectionsDirectiveClass:
+      EmitOMPParallelSectionsDirective(cast<OMPParallelSectionsDirective>(*S));
+      break;
+    case Stmt::OMPSectionDirectiveClass:
+      EmitOMPSectionDirective(cast<OMPSectionDirective>(*S));
+      break;
+    case Stmt::OMPTaskgroupDirectiveClass:
+      EmitOMPTaskgroupDirective(cast<OMPTaskgroupDirective>(*S));
+      break;
+    case Stmt::OMPTeamsDirectiveClass:
+      EmitOMPTeamsDirective(cast<OMPTeamsDirective>(*S));
+      break;
+    case Stmt::OMPDistributeDirectiveClass:
+      EmitOMPDistributeDirective(cast<OMPDistributeDirective>(*S));
+      break;
+    case Stmt::OMPCancelDirectiveClass:
+      EmitOMPCancelDirective(cast<OMPCancelDirective>(*S));
+      break;
+    case Stmt::OMPCancellationPointDirectiveClass:
+      EmitOMPCancellationPointDirective(
+          cast<OMPCancellationPointDirective>(*S));
+      break;
+    case Stmt::OMPTargetDirectiveClass:
+      EmitOMPTargetDirective(cast<OMPTargetDirective>(*S));
+      break;
   case Stmt::ObjCAtTryStmtClass:
     EmitObjCAtTryStmt(cast<ObjCAtTryStmt>(*S));
     break;
@@ -1877,19 +1897,6 @@ LValue CodeGenFunction::InitCapturedStruct(const CapturedStmt &S) {
   return SlotLV;
 }
 
-LValue CodeGenFunction::GetCapturedField(const VarDecl *VD) {
-  if (CapturedStmtInfo) {
-    if (const FieldDecl *FD = CapturedStmtInfo->lookup(VD)) {
-      const RecordDecl *RD = cast<RecordDecl>(FD->getDeclContext());
-      QualType RecordTy = getContext().getRecordType(RD);
-      LValue SlotLV = MakeNaturalAlignAddrLValue(
-                             CapturedStmtInfo->getContextValue(), RecordTy);
-      LValue LV = EmitLValueForFieldInitialization(SlotLV, FD);
-      return LV;
-    }
-  }
-  return LValue();
-}
 /// Generate an outlined function for the body of a CapturedStmt, store any
 /// captured variables into the captured struct, and call the outlined function.
 llvm::Function *
@@ -1917,6 +1924,8 @@ llvm::Function *
 CodeGenFunction::GenerateCapturedStmtFunction(const CapturedDecl *CD,
                                               const RecordDecl *RD,
                                               SourceLocation Loc) {
+  CGM.OpenMPSupport.startOpenMPRegion(true);
+
   assert(CapturedStmtInfo &&
     "CapturedStmtInfo should be set when generating the captured function");
 
@@ -1954,8 +1963,18 @@ CodeGenFunction::GenerateCapturedStmtFunction(const CapturedDecl *CD,
     CXXThisValue = EmitLoadOfLValue(ThisLValue, Loc).getScalarVal();
   }
 
+  for (RecordDecl::field_iterator I = RD->field_begin(),
+                                  E = RD->field_end();
+       I != E; ++I) {
+    if ((*I)->getType()->isVariablyModifiedType()) {
+      EmitVariablyModifiedType((*I)->getType());
+    }
+  }
+
   CapturedStmtInfo->EmitBody(*this, CD->getBody());
   FinishFunction(CD->getBodyRBrace());
+
+  CGM.OpenMPSupport.endOpenMPRegion();
 
   return F;
 }
@@ -2027,6 +2046,7 @@ void CodeGenFunction::EmitPragmaSimd(CodeGenFunction::CGPragmaSimdWrapper &W) {
   // Emit the loop control variable and cache its initial value and the
   // stride value.
   // Also emit loop index and loop count, depending on stmt.
+
   W.emitInit(*this, LoopIndex, LoopCount);
 
   // Only run the SIMD loop if the loop condition is true

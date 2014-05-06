@@ -3092,6 +3092,9 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
   case Decl::OMPDeclareSimd:
     EmitOMPDeclareSimd(cast<OMPDeclareSimdDecl>(D));
     break;
+  case Decl::OMPDeclareTarget:
+    EmitOMPDeclareSimd(cast<OMPDeclareSimdDecl>(D));
+    break;
 
   default:
     // Make sure we handled everything we should, every other kind is a
@@ -3250,9 +3253,10 @@ CodeGenModule::OpenMPSupportStackTy::OMPStackElemTy::OMPStackElemTy(CodeGenModul
     ReduceSwitch(0), BB1(0), BB1IP(0), BB2(0), BB2IP(0), LockVar(0),
     LastprivateBB(0), LastprivateIP(0), LastprivateEndBB(0), LastIterVar(0), TaskFlags(0),
     PTaskTValue(0), PTask(0), UntiedPartIdAddr(0), UntiedCounter(0), UntiedSwitch(0),
+    UntiedEnd(0), ParentCGF(0),
     NoWait(true), Mergeable(false), Schedule(0), ChunkSize(0), NewTask(false),
-    Untied(false), HasLastPrivate(false), TaskPrivateTy(0),
-    TaskPrivateQTy(), TaskPrivateBase(0) { }
+    Untied(false), HasLastPrivate(false),
+    TaskPrivateTy(0), TaskPrivateQTy(), TaskPrivateBase(0), NumTeams(0), ThreadLimit(0) { }
 
 CodeGenFunction &CodeGenModule::OpenMPSupportStackTy::getCGFForReductionFunction() {
   if (!OpenMPStack.back().RedCGF) {
@@ -3410,7 +3414,7 @@ bool CodeGenModule::OpenMPSupportStackTy::getOrdered() {
 }
 
 void CodeGenModule::OpenMPSupportStackTy::setHasLastPrivate(bool Flag) {
-  OpenMPStack.back().HasLastPrivate = true;
+  OpenMPStack.back().HasLastPrivate = Flag;
 }
 
 bool CodeGenModule::OpenMPSupportStackTy::hasLastPrivate() {
@@ -3500,7 +3504,8 @@ llvm::DenseMap<const ValueDecl *, FieldDecl *> &CodeGenModule::OpenMPSupportStac
 }
 
 void CodeGenModule::OpenMPSupportStackTy::setUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch,
-                                                        llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter) {
+                                                        llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter,
+                                                        CodeGenFunction *CGF) {
   for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
                                     E = OpenMPStack.rend();
        I != E; ++I) {
@@ -3509,6 +3514,7 @@ void CodeGenModule::OpenMPSupportStackTy::setUntiedData(llvm::Value *UntiedPartI
       I->UntiedSwitch = UntiedSwitch;
       I->UntiedEnd = UntiedEnd;
       I->UntiedCounter = UntiedCounter;
+      I->ParentCGF = CGF;
       return;
     }
   }
@@ -3530,7 +3536,8 @@ void CodeGenModule::OpenMPSupportStackTy::getUntiedData(llvm::Value *&UntiedPart
 }
 
 void CodeGenModule::OpenMPSupportStackTy::setParentUntiedData(llvm::Value *UntiedPartIdAddr, llvm::Value *UntiedSwitch,
-                                                              llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter) {
+                                                              llvm::BasicBlock *UntiedEnd, unsigned UntiedCounter,
+                                                              CodeGenFunction *CGF) {
   bool FirstTaskFound = false;
   for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
                                     E = OpenMPStack.rend();
@@ -3540,6 +3547,7 @@ void CodeGenModule::OpenMPSupportStackTy::setParentUntiedData(llvm::Value *Untie
       I->UntiedSwitch = UntiedSwitch;
       I->UntiedEnd = UntiedEnd;
       I->UntiedCounter = UntiedCounter;
+      I->ParentCGF = CGF;
       return;
     }
     FirstTaskFound = FirstTaskFound || I->NewTask;
@@ -3547,7 +3555,8 @@ void CodeGenModule::OpenMPSupportStackTy::setParentUntiedData(llvm::Value *Untie
 }
 
 void CodeGenModule::OpenMPSupportStackTy::getParentUntiedData(llvm::Value *&UntiedPartIdAddr, llvm::Value *&UntiedSwitch,
-                                                              llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter) {
+                                                              llvm::BasicBlock *&UntiedEnd, unsigned &UntiedCounter,
+                                                              CodeGenFunction *&CGF) {
   bool FirstTaskFound = false;
   for (OMPStackTy::reverse_iterator I = OpenMPStack.rbegin(),
                                     E = OpenMPStack.rend();
@@ -3557,8 +3566,25 @@ void CodeGenModule::OpenMPSupportStackTy::getParentUntiedData(llvm::Value *&Unti
       UntiedSwitch = I->UntiedSwitch;
       UntiedEnd = I->UntiedEnd;
       UntiedCounter = I->UntiedCounter;
+      CGF = I->ParentCGF;
       return;
     }
     FirstTaskFound = FirstTaskFound || I->NewTask;
   }
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setNumTeams(llvm::Value *Num) {
+  OpenMPStack.back().NumTeams = Num;
+}
+
+void CodeGenModule::OpenMPSupportStackTy::setThreadLimit(llvm::Value *Num) {
+  OpenMPStack.back().ThreadLimit = Num;
+}
+
+llvm::Value *CodeGenModule::OpenMPSupportStackTy::getNumTeams() {
+  return OpenMPStack.back().NumTeams;
+}
+
+llvm::Value *CodeGenModule::OpenMPSupportStackTy::getThreadLimit() {
+  return OpenMPStack.back().ThreadLimit;
 }

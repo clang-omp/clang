@@ -213,6 +213,7 @@ bool serialization::isRedeclarableDeclKind(unsigned Kind) {
   case Decl::OMPThreadPrivate:
   case Decl::OMPDeclareReduction:
   case Decl::OMPDeclareSimd:
+  case Decl::OMPDeclareTarget:
     return false;
   }
 

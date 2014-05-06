@@ -48,10 +48,10 @@ int main(int argc, char **argv) {
 // CHECK: %{{[0-9]+}} = call i32 @__kmpc_global_thread_num({ i32, i32, i32, i32, i8* }* %{{[a-zA-Z0-9_.]+}})
 // CHECK-NEXT: store i32 %{{[0-9]+}}, i32* %{{[a-zA-Z0-9_.]+}}
 // CHECK: call i32 @__cxa_guard_acquire
-// CHECK: = call i8* @__kmpc_threadprivate_cached({ i32, i32, i32, i32, i8* }* %{{[a-zA-Z0-9_.]+}}, i32 %{{[a-zA-Z0-9_.]+}}, i8* bitcast (%class.S* @{{[a-zA-Z0-9_]+}}gs to i8*), i32 4, i8*** @{{[a-zA-Z0-9_]+}}gs.cache.)
+// CHECK: = call i8* @__kmpc_threadprivate_cached({ i32, i32, i32, i32, i8* }* %{{[a-zA-Z0-9_.]+}}, i32 %{{[a-zA-Z0-9_.]+}}, i8* bitcast (%class.S* @{{[a-zA-Z0-9_]+}}gs to i8*), i64 4, i8*** @{{[a-zA-Z0-9_]+}}gs.cache.)
 // CHECK: call void @__cxa_guard_release
   #pragma omp threadprivate(s1)
-// CHECK: = call i8* @__kmpc_threadprivate_cached({ i32, i32, i32, i32, i8* }* %{{[a-zA-Z0-9_.]+}}, i32 %{{[a-zA-Z0-9_.]+}}, i8* bitcast (%class.S* @{{[a-zA-Z0-9_]+}}s1 to i8*), i32 4, i8*** @{{[a-zA-Z0-9_]+}}s1.cache.)
+// CHECK: = call i8* @__kmpc_threadprivate_cached({ i32, i32, i32, i32, i8* }* %{{[a-zA-Z0-9_.]+}}, i32 %{{[a-zA-Z0-9_.]+}}, i8* bitcast (%class.S* @{{[a-zA-Z0-9_]+}}s1 to i8*), i64 4, i8*** @{{[a-zA-Z0-9_]+}}s1.cache.)
   return s1.a;
 }
 // CHECK: }

@@ -625,6 +625,12 @@ void OMPClausePrinter::VisitOMPCollapseClause(OMPCollapseClause *Node) {
   OS << ")";
 }
 
+void OMPClausePrinter::VisitOMPDeviceClause(OMPDeviceClause *Node) {
+  OS << "device(";
+  Node->getDevice()->printPretty(OS, 0, Policy, 0);
+  OS << ")";
+}
+
 void OMPClausePrinter::VisitOMPDefaultClause(OMPDefaultClause *Node) {
   OS << "default("
      << getOpenMPSimpleClauseTypeName(OMPC_default, Node->getDefaultKind())
@@ -737,6 +743,22 @@ void OMPClausePrinter::VisitOMPLastPrivateClause(OMPLastPrivateClause *Node) {
   }
 }
 
+void OMPClausePrinter::VisitOMPMapClause(OMPMapClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "map(";
+    OS << getOpenMPSimpleClauseTypeName(OMPC_map, Node->getKind());
+    OS << ':';
+
+    for (OMPMapClause::varlist_iterator I = Node->varlist_begin(),
+                                        E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? ' ' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
 void OMPClausePrinter::VisitOMPScheduleClause(OMPScheduleClause *Node) {
   OS << "schedule("
      << getOpenMPSimpleClauseTypeName(OMPC_schedule, Node->getScheduleKind());
@@ -749,10 +771,11 @@ void OMPClausePrinter::VisitOMPScheduleClause(OMPScheduleClause *Node) {
 
 void OMPClausePrinter::VisitOMPDistScheduleClause(OMPDistScheduleClause *Node) {
   OS << "dist_schedule("
-     << getOpenMPSimpleClauseTypeName(OMPC_dist_schedule, Node->getScheduleKind());
-  if (Node->getChunkSize()) {
+     << getOpenMPSimpleClauseTypeName(OMPC_dist_schedule,
+                                      Node->getDistScheduleKind());
+  if (Node->getDistChunkSize()) {
     OS << ", ";
-    Node->getChunkSize()->printPretty(OS, 0, Policy, 0);
+    Node->getDistChunkSize()->printPretty(OS, 0, Policy, 0);
   }
   OS << ")";
 }
@@ -813,6 +836,22 @@ void OMPClausePrinter::VisitOMPFlushClause(OMPFlushClause *Node) {
   }
 }
 
+void OMPClausePrinter::VisitOMPDependClause(OMPDependClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "depend(";
+    OS << getOpenMPSimpleClauseTypeName(OMPC_depend, Node->getType());
+    OS << ':';
+
+    for (OMPDependClause::varlist_iterator I = Node->varlist_begin(),
+                                           E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? ' ' : ',');
+      ///static_cast<StmtPrinter*>(Printer)->PrintExpr(*I);
+      (*I)->printPretty(OS, 0, Policy, 0);
+    }
+    OS << ")";
+  }
+}
 
 void OMPClausePrinter::VisitOMPUniformClause(OMPUniformClause *Node) {
   if (!Node->varlist_empty()) {
@@ -885,22 +924,6 @@ void OMPClausePrinter::VisitOMPAlignedClause(OMPAlignedClause *Node) {
   }
 }
 
-void OMPClausePrinter::VisitOMPDependClause(OMPDependClause *Node) {
-  if (!Node->varlist_empty()) {
-    OS << "depend(";
-    OS << getOpenMPSimpleClauseTypeName(OMPC_depend, Node->getType());
-    OS << ':';
-
-    for (OMPDependClause::varlist_iterator I = Node->varlist_begin(),
-                                           E = Node->varlist_end();
-         I != E; ++I) {
-      OS << (I == Node->varlist_begin() ? ' ' : ',');
-      (*I)->printPretty(OS, 0, Policy, 0);
-    }
-    OS << ")";
-  }
-}
-
 }
 
 void OMPClause::printPretty(raw_ostream &OS,
@@ -937,6 +960,7 @@ void StmtPrinter::VisitOMPExecutableDirective(OMPExecutableDirective *Node) {
     PrintStmt(CS);
   }
 }
+
 void StmtPrinter::VisitOMPParallelDirective(OMPParallelDirective *Node) {
   Indent() << "#pragma omp parallel ";
   VisitOMPExecutableDirective(Node);
@@ -947,7 +971,8 @@ void StmtPrinter::VisitOMPParallelForDirective(OMPParallelForDirective *Node) {
   VisitOMPExecutableDirective(Node);
 }
 
-void StmtPrinter::VisitOMPParallelForSimdDirective(OMPParallelForSimdDirective *Node) {
+void StmtPrinter::VisitOMPParallelForSimdDirective(
+    OMPParallelForSimdDirective *Node) {
   Indent() << "#pragma omp parallel for simd ";
   VisitOMPExecutableDirective(Node);
 }
@@ -962,7 +987,8 @@ void StmtPrinter::VisitOMPSectionsDirective(OMPSectionsDirective *Node) {
   VisitOMPExecutableDirective(Node);
 }
 
-void StmtPrinter::VisitOMPParallelSectionsDirective(OMPParallelSectionsDirective *Node) {
+void StmtPrinter::VisitOMPParallelSectionsDirective(
+    OMPParallelSectionsDirective *Node) {
   Indent() << "#pragma omp parallel sections ";
   VisitOMPExecutableDirective(Node);
 }
@@ -1042,16 +1068,49 @@ void StmtPrinter::VisitOMPForSimdDirective(OMPForSimdDirective *Node) {
   VisitOMPExecutableDirective(Node);
 }
 
+void
+StmtPrinter::VisitOMPDistributeSimdDirective(OMPDistributeSimdDirective *Node) {
+  Indent() << "#pragma omp distribute simd ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPDistributeParallelForDirective(
+    OMPDistributeParallelForDirective *Node) {
+  Indent() << "#pragma omp distribute parallel for ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPDistributeParallelForSimdDirective(
+    OMPDistributeParallelForSimdDirective *Node) {
+  Indent() << "#pragma omp distribute parallel for simd ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTeamsDirective(OMPTeamsDirective *Node) {
+  Indent() << "#pragma omp teams ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPDistributeDirective(OMPDistributeDirective *Node) {
+  Indent() << "#pragma omp distribute ";
+  VisitOMPExecutableDirective(Node);
+}
+
 void StmtPrinter::VisitOMPCancelDirective(OMPCancelDirective *Node) {
   Indent() << "#pragma omp cancel "
-    << getOpenMPDirectiveName(Node->getConstructType()) << " ";
+           << getOpenMPDirectiveName(Node->getConstructType()) << " ";
   VisitOMPExecutableDirective(Node);
 }
 
 void StmtPrinter::VisitOMPCancellationPointDirective(
-                                OMPCancellationPointDirective *Node) {
+    OMPCancellationPointDirective *Node) {
   Indent() << "#pragma omp cancellation point "
-    << getOpenMPDirectiveName(Node->getConstructType());
+           << getOpenMPDirectiveName(Node->getConstructType());
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTargetDirective(OMPTargetDirective *Node) {
+  Indent() << "#pragma omp target ";
   VisitOMPExecutableDirective(Node);
 }
 

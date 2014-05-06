@@ -2077,10 +2077,18 @@ public:
   void EmitOMPForDirective(const OMPForDirective &S);
   void EmitOMPSimdDirective(const OMPSimdDirective &S);
   void EmitOMPForSimdDirective(const OMPForSimdDirective &S);
+  void EmitOMPDistributeSimdDirective(const OMPDistributeSimdDirective &S);
+  void EmitOMPDistributeParallelForDirective(
+      const OMPDistributeParallelForDirective &S);
+  void EmitOMPDistributeParallelForSimdDirective(
+      const OMPDistributeParallelForSimdDirective &S);
   void EmitOMPTaskDirective(const OMPTaskDirective &S);
   void EmitOMPSectionsDirective(const OMPSectionsDirective &S);
   void EmitOMPParallelSectionsDirective(const OMPParallelSectionsDirective &S);
   void EmitOMPSectionDirective(const OMPSectionDirective &S);
+  void EmitOMPTeamsDirective(const OMPTeamsDirective &S);
+  void EmitOMPDistributeDirective(const OMPDistributeDirective &S);
+  void EmitOMPTargetDirective(const OMPTargetDirective &S);
   void EmitInitOMPClause(const OMPClause &C,
                          const OMPExecutableDirective &S);
   void EmitAfterInitOMPClause(const OMPClause &C,
@@ -2093,6 +2101,10 @@ public:
   void EmitFinalOMPClause(const OMPClause &C, const OMPExecutableDirective &S);
   void EmitInitOMPNumThreadsClause(const OMPNumThreadsClause &C,
                                    const OMPExecutableDirective &S);
+  void EmitInitOMPNumTeamsClause(const OMPNumTeamsClause &C,
+                                 const OMPExecutableDirective &S);
+  void EmitInitOMPThreadLimitClause(const OMPThreadLimitClause &C,
+                                    const OMPExecutableDirective &S);
   void EmitInitOMPProcBindClause(const OMPProcBindClause &C,
                                  const OMPExecutableDirective &S);
   void EmitAfterInitOMPIfClause(const OMPIfClause &C,
@@ -2111,6 +2123,8 @@ public:
                                   const OMPExecutableDirective &S);
   void EmitPreOMPScheduleClause(const OMPScheduleClause &C,
                                 const OMPExecutableDirective &S);
+  void EmitPreOMPDistScheduleClause(const OMPDistScheduleClause &C,
+                                    const OMPExecutableDirective &S);
   void EmitPreOMPCopyinClause(const OMPCopyinClause &C,
                               const OMPExecutableDirective &S);
   void EmitPreOMPPrivateClause(const OMPPrivateClause &C,

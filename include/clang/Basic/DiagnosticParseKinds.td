@@ -411,9 +411,9 @@ def err_objc_properties_require_objc2 : Error<
   "properties are an Objective-C 2 feature">;
 def err_objc_unexpected_attr : Error<
   "prefix attribute must be followed by an interface or protocol">;
-def err_objc_postfix_attribute : Error <
+def err_objc_postfix_attribute : Error<
   "postfix attributes are not allowed on Objective-C directives">;
-def err_objc_postfix_attribute_hint : Error <
+def err_objc_postfix_attribute_hint : Error<
   "postfix attributes are not allowed on Objective-C directives, place"
   " them in front of '%select{@interface|@protocol}0'">;
 def err_objc_directive_only_in_protocol : Error<
@@ -868,8 +868,10 @@ def err_omp_expected_reduction_identifier : Error<
   "expected identifier or one of the following operators: '+', '-', '*', '&', '|', '^', '&&' and '||'">;
 def err_omp_unknown_dependence_type : Error<
   "expected dependence type 'in', 'out' or 'inout'">;
-def err_omp_expected_cancel_construct_type : Error <
+def err_omp_expected_cancel_construct_type : Error<
   "expected 'parallel', 'sections', 'for' or 'taskgroup' construct type">;
+def err_expected_end_declare_target : Error<
+  "expected '#pragma omp end declare target'">;
 } // end of Parse Issue category.
 
 let CategoryName = "Modules Issue" in {

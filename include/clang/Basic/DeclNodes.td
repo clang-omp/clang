@@ -83,5 +83,6 @@ def ClassScopeFunctionSpecialization : Decl;
 def Import : Decl;
 def OMPThreadPrivate : Decl;
 def OMPDeclareSimd : Decl;
+def OMPDeclareTarget : Decl, DeclContext;
 def Empty : Decl;
 

@@ -115,6 +115,24 @@ ExprResult
 Sema::CheckBuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   ExprResult TheCallResult(Owned(TheCall));
 
+  // Check that setjmp/longjmp are not allowed in omp simd.
+  switch (BuiltinID) {
+  case Builtin::BI_setjmp:
+  case Builtin::BIsetjmp:
+  case Builtin::BIsetjmp_syscall:
+  case Builtin::BIqsetjmp:
+  case Builtin::BIgetcontext:
+  case Builtin::BI__builtin_setjmp:
+  case Builtin::BI_longjmp:
+  case Builtin::BIlongjmp:
+  case Builtin::BI__builtin_longjmp:
+    if (HasOpenMPSimdRegion()) {
+      Diag(TheCall->getExprLoc(), diag::err_setjmp_longjmp_in_omp_simd)
+        << TheCall->getSourceRange();
+      return ExprError();
+    }
+    break;
+  }
   // Find out if any arguments are required to be integer constant expressions.
   unsigned ICEArguments = 0;
   ASTContext::GetBuiltinTypeError Error;

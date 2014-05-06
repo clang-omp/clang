@@ -1,4 +1,4 @@
-//===- DeclOpenMP.h - Classes for representing OpenMP directives -*- C++ -*-===//
+//===- DeclOpenMP.h - Classes for representing OpenMP directives -*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -39,29 +39,26 @@ class OMPThreadPrivateDecl : public Decl {
 
   virtual void anchor();
 
-  OMPThreadPrivateDecl(Kind DK, DeclContext *DC, SourceLocation L) :
-    Decl(DK, DC, L), NumVars(0) { }
+  OMPThreadPrivateDecl(Kind DK, DeclContext *DC, SourceLocation L)
+      : Decl(DK, DC, L), NumVars(0) {}
 
   ArrayRef<const Expr *> getVars() const {
     return ArrayRef<const Expr *>(
-                   reinterpret_cast<const Expr * const *>(this + 1),
-                   NumVars);
+        reinterpret_cast<const Expr *const *>(this + 1), NumVars);
   }
 
   llvm::MutableArrayRef<Expr *> getVars() {
-    return llvm::MutableArrayRef<Expr *>(
-                                 reinterpret_cast<Expr **>(this + 1),
-                                 NumVars);
+    return llvm::MutableArrayRef<Expr *>(reinterpret_cast<Expr **>(this + 1),
+                                         NumVars);
   }
 
   void setVars(ArrayRef<Expr *> VL);
 
 public:
   static OMPThreadPrivateDecl *Create(ASTContext &C, DeclContext *DC,
-                                      SourceLocation L,
-                                      ArrayRef<Expr *> VL);
-  static OMPThreadPrivateDecl *CreateDeserialized(ASTContext &C,
-                                                  unsigned ID, unsigned N);
+                                      SourceLocation L, ArrayRef<Expr *> VL);
+  static OMPThreadPrivateDecl *CreateDeserialized(ASTContext &C, unsigned ID,
+                                                  unsigned N);
 
   typedef llvm::MutableArrayRef<Expr *>::iterator varlist_iterator;
   typedef ArrayRef<const Expr *>::iterator varlist_const_iterator;
@@ -81,19 +78,23 @@ public:
 /// For example, in the following, declared reduction 'foo':
 ///
 /// \code
-/// #pragma omp declare reduction (foo : int,float : omp_out += omp_in) initializer (omp_priv = 0)
+/// #pragma omp declare reduction (foo : int,float : omp_out += omp_in)
+/// initializer (omp_priv = 0)
 /// \endcode
 ///
 class OMPDeclareReductionDecl : public NamedDecl, public DeclContext {
 public:
   struct ReductionData {
     ReductionData(QualType QTy, SourceRange TyRange, Expr *Combiner, Expr *Init)
-      : QTy(QTy), TyRange(TyRange), CombinerFunction(Combiner), InitFunction(Init) { }
+        : QTy(QTy), TyRange(TyRange), CombinerFunction(Combiner),
+          InitFunction(Init) {}
+    ReductionData() : QTy(), TyRange(), CombinerFunction(0), InitFunction(0) {}
     QualType QTy;
     SourceRange TyRange;
     Expr *CombinerFunction;
     Expr *InitFunction;
   };
+
 private:
   friend class ASTDeclReader;
   unsigned NumTypes;
@@ -101,36 +102,33 @@ private:
   virtual void anchor();
 
   OMPDeclareReductionDecl(Kind DK, DeclContext *DC, SourceLocation L,
-                          DeclarationName Name) :
-    NamedDecl(DK, DC, L, Name), DeclContext(DK), NumTypes(0) {
-      setModulePrivate();
-    }
+                          DeclarationName Name)
+      : NamedDecl(DK, DC, L, Name), DeclContext(DK), NumTypes(0) {
+    setModulePrivate();
+  }
 
   static unsigned getFirstElementOffset();
 
   ArrayRef<ReductionData> getData() const {
     return ArrayRef<ReductionData>(
-                   reinterpret_cast<const ReductionData *>(
-                                reinterpret_cast<const char *>(this) +
-                                getFirstElementOffset()),
-                   NumTypes);
+        reinterpret_cast<const ReductionData *>(
+            reinterpret_cast<const char *>(this) + getFirstElementOffset()),
+        NumTypes);
   }
 
   llvm::MutableArrayRef<ReductionData> getData() {
     return llvm::MutableArrayRef<ReductionData>(
-                   reinterpret_cast<ReductionData *>(
-                                reinterpret_cast<char *>(this) +
-                                getFirstElementOffset()),
-                   NumTypes);
+        reinterpret_cast<ReductionData *>(reinterpret_cast<char *>(this) +
+                                          getFirstElementOffset()),
+        NumTypes);
   }
 
 public:
   static OMPDeclareReductionDecl *Create(ASTContext &C, DeclContext *DC,
-                                         SourceLocation L,
-                                         DeclarationName Name,
+                                         SourceLocation L, DeclarationName Name,
                                          unsigned N);
-  static OMPDeclareReductionDecl *CreateDeserialized(ASTContext &C,
-                                                     unsigned ID, unsigned N);
+  static OMPDeclareReductionDecl *CreateDeserialized(ASTContext &C, unsigned ID,
+                                                     unsigned N);
 
   void setData(ArrayRef<ReductionData> RD);
 
@@ -147,10 +145,11 @@ public:
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }
   static bool classofKind(Kind K) { return K == OMPDeclareReduction; }
   static DeclContext *castToDeclContext(const OMPDeclareReductionDecl *D) {
-    return static_cast<DeclContext *>(const_cast<OMPDeclareReductionDecl*>(D));
+    return static_cast<DeclContext *>(const_cast<OMPDeclareReductionDecl *>(D));
   }
   static OMPDeclareReductionDecl *castFromDeclContext(const DeclContext *DC) {
-    return static_cast<OMPDeclareReductionDecl *>(const_cast<DeclContext*>(DC));
+    return static_cast<OMPDeclareReductionDecl *>(
+        const_cast<DeclContext *>(DC));
   }
 };
 
@@ -167,11 +166,12 @@ public:
   ///        variant of the function that will need to be instantiated.
   struct SimdVariant {
     SimdVariant(SourceRange SR, unsigned BI, unsigned EI)
-      :SrcRange(SR), BeginIdx(BI), EndIdx(EI) { }
+        : SrcRange(SR), BeginIdx(BI), EndIdx(EI) {}
     SourceRange SrcRange;
     unsigned BeginIdx;
     unsigned EndIdx;
   };
+
 private:
   friend class ASTDeclReader;
   unsigned NumVariants;
@@ -180,9 +180,9 @@ private:
 
   virtual void anchor();
 
-  OMPDeclareSimdDecl(Kind DK, DeclContext *DC, SourceLocation L,
-                     unsigned NV, unsigned NC)
-    :Decl(DK, DC, L), NumVariants(NV), NumClauses(NC), FuncDecl(0) { }
+  OMPDeclareSimdDecl(Kind DK, DeclContext *DC, SourceLocation L, unsigned NV,
+                     unsigned NC)
+      : Decl(DK, DC, L), NumVariants(NV), NumClauses(NC), FuncDecl(0) {}
 
   static unsigned getFirstVariantOffset();
   static unsigned getFirstClauseOffset(unsigned NV);
@@ -192,49 +192,44 @@ public:
   // Getters for the array of simd variants.
   ArrayRef<SimdVariant> getVariants() const {
     return ArrayRef<SimdVariant>(
-                   reinterpret_cast<const SimdVariant *>(
-                     reinterpret_cast<const char *>(this) +
-                     getFirstVariantOffset()),
-                   NumVariants);
+        reinterpret_cast<const SimdVariant *>(
+            reinterpret_cast<const char *>(this) + getFirstVariantOffset()),
+        NumVariants);
   }
 
   llvm::MutableArrayRef<SimdVariant> getVariants() {
     return llvm::MutableArrayRef<SimdVariant>(
-                   reinterpret_cast<SimdVariant *>(
-                     reinterpret_cast<char *>(this) +
-                     getFirstVariantOffset()),
-                   NumVariants);
+        reinterpret_cast<SimdVariant *>(reinterpret_cast<char *>(this) +
+                                        getFirstVariantOffset()),
+        NumVariants);
   }
 
   // Getters for the array of clauses.
   ArrayRef<OMPClause *> getClauses() const {
-    return ArrayRef<OMPClause *>(
-                   reinterpret_cast<OMPClause * const *>(
-                     reinterpret_cast<const char *>(this) +
-                     getFirstClauseOffset(NumVariants)),
-                   NumClauses);
+    return ArrayRef<OMPClause *>(reinterpret_cast<OMPClause *const *>(
+                                     reinterpret_cast<const char *>(this) +
+                                     getFirstClauseOffset(NumVariants)),
+                                 NumClauses);
   }
 
   llvm::MutableArrayRef<OMPClause *> getClauses() {
     return llvm::MutableArrayRef<OMPClause *>(
-                   reinterpret_cast<OMPClause **>(
-                     reinterpret_cast<char *>(this) +
-                     getFirstClauseOffset(NumVariants)),
-                   NumClauses);
+        reinterpret_cast<OMPClause **>(reinterpret_cast<char *>(this) +
+                                       getFirstClauseOffset(NumVariants)),
+        NumClauses);
   }
 
 public:
   static OMPDeclareSimdDecl *Create(ASTContext &C, DeclContext *DC,
                                     SourceLocation L, Decl *FuncDecl,
-                                    unsigned NV,
-                                    ArrayRef<OMPClause *> CL);
+                                    unsigned NV, ArrayRef<OMPClause *> CL);
   static OMPDeclareSimdDecl *CreateDeserialized(ASTContext &C, unsigned ID,
                                                 unsigned NV, unsigned NC);
 
   Decl *getFunction() const { return FuncDecl; }
-  void  setFunction(Decl *FD) { FuncDecl = FD; }
+  void setFunction(Decl *FD) { FuncDecl = FD; }
   unsigned getNumVariants() const { return NumVariants; }
-  unsigned getNumClauses()  const { return NumClauses;  }
+  unsigned getNumClauses() const { return NumClauses; }
 
   // Stuff to work with variants
   void setVariants(ArrayRef<SimdVariant> SV);
@@ -245,9 +240,13 @@ public:
   unsigned simd_variants_size() const { return NumVariants; }
   bool simds_variant_empty() const { return NumVariants == 0; }
   simd_variants_iterator simd_variants_begin() { return getVariants().begin(); }
-  simd_variants_iterator simd_variants_end()   { return getVariants().end(); }
-  simd_variants_const_iterator simd_variants_begin() const { return getVariants().begin(); }
-  simd_variants_const_iterator simd_variants_end()   const { return getVariants().end();   }
+  simd_variants_iterator simd_variants_end() { return getVariants().end(); }
+  simd_variants_const_iterator simd_variants_begin() const {
+    return getVariants().begin();
+  }
+  simd_variants_const_iterator simd_variants_end() const {
+    return getVariants().end();
+  }
 
   // Stuff to work with clauses
   void setClauses(ArrayRef<OMPClause *> CL);
@@ -266,6 +265,39 @@ public:
   static bool classofKind(Kind K) { return K == OMPDeclareSimd; }
 };
 
-}  // end namespace clang
+/// For example, in the following, declared target variable 'foo':
+///
+/// \code
+/// #pragma omp declare target
+/// int foo;
+/// #pragma omp end declare target
+/// \endcode
+///
+class OMPDeclareTargetDecl : public Decl, public DeclContext {
+  friend class ASTDeclReader;
+
+  virtual void anchor();
+
+  OMPDeclareTargetDecl(Kind DK, DeclContext *DC, SourceLocation L)
+      : Decl(DK, DC, L), DeclContext(DK) {
+    setModulePrivate();
+  }
+
+public:
+  static OMPDeclareTargetDecl *Create(ASTContext &C, DeclContext *DC,
+                                      SourceLocation L);
+  static OMPDeclareTargetDecl *CreateDeserialized(ASTContext &C, unsigned ID);
+
+  static bool classof(const Decl *D) { return classofKind(D->getKind()); }
+  static bool classofKind(Kind K) { return K == OMPDeclareTarget; }
+  static DeclContext *castToDeclContext(const OMPDeclareTargetDecl *D) {
+    return static_cast<DeclContext *>(const_cast<OMPDeclareTargetDecl *>(D));
+  }
+  static OMPDeclareTargetDecl *castFromDeclContext(const DeclContext *DC) {
+    return static_cast<OMPDeclareTargetDecl *>(const_cast<DeclContext *>(DC));
+  }
+};
+
+} // end namespace clang
 
 #endif
