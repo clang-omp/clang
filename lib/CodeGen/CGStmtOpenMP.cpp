@@ -1711,6 +1711,19 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
           Builder.CreateAdd(Idx, llvm::ConstantInt::get(IdxTy, 1), ".next.idx.",
                             false, QTy->isSignedIntegerOrEnumerationType());
       Builder.CreateStore(NextIdx, Private);
+      if (!IsStaticSchedule && CGM.OpenMPSupport.getOrdered()) {
+        // Emit _dispatch_fini for ordered loops
+        llvm::Value *RealArgsFini[] = { Loc, GTid };
+        if (TypeSize == 32 && isSigned)
+          EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_4), RealArgsFini);
+        else if (TypeSize == 32 && !isSigned)
+          EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_4u), RealArgsFini);
+        else if (TypeSize == 64 && isSigned)
+          EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_8), RealArgsFini);
+        else
+          EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_8u), RealArgsFini);
+
+      }
       //      for(llvm::SmallVector<const Expr *, 16>::const_iterator II =
       // Incs.begin(),
       //                                                              EE =
@@ -1724,27 +1737,14 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
         LoopStack.Pop();
       }
       EmitBlock(FiniBB);
-      if (!IsStaticSchedule) {
-        llvm::Value *RealArgsFini[] = { Loc, GTid };
-        if (TypeSize == 32 && isSigned)
-          EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_4), RealArgsFini);
-        else if (TypeSize == 32 && !isSigned)
-          EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_4u), RealArgsFini);
-        else if (TypeSize == 64 && isSigned)
-          EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_8), RealArgsFini);
-        else
-          EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_8u), RealArgsFini);
-
-      } else {
-        if (ChunkSize != 0) {
-          llvm::Value *St = Builder.CreateLoad(PSt);
-          LB = Builder.CreateLoad(PLB);
-          LB = Builder.CreateAdd(LB, St);
-          Builder.CreateStore(LB, PLB);
-          UB = Builder.CreateLoad(PUB);
-          UB = Builder.CreateAdd(UB, St);
-          Builder.CreateStore(UB, PUB);
-        }
+      if (IsStaticSchedule && ChunkSize != 0) {
+        llvm::Value *St = Builder.CreateLoad(PSt);
+        LB = Builder.CreateLoad(PLB);
+        LB = Builder.CreateAdd(LB, St);
+        Builder.CreateStore(LB, PLB);
+        UB = Builder.CreateLoad(PUB);
+        UB = Builder.CreateAdd(UB, St);
+        Builder.CreateStore(UB, PUB);
       }
       if (SeparateLastIter) {
         // Emit the following for the lastprivate vars update:
@@ -2508,20 +2508,6 @@ CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
     Chunk = (TypeSize == 32) ? Builder.getInt32(0) : Builder.getInt64(0);
   }
   llvm::Value *UBVal = llvm::ConstantInt::get(UnsignedTy, NumberOfSections);
-  llvm::IntegerType *SchedTy =
-      llvm::TypeBuilder<sched_type, false>::get(getLLVMContext());
-  llvm::Value *RealArgs[] = { Loc,
-                              GTid,
-                              llvm::ConstantInt::get(SchedTy, Schedule),
-                              llvm::ConstantInt::get(UnsignedTy, 0),
-                              UBVal,
-                              llvm::ConstantInt::get(UnsignedTy, 1),
-                              Chunk };
-  // __kmpc_dispatch_init{4, 8}(&loc, gtid, sched_type, lb, ub, st, chunk);
-  if (TypeSize == 32)
-    EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_init_4u), RealArgs);
-  else
-    EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_init_8u), RealArgs);
   llvm::AllocaInst *PLast = CreateTempAlloca(Int32Ty, "last");
   PLast->setAlignment(CGM.getDataLayout().getPrefTypeAlignment(Int32Ty));
   InitTempAlloca(PLast, Builder.getInt32(0));
@@ -2531,34 +2517,33 @@ CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
   InitTempAlloca(PUB, UBVal);
   llvm::AllocaInst *PSt = CreateMemTemp(getContext().UnsignedIntTy, "st");
   InitTempAlloca(PSt, llvm::ConstantInt::get(UnsignedTy, 1));
-  llvm::Value *RealArgsNext[] = { Loc, GTid, PLast, PLB, PUB, PSt };
-  llvm::Value *CallRes;
-  llvm::BasicBlock *OMPSectionsBB = createBasicBlock("omp.sections.begin");
-  EmitBlock(OMPSectionsBB);
-  if (TypeSize == 32)
-    CallRes = EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_next_4u), RealArgsNext);
-  else
-    CallRes = EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_next_8u), RealArgsNext);
-  llvm::BasicBlock *MainBB = createBasicBlock("omp.sections.main");
-  llvm::BasicBlock *EndBB = createBasicBlock("omp.sections.end");
-  llvm::SwitchInst *Switch = Builder.CreateSwitch(
-      Builder.CreateIntCast(CallRes, Int32Ty, false), EndBB, 1);
-  Switch->addCase(llvm::ConstantInt::get(Int32Ty, 1), MainBB);
-  EmitBlock(MainBB);
 
+  llvm::Value *RealArgs[] = { Loc, GTid, Builder.getInt32(Schedule), PLast, PLB,
+                              PUB, PSt, TypeSize == 32 ? Builder.getInt32(1)
+                                                       : Builder.getInt64(1),
+                              Chunk };
+  if (TypeSize == 32)
+    EmitRuntimeCall(OPENMPRTL_FUNC(for_static_init_4u), RealArgs);
+  else
+    EmitRuntimeCall(OPENMPRTL_FUNC(for_static_init_8u), RealArgs);
+
+  llvm::BasicBlock *OMPSectionsBB = createBasicBlock("omp.sections.begin");
+  EmitBranch(OMPSectionsBB);
+  EmitBlock(OMPSectionsBB);
   llvm::Value *UB = Builder.CreateLoad(PUB);
+  llvm::Value *Cond = Builder.CreateICmpULT(UB, UBVal);
+  UB = Builder.CreateSelect(Cond, UB, UBVal);
+  Builder.CreateStore(UB, PUB);
+
+  llvm::BasicBlock *EndBB = createBasicBlock("omp.sections.end");
   llvm::Value *LB = Builder.CreateLoad(PLB);
+  Builder.CreateStore(LB, IterVar);
   llvm::BasicBlock *UBLBCheckBB = createBasicBlock("omp.lb_ub.check_pass");
   llvm::Value *UBLBCheck = Builder.CreateICmpULE(LB, UB, "omp.lb.le.ub");
-  llvm::BasicBlock *PrevBB = Builder.GetInsertBlock();
   Builder.CreateCondBr(UBLBCheck, UBLBCheckBB, EndBB);
   EmitBlock(UBLBCheckBB);
 
-  llvm::PHINode *Phi = Builder.CreatePHI(UnsignedTy, 2, ".idx.");
-  Phi->addIncoming(LB, PrevBB);
-  Builder.CreateStore(Phi, IterVar);
-
-  llvm::Value *Idx = Phi; // Builder.CreateLoad(IterVar, ".idx.");
+  llvm::Value *Idx = Builder.CreateLoad(IterVar, ".idx.");
   llvm::BasicBlock *SectionEndBB = createBasicBlock("omp.section.fini");
   llvm::SwitchInst *SectionSwitch =
       Builder.CreateSwitch(Idx, SectionEndBB, NumberOfSections + 1);
@@ -2577,20 +2562,26 @@ CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
   EmitBlock(SectionEndBB, true);
   OMPCancelMap.erase(SKind);
 
-  llvm::Value *NextIdx =
-      Builder.CreateAdd(Builder.CreateLoad(IterVar, ".idx."),
-                        llvm::ConstantInt::get(UnsignedTy, 1), ".next.idx.");
-  llvm::Value *RealArgsFini[] = { Loc, GTid };
-  if (TypeSize == 32)
-    EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_4u), RealArgsFini);
-  else
-    EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_8u), RealArgsFini);
+  llvm::Value *NextIdx = Builder.CreateAdd(
+      Idx, llvm::ConstantInt::get(UnsignedTy, 1), ".next.idx.");
+  Builder.CreateStore(NextIdx, IterVar);
   UBLBCheck = Builder.CreateICmpULE(NextIdx, UB, "omp.idx.le.ub");
-  PrevBB = Builder.GetInsertBlock();
-  Builder.CreateCondBr(UBLBCheck, UBLBCheckBB, OMPSectionsBB);
-  Phi->addIncoming(NextIdx, PrevBB);
-
-  EmitBlock(EndBB, true);
+  if (ChunkSize != 0) {
+    llvm::BasicBlock *OMPSectionsNB = createBasicBlock("omp.sections.next");
+    Builder.CreateCondBr(UBLBCheck, UBLBCheckBB, OMPSectionsNB);
+    EmitBlock(OMPSectionsNB);
+    llvm::Value *St = Builder.CreateLoad(PSt);
+    LB = Builder.CreateAdd(LB, St);
+    Builder.CreateStore(LB, PLB);
+    UB = Builder.CreateAdd(UB, St);
+    Builder.CreateStore(UB, PUB);
+    EmitBranch(OMPSectionsBB);
+  } else {
+    Builder.CreateCondBr(UBLBCheck, UBLBCheckBB, EndBB);
+  }
+  EmitBlock(EndBB);
+  llvm::Value *RealArgsFini[] = { Loc, GTid };
+  EmitRuntimeCall(OPENMPRTL_FUNC(for_static_fini), RealArgsFini);
   CGM.OpenMPSupport.setLastIterVar(PLast);
 
   if (CGM.OpenMPSupport.hasLastPrivate() || !CGM.OpenMPSupport.getNoWait())
