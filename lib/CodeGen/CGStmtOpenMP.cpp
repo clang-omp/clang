@@ -194,6 +194,7 @@ struct kmp_task_t {};
 const int OMP_TASK_UNTIED = 0;
 const int OMP_TASK_TIED = 1;
 const int OMP_TASK_FINAL = 2;
+const int OMP_TASK_DESTRUCTORS_THUNK = 8;
 const int OMP_TASK_CURRENT_QUEUED = 1;
 struct kmp_depend_info_t {};
 const unsigned char IN = 1;
@@ -253,6 +254,7 @@ public:
         TypeBuilder<void *, X>::get(C),              // shareds
         TypeBuilder<kmp_routine_entry_t, X>::get(C), // routine
         TypeBuilder<llvm::types::i<32>, X>::get(C),  // part_id
+        TypeBuilder<kmp_routine_entry_t, X>::get(C), // destructors
         TypeBuilder<llvm::types::i<32>, X>::get(C),  // firstprivate_locker
         NULL);
   }
@@ -260,6 +262,7 @@ public:
     shareds,
     routine,
     part_id,
+    destructors,
     firstprivate_locker
   };
 };
@@ -2160,6 +2163,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
                                SourceLocation(), SourceLocation(),
                                &getContext().Idents.get(".omp.task.priv."));
   RD->startDefinition();
+  SmallVector<FieldDecl *, 16> FieldsWithDestructors;
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I) {
@@ -2174,6 +2178,12 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
         FD->setAccess(AS_public);
         RD->addDecl(FD);
         CGM.OpenMPSupport.getTaskFields()[D] = FD;
+        QualType ASTType = D->getType();
+        if (CXXRecordDecl *RD =
+                ASTType->getBaseElementTypeUnsafe()->getAsCXXRecordDecl()) {
+          if (!RD->hasTrivialDestructor())
+            FieldsWithDestructors.push_back(FD);
+        }
       }
     } else if (OMPFirstPrivateClause *C =
                    dyn_cast_or_null<OMPFirstPrivateClause>(*I)) {
@@ -2188,6 +2198,12 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
         FD->setAccess(AS_public);
         RD->addDecl(FD);
         CGM.OpenMPSupport.getTaskFields()[D] = FD;
+        QualType ASTType = D->getType();
+        if (CXXRecordDecl *RD =
+                ASTType->getBaseElementTypeUnsafe()->getAsCXXRecordDecl()) {
+          if (!RD->hasTrivialDestructor())
+            FieldsWithDestructors.push_back(FD);
+        }
       }
     }
   }
@@ -2195,13 +2211,76 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   QualType PrivateRecord = getContext().getRecordType(RD);
   llvm::Type *LPrivateTy = getTypes().ConvertTypeForMem(PrivateRecord);
 
+  llvm::Function *Destructors = 0;
+  if (!FieldsWithDestructors.empty()) {
+    IdentifierInfo *Id = &getContext().Idents.get(".omp_ptask_destructors.");
+    SmallVector<QualType, 2> FnArgTypes;
+    FnArgTypes.push_back(getContext().getIntTypeForBitwidth(32, 1));
+    FnArgTypes.push_back(getContext().VoidPtrTy);
+    FunctionProtoType::ExtProtoInfo EPI;
+    EPI.ExceptionSpecType = EST_BasicNoexcept;
+    QualType FnTy = getContext().getFunctionType(
+        getContext().getIntTypeForBitwidth(32, 1), FnArgTypes, EPI);
+    TypeSourceInfo *TI =
+        getContext().getTrivialTypeSourceInfo(FnTy, SourceLocation());
+    FunctionDecl *FD = FunctionDecl::Create(
+        getContext(), getContext().getTranslationUnitDecl(), CS->getLocStart(),
+        SourceLocation(), Id, FnTy, TI, SC_Static, false, false, false);
+    TypeSourceInfo *IntTI = getContext().getTrivialTypeSourceInfo(
+        getContext().getIntTypeForBitwidth(32, 1), SourceLocation());
+    TypeSourceInfo *PtrVoidTI = getContext().getTrivialTypeSourceInfo(
+        getContext().VoidPtrTy, SourceLocation());
+    ParmVarDecl *Arg1 = ParmVarDecl::Create(
+        getContext(), FD, SourceLocation(), SourceLocation(), 0,
+        getContext().getIntTypeForBitwidth(32, 1), IntTI, SC_Auto, 0);
+    ParmVarDecl *Arg2 = ParmVarDecl::Create(
+        getContext(), FD, SourceLocation(), SourceLocation(), 0,
+        getContext().VoidPtrTy, PtrVoidTI, SC_Auto, 0);
+    CodeGenFunction CGF(CGM);
+    const CGFunctionInfo &FI = getTypes().arrangeFunctionDeclaration(FD);
+    Destructors = llvm::Function::Create(getTypes().GetFunctionType(FI),
+                                         llvm::GlobalValue::PrivateLinkage,
+                                         FD->getName(), &CGM.getModule());
+    FunctionArgList FnArgs;
+    FnArgs.push_back(Arg1);
+    FnArgs.push_back(Arg2);
+    CGF.StartFunction(FD, getContext().getIntTypeForBitwidth(32, 1),
+                      Destructors, FI, FnArgs, SourceLocation());
+    llvm::Type *TaskTTy = llvm::TaskTBuilder::get(getLLVMContext());
+    llvm::Value *TaskTPtr = CGF.Builder.CreatePointerCast(
+        CGF.GetAddrOfLocalVar(Arg2), TaskTTy->getPointerTo()->getPointerTo());
+    // Emit call to the helper function.
+    llvm::Value *Locker =
+        CGF.Builder.CreateConstGEP1_32(CGF.Builder.CreateLoad(TaskTPtr), 1);
+    Locker = CGF.Builder.CreatePointerCast(Locker, LPrivateTy->getPointerTo());
+    for (ArrayRef<FieldDecl *>::iterator I = FieldsWithDestructors.begin(),
+                                         E = FieldsWithDestructors.end();
+         I != E; ++I) {
+      QualType ASTType = (*I)->getType();
+      if (CXXRecordDecl *RD =
+              ASTType->getBaseElementTypeUnsafe()->getAsCXXRecordDecl()) {
+        if (!RD->hasTrivialDestructor()) {
+          llvm::Value *Private =
+              CGF.EmitLValueForField(
+                      CGF.MakeNaturalAlignAddrLValue(Locker, PrivateRecord), *I)
+                  .getAddress();
+          QualType::DestructionKind DtorKind = ASTType.isDestructedType();
+          CGF.emitDestroy(Private, ASTType, CGF.getDestroyer(DtorKind),
+                          CGF.needsEHCleanup(DtorKind));
+        }
+      }
+    }
+    CGF.FinishFunction(SourceLocation());
+  }
+
   //  llvm::Type *PTaskFnTy = llvm::TypeBuilder<kmp_routine_entry_t,
   // false>::get(getLLVMContext());
   //  llvm::AllocaInst *FnPtr = CreateTempAlloca(PTaskFnTy);
   //  FnPtr->setAlignment(llvm::ConstantExpr::getAlignOf(PTaskFnTy));
 
   // CodeGen for clauses (task init).
-  llvm::AllocaInst *Flags = CreateMemTemp(getContext().IntTy, ".flags.addr");
+  llvm::AllocaInst *Flags =
+      CreateMemTemp(getContext().getIntTypeForBitwidth(32, 1), ".flags.addr");
   CGM.OpenMPSupport.setTaskFlags(Flags);
 
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
@@ -2210,9 +2289,12 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
     if (*I)
       EmitInitOMPClause(*(*I), S);
 
-  InitTempAlloca(Flags, Builder.getInt32(CGM.OpenMPSupport.getUntied()
-                                             ? OMP_TASK_UNTIED
-                                             : OMP_TASK_TIED));
+  uint64_t InitFlags =
+      CGM.OpenMPSupport.getUntied() ? OMP_TASK_UNTIED : OMP_TASK_TIED;
+  if (Destructors) {
+    InitFlags |= OMP_TASK_DESTRUCTORS_THUNK;
+  }
+  InitTempAlloca(Flags, Builder.getInt32(InitFlags));
 
   // Generate microtask.
   // int32 .omp_ptask.(int32_t arg1, void */*kmp_task_t **/arg2) {
@@ -2220,24 +2302,24 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   // }
   IdentifierInfo *Id = &getContext().Idents.get(".omp_ptask.");
   SmallVector<QualType, 2> FnArgTypes;
-  FnArgTypes.push_back(getContext().IntTy);
+  FnArgTypes.push_back(getContext().getIntTypeForBitwidth(32, 1));
   FnArgTypes.push_back(getContext().VoidPtrTy);
   FunctionProtoType::ExtProtoInfo EPI;
   EPI.ExceptionSpecType = EST_BasicNoexcept;
-  QualType FnTy =
-      getContext().getFunctionType(getContext().IntTy, FnArgTypes, EPI);
+  QualType FnTy = getContext().getFunctionType(
+      getContext().getIntTypeForBitwidth(32, 1), FnArgTypes, EPI);
   TypeSourceInfo *TI =
       getContext().getTrivialTypeSourceInfo(FnTy, SourceLocation());
   FunctionDecl *FD = FunctionDecl::Create(
       getContext(), getContext().getTranslationUnitDecl(), CS->getLocStart(),
       SourceLocation(), Id, FnTy, TI, SC_Static, false, false, false);
   TypeSourceInfo *IntTI = getContext().getTrivialTypeSourceInfo(
-      getContext().IntTy, SourceLocation());
+      getContext().getIntTypeForBitwidth(32, 1), SourceLocation());
   TypeSourceInfo *PtrVoidTI = getContext().getTrivialTypeSourceInfo(
       getContext().VoidPtrTy, SourceLocation());
-  ParmVarDecl *Arg1 =
-      ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
-                          0, getContext().IntTy, IntTI, SC_Auto, 0);
+  ParmVarDecl *Arg1 = ParmVarDecl::Create(
+      getContext(), FD, SourceLocation(), SourceLocation(), 0,
+      getContext().getIntTypeForBitwidth(32, 1), IntTI, SC_Auto, 0);
   ParmVarDecl *Arg2 =
       ParmVarDecl::Create(getContext(), FD, SourceLocation(), SourceLocation(),
                           0, getContext().VoidPtrTy, PtrVoidTI, SC_Auto, 0);
@@ -2251,14 +2333,16 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   FnArgs.push_back(Arg1);
   FnArgs.push_back(Arg2);
   CGF.OpenMPRoot = OpenMPRoot ? OpenMPRoot : this;
-  CGF.StartFunction(FD, getContext().IntTy, Fn, FI, FnArgs, SourceLocation());
+  CGF.StartFunction(FD, getContext().getIntTypeForBitwidth(32, 1), Fn, FI,
+                    FnArgs, SourceLocation());
 
   CGF.OMPCancelMap[OMPD_taskgroup] = CGF.ReturnBlock;
 
-  llvm::AllocaInst *GTid =
-      CGF.CreateMemTemp(getContext().IntTy, ".__kmpc_global_thread_num.");
+  llvm::AllocaInst *GTid = CGF.CreateMemTemp(
+      getContext().getIntTypeForBitwidth(32, 1), ".__kmpc_global_thread_num.");
   CGF.EmitStoreOfScalar(CGF.Builder.CreateLoad(CGF.GetAddrOfLocalVar(Arg1)),
-                        MakeNaturalAlignAddrLValue(GTid, getContext().IntTy),
+                        MakeNaturalAlignAddrLValue(
+                            GTid, getContext().getIntTypeForBitwidth(32, 1)),
                         false);
   llvm::Type *TaskTTy = llvm::TaskTBuilder::get(getLLVMContext());
   llvm::Value *TaskTPtr = CGF.Builder.CreatePointerCast(
@@ -2387,6 +2471,11 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
     llvm::Value *SharedAddr = Builder.CreateConstInBoundsGEP2_32(
         TaskTVal, 0, llvm::TaskTBuilder::shareds, ".shared.addr");
     EmitAggregateAssign(Builder.CreateLoad(SharedAddr), Arg, QTy);
+    if (Destructors) {
+      llvm::Value *DestructorsAddr = Builder.CreateConstInBoundsGEP2_32(
+          TaskTVal, 0, llvm::TaskTBuilder::destructors, ".destructors.addr");
+      Builder.CreateStore(Destructors, DestructorsAddr);
+    }
     llvm::Value *Locker = Builder.CreateConstGEP1_32(TaskTVal, 1);
     CGM.OpenMPSupport.setPTask(Fn, TaskTVal, LPrivateTy, PrivateRecord, Locker);
     {
