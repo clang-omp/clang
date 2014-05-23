@@ -3256,7 +3256,8 @@ CodeGenModule::OpenMPSupportStackTy::OMPStackElemTy::OMPStackElemTy(CodeGenModul
     UntiedEnd(0), ParentCGF(0),
     NoWait(true), Mergeable(false), Schedule(0), ChunkSize(0), NewTask(false),
     Untied(false), HasLastPrivate(false),
-    TaskPrivateTy(0), TaskPrivateQTy(), TaskPrivateBase(0), NumTeams(0), ThreadLimit(0) { }
+    TaskPrivateTy(0), TaskPrivateQTy(), TaskPrivateBase(0), NumTeams(0), ThreadLimit(0),
+    WaitDepsArgs(0) { }
 
 CodeGenFunction &CodeGenModule::OpenMPSupportStackTy::getCGFForReductionFunction() {
   if (!OpenMPStack.back().RedCGF) {
@@ -3588,3 +3589,12 @@ llvm::Value *CodeGenModule::OpenMPSupportStackTy::getNumTeams() {
 llvm::Value *CodeGenModule::OpenMPSupportStackTy::getThreadLimit() {
   return OpenMPStack.back().ThreadLimit;
 }
+
+void CodeGenModule::OpenMPSupportStackTy::setWaitDepsArgs(llvm::Value **Args) {
+  OpenMPStack.back().WaitDepsArgs = Args;
+}
+
+llvm::Value **CodeGenModule::OpenMPSupportStackTy::getWaitDepsArgs() {
+  return OpenMPStack.back().WaitDepsArgs;
+}
+

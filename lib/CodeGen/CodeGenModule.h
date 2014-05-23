@@ -1174,6 +1174,7 @@ public:
       llvm::Value *TaskPrivateBase;
       llvm::Value *NumTeams;
       llvm::Value *ThreadLimit;
+      llvm::Value **WaitDepsArgs;
       OMPStackElemTy(CodeGenModule &CGM);
       ~OMPStackElemTy();
     };
@@ -1293,6 +1294,8 @@ public:
     void setThreadLimit(llvm::Value *Num);
     llvm::Value *getNumTeams();
     llvm::Value *getThreadLimit();
+    void setWaitDepsArgs(llvm::Value **Args);
+    llvm::Value **getWaitDepsArgs();
   };
 
   OpenMPSupportStackTy OpenMPSupport;
