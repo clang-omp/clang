@@ -275,6 +275,9 @@ void CodeGenModule::EmitOMPThreadPrivate(const VarDecl *VD, const Expr *TPE) {
                         SourceLocation());
       // ident_t tmp;
       llvm::Value *Tmp = CreateIntelOpenMPRTLLoc(TPE->getExprLoc(), CGF);
+      llvm::Value *Args1[] = { Tmp };
+      // __kmpc_global_thread_num(&tmp);
+      CGF.EmitRuntimeCall(OPENMPRTL_FUNC(global_thread_num), Args1);
       llvm::Value *Args[5] = { Tmp, CGF.Builder.CreateBitCast(
                                         Val, CGF.Builder.getInt8PtrTy()),
                                Ctor, CCtor, Dtor };
@@ -296,6 +299,9 @@ void CodeGenModule::EmitOMPThreadPrivate(const VarDecl *VD, const Expr *TPE) {
                         SourceLocation());
       // ident_t tmp;
       llvm::Value *Tmp = CreateIntelOpenMPRTLLoc(TPE->getExprLoc(), CGF);
+      llvm::Value *Args1[] = { Tmp };
+      // __kmpc_global_thread_num(&tmp);
+      CGF.EmitRuntimeCall(OPENMPRTL_FUNC(global_thread_num), Args1);
       llvm::Value *Args[5] = { Tmp, CGF.Builder.CreateBitCast(
                                         Val, CGF.Builder.getInt8PtrTy()),
                                Ctor, CCtor, Dtor };
