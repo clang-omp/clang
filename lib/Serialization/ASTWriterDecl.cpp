@@ -1862,7 +1862,9 @@ static bool isRequiredDecl(const Decl *D, ASTContext &Context) {
   // implementation container always is.
 
   // File scoped assembly or obj-c implementation must be seen.
-  if (isa<FileScopeAsmDecl>(D) || isa<ObjCImplDecl>(D))
+  if (isa<FileScopeAsmDecl>(D) || isa<ObjCImplDecl>(D) ||
+      isa<OMPThreadPrivateDecl>(D) || isa<OMPDeclareSimdDecl>(D) ||
+      isa<OMPDeclareTargetDecl>(D) || isa<OMPDeclareReductionDecl>(D))
     return true;
 
   return Context.DeclMustBeEmitted(D);

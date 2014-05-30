@@ -2031,7 +2031,11 @@ static bool isConsumerInterestedIn(Decl *D, bool HasBody) {
 
   if (isa<FileScopeAsmDecl>(D) || 
       isa<ObjCProtocolDecl>(D) || 
-      isa<ObjCImplDecl>(D))
+      isa<ObjCImplDecl>(D) ||
+      isa<OMPThreadPrivateDecl>(D) ||
+      isa<OMPDeclareSimdDecl>(D) ||
+      isa<OMPDeclareReductionDecl>(D) ||
+      isa<OMPDeclareTargetDecl>(D))
     return true;
   if (VarDecl *Var = dyn_cast<VarDecl>(D))
     return Var->isFileVarDecl() &&
