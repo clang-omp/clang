@@ -592,12 +592,11 @@ namespace {
 class OMPClausePrinter : public OMPClauseVisitor<OMPClausePrinter> {
   raw_ostream &OS;
   const PrintingPolicy &Policy;
+
 public:
-  OMPClausePrinter(raw_ostream &OS,
-                   const PrintingPolicy &P)
-    : OS(OS), Policy(P) { }
-#define OPENMP_CLAUSE(Name, Class)                              \
-  void Visit##Class(Class *S);
+  OMPClausePrinter(raw_ostream &OS, const PrintingPolicy &P)
+      : OS(OS), Policy(P) {}
+#define OPENMP_CLAUSE(Name, Class) void Visit##Class(Class *S);
 #include "clang/Basic/OpenMPKinds.def"
 };
 
@@ -759,6 +758,32 @@ void OMPClausePrinter::VisitOMPMapClause(OMPMapClause *Node) {
   }
 }
 
+void OMPClausePrinter::VisitOMPToClause(OMPToClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "to";
+    for (OMPToClause::varlist_iterator I = Node->varlist_begin(),
+                                       E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
+void OMPClausePrinter::VisitOMPFromClause(OMPFromClause *Node) {
+  if (!Node->varlist_empty()) {
+    OS << "from";
+    for (OMPFromClause::varlist_iterator I = Node->varlist_begin(),
+                                         E = Node->varlist_end();
+         I != E; ++I) {
+      OS << (I == Node->varlist_begin() ? '(' : ',')
+         << *cast<NamedDecl>(cast<DeclRefExpr>(*I)->getDecl());
+    }
+    OS << ")";
+  }
+}
+
 void OMPClausePrinter::VisitOMPScheduleClause(OMPScheduleClause *Node) {
   OS << "schedule("
      << getOpenMPSimpleClauseTypeName(OMPC_schedule, Node->getScheduleKind());
@@ -796,9 +821,7 @@ void OMPClausePrinter::VisitOMPMergeableClause(OMPMergeableClause *Node) {
   OS << "mergeable";
 }
 
-void OMPClausePrinter::VisitOMPReadClause(OMPReadClause *Node) {
-  OS << "read";
-}
+void OMPClausePrinter::VisitOMPReadClause(OMPReadClause *Node) { OS << "read"; }
 
 void OMPClausePrinter::VisitOMPWriteClause(OMPWriteClause *Node) {
   OS << "write";
@@ -846,7 +869,7 @@ void OMPClausePrinter::VisitOMPDependClause(OMPDependClause *Node) {
                                            E = Node->varlist_end();
          I != E; ++I) {
       OS << (I == Node->varlist_begin() ? ' ' : ',');
-      ///static_cast<StmtPrinter*>(Printer)->PrintExpr(*I);
+      /// static_cast<StmtPrinter*>(Printer)->PrintExpr(*I);
       (*I)->printPretty(OS, 0, Policy, 0);
     }
     OS << ")";
@@ -923,11 +946,9 @@ void OMPClausePrinter::VisitOMPAlignedClause(OMPAlignedClause *Node) {
     OS << ")";
   }
 }
-
 }
 
-void OMPClause::printPretty(raw_ostream &OS,
-                            PrinterHelper *Helper,
+void OMPClause::printPretty(raw_ostream &OS, PrinterHelper *Helper,
                             const PrintingPolicy &Policy,
                             unsigned Indentation) const {
   if (this == 0) {
@@ -936,7 +957,7 @@ void OMPClause::printPretty(raw_ostream &OS,
   }
 
   OMPClausePrinter P(OS, Policy);
-  P.Visit(const_cast<OMPClause*>(this));
+  P.Visit(const_cast<OMPClause *>(this));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1114,6 +1135,15 @@ void StmtPrinter::VisitOMPTargetDirective(OMPTargetDirective *Node) {
   VisitOMPExecutableDirective(Node);
 }
 
+void StmtPrinter::VisitOMPTargetDataDirective(OMPTargetDataDirective *Node) {
+  Indent() << "#pragma omp target data ";
+  VisitOMPExecutableDirective(Node);
+}
+
+void StmtPrinter::VisitOMPTargetUpdateDirective(OMPTargetUpdateDirective *Node) {
+  Indent() << "#pragma omp target update ";
+  VisitOMPExecutableDirective(Node);
+}
 //===----------------------------------------------------------------------===//
 //  Expr printing methods.
 //===----------------------------------------------------------------------===//

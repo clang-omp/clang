@@ -1779,6 +1779,12 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_map:
     C = OMPMapClause::CreateEmpty(Context, Record[Idx++]);
     break;
+  case OMPC_to:
+    C = OMPToClause::CreateEmpty(Context, Record[Idx++]);
+    break;
+  case OMPC_from:
+    C = OMPFromClause::CreateEmpty(Context, Record[Idx++]);
+    break;
   case OMPC_safelen:
     C = new (Context) OMPSafelenClause();
     break;
@@ -2101,6 +2107,66 @@ void OMPClauseReader::VisitOMPMapClause(OMPMapClause *C) {
   C->setKind(
      static_cast<OpenMPMapClauseKind>(Record[Idx++]));
   C->setKindLoc(this->ReadSourceLocation(Record, Idx));
+  unsigned NumVars = C->varlist_size();
+  SmallVector<Expr *, 16> Vars;
+  Vars.reserve(NumVars);
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setVars(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setWholeStartAddresses(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setWholeSizesEndAddresses(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setCopyingStartAddresses(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setCopyingSizesEndAddresses(Vars);
+}
+
+void OMPClauseReader::VisitOMPToClause(OMPToClause *C) {
+  unsigned NumVars = C->varlist_size();
+  SmallVector<Expr *, 16> Vars;
+  Vars.reserve(NumVars);
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setVars(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setWholeStartAddresses(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setWholeSizesEndAddresses(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setCopyingStartAddresses(Vars);
+  Vars.clear();
+  for (unsigned i = 0; i != NumVars; ++i) {
+    Vars.push_back(Reader.ReadSubExpr());
+  }
+  C->setCopyingSizesEndAddresses(Vars);
+}
+
+void OMPClauseReader::VisitOMPFromClause(OMPFromClause *C) {
   unsigned NumVars = C->varlist_size();
   SmallVector<Expr *, 16> Vars;
   Vars.reserve(NumVars);
@@ -2455,6 +2521,18 @@ void ASTStmtReader::VisitOMPCancellationPointDirective(
 }
 
 void ASTStmtReader::VisitOMPTargetDirective(OMPTargetDirective *D) {
+  VisitStmt(D);
+  ++Idx;
+  VisitOMPExecutableDirective(D);
+}
+
+void ASTStmtReader::VisitOMPTargetDataDirective(OMPTargetDataDirective *D) {
+  VisitStmt(D);
+  ++Idx;
+  VisitOMPExecutableDirective(D);
+}
+
+void ASTStmtReader::VisitOMPTargetUpdateDirective(OMPTargetUpdateDirective *D) {
   VisitStmt(D);
   ++Idx;
   VisitOMPExecutableDirective(D);
@@ -2937,62 +3015,67 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
                                               0);
       break;
     case STMT_OMP_PARALLEL_DIRECTIVE:
-      S = OMPParallelDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPParallelDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_FOR_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPForDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPForDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_PARALLEL_FOR_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPParallelForDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPParallelForDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_SIMD_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPSimdDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPSimdDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_FOR_SIMD_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPForSimdDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPForSimdDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_PARALLEL_FOR_SIMD_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPParallelForSimdDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPParallelForSimdDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_DISTRIBUTE_SIMD_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPDistributeSimdDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPDistributeSimdDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_DISTRIBUTE_PARALLEL_FOR_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPDistributeParallelForDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPDistributeParallelForDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_DISTRIBUTE_PARALLEL_FOR_SIMD_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPDistributeParallelForSimdDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPDistributeParallelForSimdDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_SECTIONS_DIRECTIVE:
-      S = OMPSectionsDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPSectionsDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_PARALLEL_SECTIONS_DIRECTIVE:
-      S = OMPParallelSectionsDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPParallelSectionsDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_SECTION_DIRECTIVE:
       S = OMPSectionDirective::CreateEmpty(Context, Empty);
       break;
     case STMT_OMP_SINGLE_DIRECTIVE:
-      S = OMPSingleDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPSingleDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_TASK_DIRECTIVE:
-      S = OMPTaskDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPTaskDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_TASKYIELD_DIRECTIVE:
       S = OMPTaskyieldDirective::CreateEmpty(Context, Empty);
@@ -3013,36 +3096,49 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       S = OMPTaskgroupDirective::CreateEmpty(Context, Empty);
       break;
     case STMT_OMP_ATOMIC_DIRECTIVE:
-      S = OMPAtomicDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPAtomicDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_FLUSH_DIRECTIVE:
-      S = OMPFlushDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPFlushDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_ORDERED_DIRECTIVE:
       S = OMPOrderedDirective::CreateEmpty(Context, Empty);
       break;
     case STMT_OMP_TEAMS_DIRECTIVE:
-      S = OMPTeamsDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPTeamsDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
     case STMT_OMP_DISTRIBUTE_DIRECTIVE: {
       unsigned Val = Record[ASTStmtReader::NumStmtFields];
-      S = OMPDistributeDirective::CreateEmpty(Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
-      }
-      break;
+      S = OMPDistributeDirective::CreateEmpty(
+          Context, Val, Record[ASTStmtReader::NumStmtFields + 1], Empty);
+    } break;
     case STMT_OMP_CANCEL_DIRECTIVE:
-      S =
-        OMPCancelDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields],
-                                        static_cast<OpenMPDirectiveKind>(Record[ASTStmtReader::NumStmtFields + 1]),
-                                        Empty);
+      S = OMPCancelDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields],
+          static_cast<OpenMPDirectiveKind>(
+              Record[ASTStmtReader::NumStmtFields + 1]),
+          Empty);
       break;
     case STMT_OMP_CANCELLATION_POINT_DIRECTIVE:
       S = OMPCancellationPointDirective::CreateEmpty(
-             Context,
-             static_cast<OpenMPDirectiveKind>(Record[ASTStmtReader::NumStmtFields]),
-             Empty);
+          Context, static_cast<OpenMPDirectiveKind>(
+                       Record[ASTStmtReader::NumStmtFields]),
+          Empty);
       break;
     case STMT_OMP_TARGET_DIRECTIVE:
-      S = OMPTargetDirective::CreateEmpty(Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      S = OMPTargetDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      break;
+    case STMT_OMP_TARGET_DATA_DIRECTIVE:
+      S = OMPTargetDataDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
+      break;
+    case STMT_OMP_TARGET_UPDATE_DIRECTIVE:
+      S = OMPTargetUpdateDirective::CreateEmpty(
+          Context, Record[ASTStmtReader::NumStmtFields], Empty);
       break;
 
     case EXPR_CXX_OPERATOR_CALL:

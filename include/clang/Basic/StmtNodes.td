@@ -210,4 +210,6 @@ def OMPDistributeDirective : DStmt<OMPExecutableDirective>;
 def OMPCancelDirective : DStmt<OMPExecutableDirective>;
 def OMPCancellationPointDirective : DStmt<OMPExecutableDirective>;
 def OMPTargetDirective : DStmt<OMPExecutableDirective>;
+def OMPTargetDataDirective : DStmt<OMPExecutableDirective>;
+def OMPTargetUpdateDirective : DStmt<OMPExecutableDirective>;
 

@@ -16,11 +16,11 @@
 #ifndef LLVM_CLANG_AST_OPENMPCLAUSE_H
 #define LLVM_CLANG_AST_OPENMPCLAUSE_H
 
-#include "clang/Basic/SourceLocation.h"
-#include "clang/Basic/OpenMPKinds.h"
+#include "clang/AST/Expr.h"
 #include "clang/AST/PrettyPrinter.h"
 #include "clang/AST/Stmt.h"
-#include "clang/AST/Expr.h"
+#include "clang/Basic/OpenMPKinds.h"
+#include "clang/Basic/SourceLocation.h"
 
 namespace clang {
 
@@ -56,7 +56,7 @@ public:
   /// \brief Fetches kind of OpenMP clause (private, shared, reduction, etc.).
   OpenMPClauseKind getClauseKind() const { return Kind; }
 
-  static bool classof(const OMPClause *T) { return true; }
+  static bool classof(const OMPClause *) { return true; }
 
   bool isImplicit() { return StartLoc.isInvalid(); }
 
@@ -1314,6 +1314,250 @@ public:
   }
 };
 
+/// \brief This represents clause 'to' in the '#pragma omp ...'
+/// directives.
+///
+/// \code
+/// #pragma omp target update to(a,b)
+/// \endcode
+/// In this example directive '#pragma omp target update' has clause 'to'
+/// with the variables 'a' and 'b'.
+///
+class OMPToClause : public OMPVarListClause<OMPToClause> {
+  friend class OMPClauseReader;
+  friend class OMPClauseWriter;
+  friend class Sema;
+
+  /// \brief Build clause with number of variables \a N.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  /// \param N Number of the variables in the clause.
+  ///
+  explicit OMPToClause(SourceLocation StartLoc, SourceLocation EndLoc,
+                       unsigned N)
+      : OMPVarListClause<OMPToClause>(OMPC_to, StartLoc, EndLoc, N) {}
+
+  /// \brief Build an empty clause.
+  ///
+  /// \param N Number of variables.
+  ///
+  explicit OMPToClause(unsigned N)
+      : OMPVarListClause<OMPToClause>(OMPC_to, SourceLocation(),
+                                      SourceLocation(), N) {}
+
+  /// \brief Sets whole starting addresses for the items.
+  void setWholeStartAddresses(ArrayRef<Expr *> WholeStartAddresses);
+
+  /// \brief Return the list of whole starting addresses.
+  llvm::MutableArrayRef<Expr *> getWholeStartAddresses() {
+    return llvm::MutableArrayRef<Expr *>(varlist_end(), numberOfVariables());
+  }
+
+  /// \brief Sets whole sizes/ending addresses for the items.
+  void setWholeSizesEndAddresses(ArrayRef<Expr *> WholeSizesEndAddresses);
+
+  /// \brief Return whole sizes/ending addresses for the items.
+  llvm::MutableArrayRef<Expr *> getWholeSizesEndAddresses() {
+    return llvm::MutableArrayRef<Expr *>(getWholeStartAddresses().end(),
+                                         numberOfVariables());
+  }
+
+  /// \brief Sets starting addresses for the items to be copied.
+  void setCopyingStartAddresses(ArrayRef<Expr *> CopyingStartAddresses);
+
+  /// \brief Return the list of copied starting addresses.
+  llvm::MutableArrayRef<Expr *> getCopyingStartAddresses() {
+    return llvm::MutableArrayRef<Expr *>(getWholeSizesEndAddresses().end(),
+                                         numberOfVariables());
+  }
+
+  /// \brief Sets sizes/ending addresses for the copied items.
+  void setCopyingSizesEndAddresses(ArrayRef<Expr *> CopyingSizesEndAddresses);
+
+  /// \brief Return sizes/ending addresses for the copied items.
+  llvm::MutableArrayRef<Expr *> getCopyingSizesEndAddresses() {
+    return llvm::MutableArrayRef<Expr *>(getCopyingStartAddresses().end(),
+                                         numberOfVariables());
+  }
+
+public:
+  /// \brief Creates clause with a list of variables \a VL.
+  ///
+  /// \param C AST context.
+  /// \brief StartLoc Starting location of the clause.
+  /// \brief EndLoc Ending location of the clause.
+  /// \param VL List of references to the variables.
+  ///
+  static OMPToClause *Create(const ASTContext &C, SourceLocation StartLoc,
+                             SourceLocation EndLoc, ArrayRef<Expr *> VL,
+                             ArrayRef<Expr *> WholeStartAddresses,
+                             ArrayRef<Expr *> WholeSizesEndAddresses,
+                             ArrayRef<Expr *> CopyingStartAddresses,
+                             ArrayRef<Expr *> CopyingSizesEndAddresses);
+  /// \brief Creates an empty clause with the place for \a N variables.
+  ///
+  /// \param C AST context.
+  /// \param N The number of variables.
+  ///
+  static OMPToClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  /// \brief Return the list of whole starting addresses.
+  ArrayRef<const Expr *> getWholeStartAddresses() const {
+    return ArrayRef<const Expr *>(varlist_end(), numberOfVariables());
+  }
+
+  /// \brief Return whole sizes/ending addresses for the items.
+  ArrayRef<const Expr *> getWholeSizesEndAddresses() const {
+    return ArrayRef<const Expr *>(getWholeStartAddresses().end(),
+                                  numberOfVariables());
+  }
+
+  /// \brief Return the list of copied starting addresses.
+  ArrayRef<const Expr *> getCopyingStartAddresses() const {
+    return ArrayRef<const Expr *>(getWholeSizesEndAddresses().end(),
+                                  numberOfVariables());
+  }
+
+  /// \brief Return sizes/ending addresses for the copied items.
+  ArrayRef<const Expr *> getCopyingSizesEndAddresses() const {
+    return ArrayRef<const Expr *>(getCopyingStartAddresses().end(),
+                                  numberOfVariables());
+  }
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_to;
+  }
+
+  StmtRange children() {
+    return StmtRange(
+        reinterpret_cast<Stmt **>(varlist_begin()),
+        reinterpret_cast<Stmt **>(getCopyingSizesEndAddresses().end()));
+  }
+};
+
+/// \brief This represents clause 'from' in the '#pragma omp ...'
+/// directives.
+///
+/// \code
+/// #pragma omp target update from(a,b)
+/// \endcode
+/// In this example directive '#pragma omp target update' has clause 'from'
+/// with the variables 'a' and 'b'.
+///
+class OMPFromClause : public OMPVarListClause<OMPFromClause> {
+  friend class OMPClauseReader;
+  friend class OMPClauseWriter;
+  friend class Sema;
+
+  /// \brief Build clause with number of variables \a N.
+  ///
+  /// \param StartLoc Starting location of the clause.
+  /// \param EndLoc Ending location of the clause.
+  /// \param N Number of the variables in the clause.
+  ///
+  explicit OMPFromClause(SourceLocation StartLoc, SourceLocation EndLoc,
+                         unsigned N)
+      : OMPVarListClause<OMPFromClause>(OMPC_from, StartLoc, EndLoc, N) {}
+
+  /// \brief Build an empty clause.
+  ///
+  /// \param N Number of variables.
+  ///
+  explicit OMPFromClause(unsigned N)
+      : OMPVarListClause<OMPFromClause>(OMPC_from, SourceLocation(),
+                                        SourceLocation(), N) {}
+
+  /// \brief Sets whole starting addresses for the items.
+  void setWholeStartAddresses(ArrayRef<Expr *> WholeStartAddresses);
+
+  /// \brief Return the list of whole starting addresses.
+  llvm::MutableArrayRef<Expr *> getWholeStartAddresses() {
+    return llvm::MutableArrayRef<Expr *>(varlist_end(), numberOfVariables());
+  }
+
+  /// \brief Sets whole sizes/ending addresses for the items.
+  void setWholeSizesEndAddresses(ArrayRef<Expr *> WholeSizesEndAddresses);
+
+  /// \brief Return whole sizes/ending addresses for the items.
+  llvm::MutableArrayRef<Expr *> getWholeSizesEndAddresses() {
+    return llvm::MutableArrayRef<Expr *>(getWholeStartAddresses().end(),
+                                         numberOfVariables());
+  }
+
+  /// \brief Sets starting addresses for the items to be copied.
+  void setCopyingStartAddresses(ArrayRef<Expr *> CopyingStartAddresses);
+
+  /// \brief Return the list of copied starting addresses.
+  llvm::MutableArrayRef<Expr *> getCopyingStartAddresses() {
+    return llvm::MutableArrayRef<Expr *>(getWholeSizesEndAddresses().end(),
+                                         numberOfVariables());
+  }
+
+  /// \brief Sets sizes/ending addresses for the copied items.
+  void setCopyingSizesEndAddresses(ArrayRef<Expr *> CopyingSizesEndAddresses);
+
+  /// \brief Return sizes/ending addresses for the copied items.
+  llvm::MutableArrayRef<Expr *> getCopyingSizesEndAddresses() {
+    return llvm::MutableArrayRef<Expr *>(getCopyingStartAddresses().end(),
+                                         numberOfVariables());
+  }
+
+public:
+  /// \brief Creates clause with a list of variables \a VL.
+  ///
+  /// \param C AST context.
+  /// \brief StartLoc Starting location of the clause.
+  /// \brief EndLoc Ending location of the clause.
+  /// \param VL List of references to the variables.
+  ///
+  static OMPFromClause *Create(const ASTContext &C, SourceLocation StartLoc,
+                               SourceLocation EndLoc, ArrayRef<Expr *> VL,
+                               ArrayRef<Expr *> WholeStartAddresses,
+                               ArrayRef<Expr *> WholeSizesEndAddresses,
+                               ArrayRef<Expr *> CopyingStartAddresses,
+                               ArrayRef<Expr *> CopyingSizesEndAddresses);
+  /// \brief Creates an empty clause with the place for \a N variables.
+  ///
+  /// \param C AST context.
+  /// \param N The number of variables.
+  ///
+  static OMPFromClause *CreateEmpty(const ASTContext &C, unsigned N);
+
+  /// \brief Return the list of whole starting addresses.
+  ArrayRef<const Expr *> getWholeStartAddresses() const {
+    return ArrayRef<const Expr *>(varlist_end(), numberOfVariables());
+  }
+
+  /// \brief Return whole sizes/ending addresses for the items.
+  ArrayRef<const Expr *> getWholeSizesEndAddresses() const {
+    return ArrayRef<const Expr *>(getWholeStartAddresses().end(),
+                                  numberOfVariables());
+  }
+
+  /// \brief Return the list of copied starting addresses.
+  ArrayRef<const Expr *> getCopyingStartAddresses() const {
+    return ArrayRef<const Expr *>(getWholeSizesEndAddresses().end(),
+                                  numberOfVariables());
+  }
+
+  /// \brief Return sizes/ending addresses for the copied items.
+  ArrayRef<const Expr *> getCopyingSizesEndAddresses() const {
+    return ArrayRef<const Expr *>(getCopyingStartAddresses().end(),
+                                  numberOfVariables());
+  }
+
+  static bool classof(const OMPClause *T) {
+    return T->getClauseKind() == OMPC_from;
+  }
+
+  StmtRange children() {
+    return StmtRange(
+        reinterpret_cast<Stmt **>(varlist_begin()),
+        reinterpret_cast<Stmt **>(getCopyingSizesEndAddresses().end()));
+  }
+};
+
 /// \brief This represents 'schedule' clause in the '#pragma omp ...' directive.
 ///
 /// \code
@@ -2409,7 +2653,7 @@ public:
     }
   }
   // Base case, ignore it. :)
-  RetTy VisitOMPClause(PTR(OMPClause) Node) { return RetTy(); }
+  RetTy VisitOMPClause(PTR(OMPClause)) { return RetTy(); }
 #undef PTR
 #undef DISPATCH
 };

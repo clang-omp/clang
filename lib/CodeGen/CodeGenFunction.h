@@ -2089,6 +2089,8 @@ public:
   void EmitOMPTeamsDirective(const OMPTeamsDirective &S);
   void EmitOMPDistributeDirective(const OMPDistributeDirective &S);
   void EmitOMPTargetDirective(const OMPTargetDirective &S);
+  void EmitOMPTargetDataDirective(const OMPTargetDataDirective &S);
+  void EmitOMPTargetUpdateDirective(const OMPTargetUpdateDirective &S);
   void EmitInitOMPClause(const OMPClause &C,
                          const OMPExecutableDirective &S);
   void EmitAfterInitOMPClause(const OMPClause &C,

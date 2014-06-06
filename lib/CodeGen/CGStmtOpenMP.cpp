@@ -238,13 +238,7 @@ public:
         TypeBuilder<llvm::types::i<8> *, X>::get(C), // psource
         NULL);
   }
-  enum {
-    reserved_1,
-    flags,
-    reserved_2,
-    reserved_3,
-    psource
-  };
+  enum { reserved_1, flags, reserved_2, reserved_3, psource };
 };
 ///   ident_t
 template <bool X> class TypeBuilder<kmp_task_t, X> {
@@ -258,26 +252,22 @@ public:
         TypeBuilder<llvm::types::i<32>, X>::get(C),  // firstprivate_locker
         NULL);
   }
-  enum {
-    shareds,
-    routine,
-    part_id,
-    destructors,
-    firstprivate_locker
-  };
+  enum { shareds, routine, part_id, destructors, firstprivate_locker };
 };
 template <typename R, typename A1, typename A2, typename A3, typename A4,
           typename A5, typename A6, typename A7, bool cross>
 class TypeBuilder<R(A1, A2, A3, A4, A5, A6, A7), cross> {
 public:
   static FunctionType *get(LLVMContext &Context) {
-    Type *params[] = { TypeBuilder<A1, cross>::get(Context),
-                       TypeBuilder<A2, cross>::get(Context),
-                       TypeBuilder<A3, cross>::get(Context),
-                       TypeBuilder<A4, cross>::get(Context),
-                       TypeBuilder<A5, cross>::get(Context),
-                       TypeBuilder<A6, cross>::get(Context),
-                       TypeBuilder<A7, cross>::get(Context), };
+    Type *params[] = {
+        TypeBuilder<A1, cross>::get(Context),
+        TypeBuilder<A2, cross>::get(Context),
+        TypeBuilder<A3, cross>::get(Context),
+        TypeBuilder<A4, cross>::get(Context),
+        TypeBuilder<A5, cross>::get(Context),
+        TypeBuilder<A6, cross>::get(Context),
+        TypeBuilder<A7, cross>::get(Context),
+    };
     return FunctionType::get(TypeBuilder<R, cross>::get(Context), params,
                              false);
   }
@@ -288,15 +278,17 @@ template <typename R, typename A1, typename A2, typename A3, typename A4,
 class TypeBuilder<R(A1, A2, A3, A4, A5, A6, A7, A8, A9), cross> {
 public:
   static FunctionType *get(LLVMContext &Context) {
-    Type *params[] = { TypeBuilder<A1, cross>::get(Context),
-                       TypeBuilder<A2, cross>::get(Context),
-                       TypeBuilder<A3, cross>::get(Context),
-                       TypeBuilder<A4, cross>::get(Context),
-                       TypeBuilder<A5, cross>::get(Context),
-                       TypeBuilder<A6, cross>::get(Context),
-                       TypeBuilder<A7, cross>::get(Context),
-                       TypeBuilder<A8, cross>::get(Context),
-                       TypeBuilder<A9, cross>::get(Context), };
+    Type *params[] = {
+        TypeBuilder<A1, cross>::get(Context),
+        TypeBuilder<A2, cross>::get(Context),
+        TypeBuilder<A3, cross>::get(Context),
+        TypeBuilder<A4, cross>::get(Context),
+        TypeBuilder<A5, cross>::get(Context),
+        TypeBuilder<A6, cross>::get(Context),
+        TypeBuilder<A7, cross>::get(Context),
+        TypeBuilder<A8, cross>::get(Context),
+        TypeBuilder<A9, cross>::get(Context),
+    };
     return FunctionType::get(TypeBuilder<R, cross>::get(Context), params,
                              false);
   }
@@ -306,12 +298,14 @@ template <typename R, typename A1, typename A2, typename A3, typename A4,
 class TypeBuilder<R(A1, A2, A3, A4, A5, A6), cross> {
 public:
   static FunctionType *get(LLVMContext &Context) {
-    Type *params[] = { TypeBuilder<A1, cross>::get(Context),
-                       TypeBuilder<A2, cross>::get(Context),
-                       TypeBuilder<A3, cross>::get(Context),
-                       TypeBuilder<A4, cross>::get(Context),
-                       TypeBuilder<A5, cross>::get(Context),
-                       TypeBuilder<A6, cross>::get(Context), };
+    Type *params[] = {
+        TypeBuilder<A1, cross>::get(Context),
+        TypeBuilder<A2, cross>::get(Context),
+        TypeBuilder<A3, cross>::get(Context),
+        TypeBuilder<A4, cross>::get(Context),
+        TypeBuilder<A5, cross>::get(Context),
+        TypeBuilder<A6, cross>::get(Context),
+    };
     return FunctionType::get(TypeBuilder<R, cross>::get(Context), params,
                              false);
   }
@@ -625,12 +619,12 @@ getCollapsedNumberFromLoopDirective(const OMPExecutableDirective *ED) {
 // DEFAULT_GET_OPENMP_FUNC(copyprivate)
 static llvm::Value *Get__kmpc_copyprivate(clang::CodeGen::CodeGenModule *CGM) {
   llvm::LLVMContext &C = CGM->getLLVMContext();
-  llvm::Type *Params[] = { llvm::TypeBuilder<ident_t *, false>::get(C),
-                           llvm::TypeBuilder<int32_t, false>::get(C),
-                           CGM->SizeTy,
-                           llvm::TypeBuilder<void *, false>::get(C),
-                           llvm::TypeBuilder<kmp_reduce_func, false>::get(C),
-                           llvm::TypeBuilder<int32_t, false>::get(C) };
+  llvm::Type *Params[] = {llvm::TypeBuilder<ident_t *, false>::get(C),
+                          llvm::TypeBuilder<int32_t, false>::get(C),
+                          CGM->SizeTy,
+                          llvm::TypeBuilder<void *, false>::get(C),
+                          llvm::TypeBuilder<kmp_reduce_func, false>::get(C),
+                          llvm::TypeBuilder<int32_t, false>::get(C)};
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
       llvm::TypeBuilder<void, false>::get(C), Params, false);
@@ -642,14 +636,13 @@ static llvm::Value *
 Get__kmpc_reduce_nowait(clang::CodeGen::CodeGenModule *CGM) {
   llvm::LLVMContext &C = CGM->getLLVMContext();
   llvm::Type *Params[] = {
-    llvm::TypeBuilder<ident_t *, false>::get(C),
-    llvm::TypeBuilder<int32_t, false>::get(C),
-    llvm::TypeBuilder<int32_t, false>::get(C),
-    CGM->SizeTy,
-    llvm::TypeBuilder<void *, false>::get(C),
-    llvm::TypeBuilder<kmp_copy_func, false>::get(C),
-    llvm::TypeBuilder<kmp_critical_name *, false>::get(C)
-  };
+      llvm::TypeBuilder<ident_t *, false>::get(C),
+      llvm::TypeBuilder<int32_t, false>::get(C),
+      llvm::TypeBuilder<int32_t, false>::get(C),
+      CGM->SizeTy,
+      llvm::TypeBuilder<void *, false>::get(C),
+      llvm::TypeBuilder<kmp_copy_func, false>::get(C),
+      llvm::TypeBuilder<kmp_critical_name *, false>::get(C)};
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
       llvm::TypeBuilder<int32_t, false>::get(C), Params, false);
@@ -660,14 +653,13 @@ Get__kmpc_reduce_nowait(clang::CodeGen::CodeGenModule *CGM) {
 static llvm::Value *Get__kmpc_reduce(clang::CodeGen::CodeGenModule *CGM) {
   llvm::LLVMContext &C = CGM->getLLVMContext();
   llvm::Type *Params[] = {
-    llvm::TypeBuilder<ident_t *, false>::get(C),
-    llvm::TypeBuilder<int32_t, false>::get(C),
-    llvm::TypeBuilder<int32_t, false>::get(C),
-    CGM->SizeTy,
-    llvm::TypeBuilder<void *, false>::get(C),
-    llvm::TypeBuilder<kmp_copy_func, false>::get(C),
-    llvm::TypeBuilder<kmp_critical_name *, false>::get(C)
-  };
+      llvm::TypeBuilder<ident_t *, false>::get(C),
+      llvm::TypeBuilder<int32_t, false>::get(C),
+      llvm::TypeBuilder<int32_t, false>::get(C),
+      CGM->SizeTy,
+      llvm::TypeBuilder<void *, false>::get(C),
+      llvm::TypeBuilder<kmp_copy_func, false>::get(C),
+      llvm::TypeBuilder<kmp_critical_name *, false>::get(C)};
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
       llvm::TypeBuilder<int32_t, false>::get(C), Params, false);
@@ -679,13 +671,12 @@ static llvm::Value *
 Get__kmpc_omp_task_alloc(clang::CodeGen::CodeGenModule *CGM) {
   llvm::LLVMContext &C = CGM->getLLVMContext();
   llvm::Type *Params[] = {
-    llvm::TypeBuilder<ident_t *, false>::get(C),
-    llvm::TypeBuilder<int32_t, false>::get(C),
-    llvm::TypeBuilder<int32_t, false>::get(C),
-    CGM->SizeTy,
-    CGM->SizeTy,
-    llvm::TypeBuilder<kmp_routine_entry_t, false>::get(C)
-  };
+      llvm::TypeBuilder<ident_t *, false>::get(C),
+      llvm::TypeBuilder<int32_t, false>::get(C),
+      llvm::TypeBuilder<int32_t, false>::get(C),
+      CGM->SizeTy,
+      CGM->SizeTy,
+      llvm::TypeBuilder<kmp_routine_entry_t, false>::get(C)};
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
       llvm::TypeBuilder<kmp_task_t *, false>::get(C), Params, false);
@@ -738,13 +729,13 @@ static llvm::Type *getKMPDependInfoType(CodeGenModule *CGM) {
 static llvm::Value *
 Get__kmpc_omp_task_with_deps(clang::CodeGen::CodeGenModule *CGM) {
   llvm::LLVMContext &C = CGM->getLLVMContext();
-  llvm::Type *Params[] = { llvm::TypeBuilder<ident_t *, false>::get(C),
-                           llvm::TypeBuilder<int32_t, false>::get(C),
-                           llvm::TypeBuilder<kmp_task_t *, false>::get(C),
-                           llvm::TypeBuilder<int32_t, false>::get(C),
-                           getKMPDependInfoType(CGM)->getPointerTo(),
-                           llvm::TypeBuilder<int32_t, false>::get(C),
-                           getKMPDependInfoType(CGM)->getPointerTo() };
+  llvm::Type *Params[] = {llvm::TypeBuilder<ident_t *, false>::get(C),
+                          llvm::TypeBuilder<int32_t, false>::get(C),
+                          llvm::TypeBuilder<kmp_task_t *, false>::get(C),
+                          llvm::TypeBuilder<int32_t, false>::get(C),
+                          getKMPDependInfoType(CGM)->getPointerTo(),
+                          llvm::TypeBuilder<int32_t, false>::get(C),
+                          getKMPDependInfoType(CGM)->getPointerTo()};
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
       llvm::TypeBuilder<int32_t, false>::get(C), Params, false);
@@ -756,12 +747,12 @@ Get__kmpc_omp_task_with_deps(clang::CodeGen::CodeGenModule *CGM) {
 static llvm::Value *
 Get__kmpc_omp_wait_deps(clang::CodeGen::CodeGenModule *CGM) {
   llvm::LLVMContext &C = CGM->getLLVMContext();
-  llvm::Type *Params[] = { llvm::TypeBuilder<ident_t *, false>::get(C),
-                           llvm::TypeBuilder<int32_t, false>::get(C),
-                           llvm::TypeBuilder<int32_t, false>::get(C),
-                           getKMPDependInfoType(CGM)->getPointerTo(),
-                           llvm::TypeBuilder<int32_t, false>::get(C),
-                           getKMPDependInfoType(CGM)->getPointerTo() };
+  llvm::Type *Params[] = {llvm::TypeBuilder<ident_t *, false>::get(C),
+                          llvm::TypeBuilder<int32_t, false>::get(C),
+                          llvm::TypeBuilder<int32_t, false>::get(C),
+                          getKMPDependInfoType(CGM)->getPointerTo(),
+                          llvm::TypeBuilder<int32_t, false>::get(C),
+                          getKMPDependInfoType(CGM)->getPointerTo()};
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
       llvm::TypeBuilder<void, false>::get(C), Params, false);
@@ -930,7 +921,7 @@ static llvm::Value *getAtomicFuncGeneral(CodeGenFunction &CGF, QualType QTyRes,
   }
   SmallVector<llvm::Type *, 5> Params;
   Params.push_back(llvm::TypeBuilder<ident_t, false>::get(
-      CGF.CGM.getLLVMContext())->getPointerTo());
+                       CGF.CGM.getLLVMContext())->getPointerTo());
   Params.push_back(CGF.Int32Ty);
   llvm::Type *Ty = CGF.ConvertTypeForMem(getAtomicType(CGF, QTyRes));
   Params.push_back(Ty->getPointerTo());
@@ -1067,12 +1058,10 @@ static void EmitCancelArgs(CodeGenFunction &CGF,
   Kind = CGF.Builder.getInt32(CKind);
 }
 
-static void EmitCancellationPoint(CodeGenFunction &CGF, SourceLocation Loc,
-                                  ArrayRef<llvm::Value *> Args,
-                                  llvm::BasicBlock *ExitBB,
-                                  llvm::BasicBlock *ContBB,
-                                  CodeGenFunction::JumpDest FinalBB =
-                                      CodeGenFunction::JumpDest()) {
+static void EmitCancellationPoint(
+    CodeGenFunction &CGF, SourceLocation Loc, ArrayRef<llvm::Value *> Args,
+    llvm::BasicBlock *ExitBB, llvm::BasicBlock *ContBB,
+    CodeGenFunction::JumpDest FinalBB = CodeGenFunction::JumpDest()) {
   CodeGenModule &CGM = CGF.CGM;
   llvm::Value *CallRes = CGF.Builder.CreateIsNotNull(
       CGF.EmitRuntimeCall(OPENMPRTL_FUNC(cancellationpoint), Args));
@@ -1324,10 +1313,10 @@ CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
     llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
     llvm::Type *KmpcMicroTy =
         llvm::TypeBuilder<kmpc_micro, false>::get(getLLVMContext());
-    llvm::Value *RealArgs[] = { Loc, Builder.getInt32(2),
-                                CGF.Builder.CreateBitCast(
-                                    Fn, KmpcMicroTy, "(kmpc_micro_ty)helper"),
-                                Arg };
+    llvm::Value *RealArgs[] = {
+        Loc, Builder.getInt32(2),
+        CGF.Builder.CreateBitCast(Fn, KmpcMicroTy, "(kmpc_micro_ty)helper"),
+        Arg};
     // __kmpc_fork_call(&loc, argc/*2*/, microtask, arg);
     EmitRuntimeCall(OPENMPRTL_FUNC(fork_call), makeArrayRef(RealArgs));
   }
@@ -1539,11 +1528,16 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
       CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
 
       if (IsStaticSchedule) {
-        llvm::Value *RealArgs[] = { Loc, GTid, Builder.getInt32(Schedule),
-                                    PLast, PLB, PUB, PSt,
-                                    TypeSize == 32 ? Builder.getInt32(1)
-                                                   : Builder.getInt64(1),
-                                    Chunk };
+        llvm::Value *RealArgs[] = {
+            Loc,
+            GTid,
+            Builder.getInt32(Schedule),
+            PLast,
+            PLB,
+            PUB,
+            PSt,
+            TypeSize == 32 ? Builder.getInt32(1) : Builder.getInt64(1),
+            Chunk};
         if (TypeSize == 32 && isSigned)
           EmitRuntimeCall(OPENMPRTL_FUNC(for_static_init_4), RealArgs);
         else if (TypeSize == 32 && !isSigned)
@@ -1567,12 +1561,14 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
       } else {
         llvm::IntegerType *SchedTy =
             llvm::TypeBuilder<sched_type, false>::get(getLLVMContext());
-        llvm::Value *RealArgs[] = { Loc, GTid,
-                                    llvm::ConstantInt::get(SchedTy, Schedule),
-                                    LB, UB,
-                                    TypeSize == 32 ? Builder.getInt32(1)
-                                                   : Builder.getInt64(1),
-                                    Chunk };
+        llvm::Value *RealArgs[] = {
+            Loc,
+            GTid,
+            llvm::ConstantInt::get(SchedTy, Schedule),
+            LB,
+            UB,
+            TypeSize == 32 ? Builder.getInt32(1) : Builder.getInt64(1),
+            Chunk};
         // __kmpc_dispatch_init{4, 8}(&loc, gtid, sched_type, lb, ub, st,
         // chunk);
         if (TypeSize == 32 && isSigned)
@@ -1583,7 +1579,7 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
           EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_init_8), RealArgs);
         else
           EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_init_8u), RealArgs);
-        llvm::Value *RealArgsNext[] = { Loc, GTid, PLast, PLB, PUB, PSt };
+        llvm::Value *RealArgsNext[] = {Loc, GTid, PLast, PLB, PUB, PSt};
         OMPLoopBB = createBasicBlock("omp.loop.begin");
         EmitBlock(OMPLoopBB);
         llvm::Value *CallRes;
@@ -1722,7 +1718,7 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
         Builder.CreateStore(NextIdx, Private);
         if (!IsStaticSchedule && CGM.OpenMPSupport.getOrdered()) {
           // Emit _dispatch_fini for ordered loops
-          llvm::Value *RealArgsFini[] = { Loc, GTid };
+          llvm::Value *RealArgsFini[] = {Loc, GTid};
           if (TypeSize == 32 && isSigned)
             EmitRuntimeCall(OPENMPRTL_FUNC(dispatch_fini_4), RealArgsFini);
           else if (TypeSize == 32 && !isSigned)
@@ -1774,7 +1770,7 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
       }
       EmitBlock(EndBB, true);
       if (IsStaticSchedule) {
-        llvm::Value *RealArgsFini[] = { Loc, GTid };
+        llvm::Value *RealArgsFini[] = {Loc, GTid};
         EmitRuntimeCall(OPENMPRTL_FUNC(for_static_fini), RealArgsFini);
       }
       CGM.OpenMPSupport.setLastIterVar(PLast);
@@ -1854,12 +1850,9 @@ void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
     llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
     // global_tid = __kmpc_global_thread_num(...);
     llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), *this);
-    llvm::Value *RealArgs[] = {
-      Loc,
-      GTid,
-      NumTeams ? NumTeams : Builder.getInt32(0),
-      ThreadLimit ? ThreadLimit : Builder.getInt32(0)
-    };
+    llvm::Value *RealArgs[] = {Loc, GTid,
+                               NumTeams ? NumTeams : Builder.getInt32(0),
+                               ThreadLimit ? ThreadLimit : Builder.getInt32(0)};
     EmitRuntimeCall(OPENMPRTL_FUNC(push_num_teams), RealArgs);
   }
 
@@ -1972,10 +1965,10 @@ void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
     llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
     llvm::Type *KmpcMicroTy =
         llvm::TypeBuilder<kmpc_micro, false>::get(getLLVMContext());
-    llvm::Value *RealArgs[] = { Loc, Builder.getInt32(2),
-                                CGF.Builder.CreateBitCast(
-                                    Fn, KmpcMicroTy, "(kmpc_micro_ty)helper"),
-                                Arg };
+    llvm::Value *RealArgs[] = {
+        Loc, Builder.getInt32(2),
+        CGF.Builder.CreateBitCast(Fn, KmpcMicroTy, "(kmpc_micro_ty)helper"),
+        Arg};
     // __kmpc_fork_teams(&loc, argc/*2*/, microtask, arg);
     EmitRuntimeCall(OPENMPRTL_FUNC(fork_teams), makeArrayRef(RealArgs));
   }
@@ -2430,17 +2423,16 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
     llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
     llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), *this);
     llvm::Value *RealArgs[] = {
-      Loc, GTid, Builder.CreateLoad(Flags, ".flags."),
-      Builder.CreateAdd(
-          Builder.CreateIntCast(llvm::ConstantExpr::getSizeOf(TaskTTy), SizeTy,
-                                false),
-          llvm::ConstantInt::get(
-              SizeTy,
-              getContext().getTypeSizeInChars(PrivateRecord).getQuantity())),
-      llvm::ConstantInt::get(
-          SizeTy, getContext().getTypeSizeInChars(QTy).getQuantity()),
-      Fn
-    };
+        Loc, GTid, Builder.CreateLoad(Flags, ".flags."),
+        Builder.CreateAdd(
+            Builder.CreateIntCast(llvm::ConstantExpr::getSizeOf(TaskTTy),
+                                  SizeTy, false),
+            llvm::ConstantInt::get(
+                SizeTy,
+                getContext().getTypeSizeInChars(PrivateRecord).getQuantity())),
+        llvm::ConstantInt::get(
+            SizeTy, getContext().getTypeSizeInChars(QTy).getQuantity()),
+        Fn};
     // kmpc_task_t val = __kmpc_omp_task_alloc(&loc, gtid, flags,
     // sizeof(kmpc_task_t), sizeof(shareds), task_entry);
     llvm::Value *TaskTVal =
@@ -2472,7 +2464,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
           EmitAfterInitOMPClause(*(*I), S);
 
       if (CGM.OpenMPSupport.getUntied()) {
-        llvm::Value *RealArgs1[] = { Loc, GTid, TaskTVal };
+        llvm::Value *RealArgs1[] = {Loc, GTid, TaskTVal};
         llvm::Value *Res = EmitRuntimeCall(OPENMPRTL_FUNC(omp_task_parts),
                                            RealArgs1, ".task.res.");
         llvm::Value *Cond = Builder.CreateICmpEQ(
@@ -2485,21 +2477,22 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
         EmitBlock(EndBB, true);
       } else {
         llvm::Type *PtrDepTy = getKMPDependInfoType(&CGM)->getPointerTo();
-        llvm::Value *RealArgs1[] = { Loc,
-                                     GTid,
-                                     TaskTVal,
-                                     llvm::ConstantInt::get(Int32Ty, ArraySize),
-                                     DependenceAddresses,
-                                     llvm::ConstantInt::get(Int32Ty, 0),
-                                     llvm::Constant::getNullValue(PtrDepTy) };
+        llvm::Value *RealArgs1[] = {Loc,
+                                    GTid,
+                                    TaskTVal,
+                                    llvm::ConstantInt::get(Int32Ty, ArraySize),
+                                    DependenceAddresses,
+                                    llvm::ConstantInt::get(Int32Ty, 0),
+                                    llvm::Constant::getNullValue(PtrDepTy)};
         EmitRuntimeCall(OPENMPRTL_FUNC(omp_task_with_deps), RealArgs1,
                         ".task.res.");
-        llvm::Value *WaitDepsArgs[] = { Loc, GTid, llvm::ConstantInt::get(
-                                                       Int32Ty, ArraySize),
-                                        DependenceAddresses,
-                                        llvm::ConstantInt::get(Int32Ty, 0),
-                                        llvm::Constant::getNullValue(
-                                            PtrDepTy) };
+        llvm::Value *WaitDepsArgs[] = {
+            Loc,
+            GTid,
+            llvm::ConstantInt::get(Int32Ty, ArraySize),
+            DependenceAddresses,
+            llvm::ConstantInt::get(Int32Ty, 0),
+            llvm::Constant::getNullValue(PtrDepTy)};
         CGM.OpenMPSupport.setWaitDepsArgs(WaitDepsArgs);
       }
       EmitUntiedTaskSwitch(*this, true);
@@ -2604,11 +2597,16 @@ CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
     llvm::AllocaInst *PSt = CreateMemTemp(getContext().UnsignedIntTy, "st");
     InitTempAlloca(PSt, llvm::ConstantInt::get(UnsignedTy, 1));
 
-    llvm::Value *RealArgs[] = { Loc, GTid, Builder.getInt32(Schedule), PLast,
-                                PLB, PUB, PSt,
-                                TypeSize == 32 ? Builder.getInt32(1)
-                                               : Builder.getInt64(1),
-                                Chunk };
+    llvm::Value *RealArgs[] = {
+        Loc,
+        GTid,
+        Builder.getInt32(Schedule),
+        PLast,
+        PLB,
+        PUB,
+        PSt,
+        TypeSize == 32 ? Builder.getInt32(1) : Builder.getInt64(1),
+        Chunk};
     if (TypeSize == 32)
       EmitRuntimeCall(OPENMPRTL_FUNC(for_static_init_4u), RealArgs);
     else
@@ -2667,7 +2665,7 @@ CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
       Builder.CreateCondBr(UBLBCheck, UBLBCheckBB, EndBB);
     }
     EmitBlock(EndBB);
-    llvm::Value *RealArgsFini[] = { Loc, GTid };
+    llvm::Value *RealArgsFini[] = {Loc, GTid};
     EmitRuntimeCall(OPENMPRTL_FUNC(for_static_fini), RealArgsFini);
     CGM.OpenMPSupport.setLastIterVar(PLast);
 
@@ -3051,7 +3049,7 @@ CodeGenFunction::EmitInitOMPNumThreadsClause(const OMPNumThreadsClause &C,
   llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(C.getLocStart(), *this);
   // num_threads = num_threads...;
   llvm::Value *NumThreads = EmitScalarExpr(C.getNumThreads(), true);
-  llvm::Value *RealArgs[] = { Loc, GTid, NumThreads };
+  llvm::Value *RealArgs[] = {Loc, GTid, NumThreads};
   EmitRuntimeCall(OPENMPRTL_FUNC(push_num_threads), RealArgs);
 }
 
@@ -3100,7 +3098,7 @@ CodeGenFunction::EmitInitOMPProcBindClause(const OMPProcBindClause &C,
   case NUM_OPENMP_PROC_BIND_KINDS:
     llvm_unreachable("Unknown thread affinity");
   }
-  llvm::Value *RealArgs[] = { Loc, GTid, ProcBind };
+  llvm::Value *RealArgs[] = {Loc, GTid, ProcBind};
   EmitRuntimeCall(OPENMPRTL_FUNC(push_proc_bind), RealArgs);
 }
 
@@ -3151,11 +3149,11 @@ void CodeGenFunction::EmitFinalOMPIfClause(const OMPIfClause &C,
       llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
       llvm::Value *GTid =
           CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), *this);
-      llvm::Value *RealArgs[] = { Loc, GTid, TaskTVal };
+      llvm::Value *RealArgs[] = {Loc, GTid, TaskTVal};
       EmitRuntimeCall(OPENMPRTL_FUNC(omp_task_begin_if0),
                       makeArrayRef(RealArgs));
-      llvm::Value *RealArgs1[] = { GTid, Builder.CreatePointerCast(TaskTVal,
-                                                                   VoidPtrTy) };
+      llvm::Value *RealArgs1[] = {
+          GTid, Builder.CreatePointerCast(TaskTVal, VoidPtrTy)};
       EmitCallOrInvoke(PTask, makeArrayRef(RealArgs1));
       EmitRuntimeCall(OPENMPRTL_FUNC(omp_task_complete_if0),
                       makeArrayRef(RealArgs));
@@ -3982,7 +3980,7 @@ CodeGenFunction::EmitPreOMPReductionClause(const OMPReductionClause &C,
       }
       if (FD && isa<OMPDeclareReductionDecl>(FD->getDeclContext())) {
         llvm::Value *RegularAddr = EmitLValue(*I).getAddress();
-        llvm::Value *Args[] = { Private, RegularAddr };
+        llvm::Value *Args[] = {Private, RegularAddr};
         EmitCallOrInvoke(CGM.GetAddrOfGlobal(FD), Args);
         SetFirstprivateInsertPt(*this);
       } else {
@@ -4254,9 +4252,8 @@ CodeGenFunction::EmitPostOMPReductionClause(const OMPReductionClause &C,
 
     llvm::GlobalVariable *Lck = CreateRuntimeVariable(CGM, ".lck.", LckTy);
     CGM.OpenMPSupport.setReductionLockVar(Lck);
-    llvm::Value *RealArgs[] = { Loc,           GTid,       NumVarsVal,
-                                ReduceSizeVal, ReduceData, ReduceFunc,
-                                Lck };
+    llvm::Value *RealArgs[] = {
+        Loc, GTid, NumVarsVal, ReduceSizeVal, ReduceData, ReduceFunc, Lck};
     llvm::CallInst *Res = EmitRuntimeCall(CGM.OpenMPSupport.getNoWait()
                                               ? OPENMPRTL_FUNC(reduce_nowait)
                                               : OPENMPRTL_FUNC(reduce),
@@ -4327,11 +4324,10 @@ CodeGenFunction::EmitPostOMPReductionClause(const OMPReductionClause &C,
       llvm::Type *ArgTy = ConvertTypeForMem(getAtomicType(*this, QTy));
       llvm::Type *PtrArgTy = ArgTy->getPointerTo();
       llvm::Value *RealArgs[] = {
-        Loc, GTid, Builder.CreatePointerCast(EmitScalarExpr(&UOp), PtrArgTy),
-        Builder.CreateLoad(Builder.CreatePointerCast(
-            Builder.CreateLoad(Addr2, CGM.getMangledName(VD) + ".rhs"),
-            PtrArgTy))
-      };
+          Loc, GTid, Builder.CreatePointerCast(EmitScalarExpr(&UOp), PtrArgTy),
+          Builder.CreateLoad(Builder.CreatePointerCast(
+              Builder.CreateLoad(Addr2, CGM.getMangledName(VD) + ".rhs"),
+              PtrArgTy))};
       EmitRuntimeCall(AtomicFunc, RealArgs);
     } else {
       // __kmpc_atomic_start();
@@ -4362,7 +4358,7 @@ llvm::CallInst *CodeGenFunction::EmitOMPCallWithLocAndTidHelper(
     llvm::Value *F, SourceLocation L, unsigned Flags) {
   llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(L, *this, Flags);
   llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(L, *this);
-  llvm::Value *RealArgs[] = { Loc, GTid };
+  llvm::Value *RealArgs[] = {Loc, GTid};
   return EmitRuntimeCall(F, RealArgs);
 }
 
@@ -4461,7 +4457,7 @@ CodeGenFunction::EmitOMPTaskyieldDirective(const OMPTaskyieldDirective &S) {
   // EmitUntiedPartIdInc(*this);
   llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
   llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), *this);
-  llvm::Value *RealArgs[] = { Loc, GTid, Builder.getInt32(0) };
+  llvm::Value *RealArgs[] = {Loc, GTid, Builder.getInt32(0)};
   EmitRuntimeCall(OPENMPRTL_FUNC(omp_taskyield), RealArgs);
   // EmitUntiedBranchEnd(*this);
   // EmitUntiedTaskSwitch(*this, false);
@@ -4521,7 +4517,7 @@ void CodeGenFunction::EmitOMPCancelDirective(const OMPCancelDirective &S) {
   llvm::Value *Kind;
   EmitCancelArgs(*this, S.getConstructType(), S.getLocStart(), Loc, GTid, Kind);
 
-  llvm::Value *RealArgs[] = { Loc, GTid, Kind };
+  llvm::Value *RealArgs[] = {Loc, GTid, Kind};
 
   llvm::BasicBlock *ContBB = createBasicBlock("omp.cancel.continue");
   llvm::BasicBlock *ExitBB = createBasicBlock("omp.cancel.exit");
@@ -4556,7 +4552,7 @@ void CodeGenFunction::EmitOMPCancellationPointDirective(
   llvm::Value *Kind;
   EmitCancelArgs(*this, S.getConstructType(), S.getLocStart(), Loc, GTid, Kind);
 
-  llvm::Value *RealArgs[] = { Loc, GTid, Kind };
+  llvm::Value *RealArgs[] = {Loc, GTid, Kind};
 
   llvm::BasicBlock *ExitBB = createBasicBlock("omp.cancellationpoint.exit");
   llvm::BasicBlock *ContBB = createBasicBlock("omp.cancellationpoint.continue");
@@ -4973,10 +4969,13 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
               DidIt, false, CGM.getDataLayout().getPrefTypeAlignment(
                                 DidIt->getType()->getSequentialElementType()),
               getContext().IntTy, SourceLocation());
-          llvm::Value *RealArgs[] = { Loc, GTid, CpySize,
-                                      Builder.CreateBitCast(CpyVar, VoidPtrTy,
-                                                            "(void*)cpyrec"),
-                                      CGF.CurFn, LoadDidIt };
+          llvm::Value *RealArgs[] = {
+              Loc,
+              GTid,
+              CpySize,
+              Builder.CreateBitCast(CpyVar, VoidPtrTy, "(void*)cpyrec"),
+              CGF.CurFn,
+              LoadDidIt};
           EmitRuntimeCall(OPENMPRTL_FUNC(copyprivate), RealArgs);
         }
 
@@ -5016,7 +5015,7 @@ void CodeGenFunction::EmitOMPCriticalDirective(const OMPCriticalDirective &S) {
   // Prepare other arguments and build a call to __kmpc_critical
   llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(S.getLocStart(), *this);
   llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(S.getLocStart(), *this);
-  llvm::Value *RealArgs[] = { Loc, GTid, Lck };
+  llvm::Value *RealArgs[] = {Loc, GTid, Lck};
   EmitRuntimeCall(OPENMPRTL_FUNC(critical), RealArgs);
   EmitOMPCapturedBodyHelper(S);
   EmitRuntimeCall(OPENMPRTL_FUNC(end_critical), RealArgs);
@@ -5069,8 +5068,8 @@ CodeGenFunction::EmitCloseOMPReductionClause(const OMPReductionClause &C,
     // global_tid = __kmpc_global_thread_num(...);
     llvm::Value *GTid = CGM.CreateOpenMPGlobalThreadNum(C.getLocStart(), *this);
     // kmp_critical_name lck;
-    llvm::Value *RealArgs[] = { Loc, GTid,
-                                CGM.OpenMPSupport.getReductionLockVar() };
+    llvm::Value *RealArgs[] = {Loc, GTid,
+                               CGM.OpenMPSupport.getReductionLockVar()};
     EmitRuntimeCall(CGM.OpenMPSupport.getNoWait()
                         ? OPENMPRTL_FUNC(end_reduce_nowait)
                         : OPENMPRTL_FUNC(end_reduce),
@@ -5514,5 +5513,18 @@ void CodeGenFunction::EmitOMPDistributeParallelForSimdDirective(
 void CodeGenFunction::EmitOMPTargetDirective(const OMPTargetDirective &S) {
   CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
   EmitStmt(CS->getCapturedStmt());
+}
+
+// Generate the instructions for '#pragma omp target data' directive.
+void
+CodeGenFunction::EmitOMPTargetDataDirective(const OMPTargetDataDirective &S) {
+  CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
+  EmitStmt(CS->getCapturedStmt());
+}
+
+// Generate the instructions for '#pragma omp target update' directive.
+void CodeGenFunction::EmitOMPTargetUpdateDirective(
+    const OMPTargetUpdateDirective &S) {
+  ;
 }
 

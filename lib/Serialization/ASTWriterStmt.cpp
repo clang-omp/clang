@@ -1930,6 +1930,54 @@ void OMPClauseWriter::VisitOMPMapClause(OMPMapClause *C) {
     Writer.AddStmt(*I);
 }
 
+void OMPClauseWriter::VisitOMPToClause(OMPToClause *C) {
+  Record.push_back(C->varlist_size());
+  for (OMPToClause::varlist_iterator I = C->varlist_begin(),
+                                     E = C->varlist_end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+  for (ArrayRef<Expr *>::iterator I = C->getWholeStartAddresses().begin(),
+                                  E = C->getWholeStartAddresses().end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+  for (ArrayRef<Expr *>::iterator I = C->getWholeSizesEndAddresses().begin(),
+                                  E = C->getWholeSizesEndAddresses().end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+  for (ArrayRef<Expr *>::iterator I = C->getCopyingStartAddresses().begin(),
+                                  E = C->getCopyingStartAddresses().end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+  for (ArrayRef<Expr *>::iterator I = C->getCopyingSizesEndAddresses().begin(),
+                                  E = C->getCopyingSizesEndAddresses().end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+}
+
+void OMPClauseWriter::VisitOMPFromClause(OMPFromClause *C) {
+  Record.push_back(C->varlist_size());
+  for (OMPFromClause::varlist_iterator I = C->varlist_begin(),
+                                       E = C->varlist_end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+  for (ArrayRef<Expr *>::iterator I = C->getWholeStartAddresses().begin(),
+                                  E = C->getWholeStartAddresses().end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+  for (ArrayRef<Expr *>::iterator I = C->getWholeSizesEndAddresses().begin(),
+                                  E = C->getWholeSizesEndAddresses().end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+  for (ArrayRef<Expr *>::iterator I = C->getCopyingStartAddresses().begin(),
+                                  E = C->getCopyingStartAddresses().end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+  for (ArrayRef<Expr *>::iterator I = C->getCopyingSizesEndAddresses().begin(),
+                                  E = C->getCopyingSizesEndAddresses().end();
+       I != E; ++I)
+    Writer.AddStmt(*I);
+}
+
 void OMPClauseWriter::VisitOMPUniformClause(OMPUniformClause *C) {
   Record.push_back(C->varlist_size());
   for (OMPUniformClause::varlist_iterator I = C->varlist_begin(),
@@ -2264,6 +2312,20 @@ void ASTStmtWriter::VisitOMPTargetDirective(OMPTargetDirective *D) {
   Record.push_back(D->getNumClauses());
   VisitOMPExecutableDirective(D);
   Code = serialization::STMT_OMP_TARGET_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTargetDataDirective(OMPTargetDataDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  VisitOMPExecutableDirective(D);
+  Code = serialization::STMT_OMP_TARGET_DATA_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTargetUpdateDirective(OMPTargetUpdateDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  VisitOMPExecutableDirective(D);
+  Code = serialization::STMT_OMP_TARGET_UPDATE_DIRECTIVE;
 }
 
 //===----------------------------------------------------------------------===//

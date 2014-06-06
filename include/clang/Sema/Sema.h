@@ -7412,6 +7412,17 @@ public:
   StmtResult ActOnOpenMPTargetDirective(ArrayRef<OMPClause *> Clauses,
                                         Stmt *AStmt, SourceLocation StartLoc,
                                         SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp target data' after parsing
+  /// of the  associated statement.
+  StmtResult ActOnOpenMPTargetDataDirective(ArrayRef<OMPClause *> Clauses,
+                                            Stmt *AStmt,
+                                            SourceLocation StartLoc,
+                                            SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp target update' after parsing
+  /// of the  associated statement.
+  StmtResult ActOnOpenMPTargetUpdateDirective(ArrayRef<OMPClause *> Clauses,
+                                              SourceLocation StartLoc,
+                                              SourceLocation EndLoc);
 
   OMPClause *ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind, Expr *Expr,
                                          SourceLocation StartLoc,
@@ -7503,6 +7514,14 @@ public:
                                   SourceLocation EndLoc,
                                   OpenMPMapClauseKind Kind,
                                   SourceLocation KindLoc);
+  /// \brief Called on well-formed 'to' clause.
+  OMPClause *ActOnOpenMPToClause(ArrayRef<Expr *> VarList,
+                                 SourceLocation StartLoc,
+                                 SourceLocation EndLoc);
+  /// \brief Called on well-formed 'from' clause.
+  OMPClause *ActOnOpenMPFromClause(ArrayRef<Expr *> VarList,
+                                   SourceLocation StartLoc,
+                                   SourceLocation EndLoc);
   /// \brief Called on well-formed 'flush' clause.
   OMPClause *ActOnOpenMPFlushClause(ArrayRef<Expr *> VarList,
                                     SourceLocation StartLoc,

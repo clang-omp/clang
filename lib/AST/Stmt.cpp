@@ -31,7 +31,7 @@ static struct StmtClassNameTable {
   const char *Name;
   unsigned Counter;
   unsigned Size;
-} StmtClassInfo[Stmt::lastStmtConstant+1];
+} StmtClassInfo[Stmt::lastStmtConstant + 1];
 
 static StmtClassNameTable &getStmtInfoTableEntry(Stmt::StmtClass E) {
   static bool Initialized = false;
@@ -41,21 +41,21 @@ static StmtClassNameTable &getStmtInfoTableEntry(Stmt::StmtClass E) {
   // Intialize the table on the first use.
   Initialized = true;
 #define ABSTRACT_STMT(STMT)
-#define STMT(CLASS, PARENT) \
-  StmtClassInfo[(unsigned)Stmt::CLASS##Class].Name = #CLASS;    \
+#define STMT(CLASS, PARENT)                                                    \
+  StmtClassInfo[(unsigned)Stmt::CLASS##Class].Name = #CLASS;                   \
   StmtClassInfo[(unsigned)Stmt::CLASS##Class].Size = sizeof(CLASS);
 #include "clang/AST/StmtNodes.inc"
 
   return StmtClassInfo[E];
 }
 
-void *Stmt::operator new(size_t bytes, const ASTContext& C,
+void *Stmt::operator new(size_t bytes, const ASTContext &C,
                          unsigned alignment) {
   return ::operator new(bytes, C, alignment);
 }
 
 const char *Stmt::getStmtClassName() const {
-  return getStmtInfoTableEntry((StmtClass) StmtBits.sClass).Name;
+  return getStmtInfoTableEntry((StmtClass)StmtBits.sClass).Name;
 }
 
 void Stmt::PrintStats() {
@@ -64,33 +64,33 @@ void Stmt::PrintStats() {
 
   unsigned sum = 0;
   llvm::errs() << "\n*** Stmt/Expr Stats:\n";
-  for (int i = 0; i != Stmt::lastStmtConstant+1; i++) {
-    if (StmtClassInfo[i].Name == 0) continue;
+  for (int i = 0; i != Stmt::lastStmtConstant + 1; i++) {
+    if (StmtClassInfo[i].Name == 0)
+      continue;
     sum += StmtClassInfo[i].Counter;
   }
   llvm::errs() << "  " << sum << " stmts/exprs total.\n";
   sum = 0;
-  for (int i = 0; i != Stmt::lastStmtConstant+1; i++) {
-    if (StmtClassInfo[i].Name == 0) continue;
-    if (StmtClassInfo[i].Counter == 0) continue;
+  for (int i = 0; i != Stmt::lastStmtConstant + 1; i++) {
+    if (StmtClassInfo[i].Name == 0)
+      continue;
+    if (StmtClassInfo[i].Counter == 0)
+      continue;
     llvm::errs() << "    " << StmtClassInfo[i].Counter << " "
                  << StmtClassInfo[i].Name << ", " << StmtClassInfo[i].Size
-                 << " each (" << StmtClassInfo[i].Counter*StmtClassInfo[i].Size
+                 << " each ("
+                 << StmtClassInfo[i].Counter * StmtClassInfo[i].Size
                  << " bytes)\n";
-    sum += StmtClassInfo[i].Counter*StmtClassInfo[i].Size;
+    sum += StmtClassInfo[i].Counter * StmtClassInfo[i].Size;
   }
 
   llvm::errs() << "Total bytes = " << sum << "\n";
 }
 
-void Stmt::addStmtClass(StmtClass s) {
-  ++getStmtInfoTableEntry(s).Counter;
-}
+void Stmt::addStmtClass(StmtClass s) { ++getStmtInfoTableEntry(s).Counter; }
 
 bool Stmt::StatisticsEnabled = false;
-void Stmt::EnableStatistics() {
-  StatisticsEnabled = true;
-}
+void Stmt::EnableStatistics() { StatisticsEnabled = true; }
 
 Stmt *Stmt::IgnoreImplicit() {
   Stmt *s = this;
@@ -123,46 +123,40 @@ const Stmt *Stmt::stripLabelLikeStatements() const {
 }
 
 namespace {
-  struct good {};
-  struct bad {};
+struct good {};
+struct bad {};
 
-  // These silly little functions have to be static inline to suppress
-  // unused warnings, and they have to be defined to suppress other
-  // warnings.
-  static inline good is_good(good) { return good(); }
+// These silly little functions have to be static inline to suppress
+// unused warnings, and they have to be defined to suppress other
+// warnings.
+static inline good is_good(good) { return good(); }
 
-  typedef Stmt::child_range children_t();
-  template <class T> good implements_children(children_t T::*) {
-    return good();
-  }
-  LLVM_ATTRIBUTE_UNUSED
-  static inline bad implements_children(children_t Stmt::*) {
-    return bad();
-  }
+typedef Stmt::child_range children_t();
+template <class T> good implements_children(children_t T::*) { return good(); }
+LLVM_ATTRIBUTE_UNUSED
+static inline bad implements_children(children_t Stmt::*) { return bad(); }
 
-  typedef SourceLocation getLocStart_t() const;
-  template <class T> good implements_getLocStart(getLocStart_t T::*) {
-    return good();
-  }
-  LLVM_ATTRIBUTE_UNUSED
-  static inline bad implements_getLocStart(getLocStart_t Stmt::*) {
-    return bad();
-  }
+typedef SourceLocation getLocStart_t() const;
+template <class T> good implements_getLocStart(getLocStart_t T::*) {
+  return good();
+}
+LLVM_ATTRIBUTE_UNUSED
+static inline bad implements_getLocStart(getLocStart_t Stmt::*) {
+  return bad();
+}
 
-  typedef SourceLocation getLocEnd_t() const;
-  template <class T> good implements_getLocEnd(getLocEnd_t T::*) {
-    return good();
-  }
-  LLVM_ATTRIBUTE_UNUSED
-  static inline bad implements_getLocEnd(getLocEnd_t Stmt::*) {
-    return bad();
-  }
+typedef SourceLocation getLocEnd_t() const;
+template <class T> good implements_getLocEnd(getLocEnd_t T::*) {
+  return good();
+}
+LLVM_ATTRIBUTE_UNUSED
+static inline bad implements_getLocEnd(getLocEnd_t Stmt::*) { return bad(); }
 
-#define ASSERT_IMPLEMENTS_children(type) \
+#define ASSERT_IMPLEMENTS_children(type)                                       \
   (void) is_good(implements_children(&type::children))
-#define ASSERT_IMPLEMENTS_getLocStart(type) \
+#define ASSERT_IMPLEMENTS_getLocStart(type)                                    \
   (void) is_good(implements_getLocStart(&type::getLocStart))
-#define ASSERT_IMPLEMENTS_getLocEnd(type) \
+#define ASSERT_IMPLEMENTS_getLocEnd(type)                                      \
   (void) is_good(implements_getLocEnd(&type::getLocEnd))
 }
 
@@ -171,20 +165,21 @@ namespace {
 LLVM_ATTRIBUTE_UNUSED
 static inline void check_implementations() {
 #define ABSTRACT_STMT(type)
-#define STMT(type, base) \
-  ASSERT_IMPLEMENTS_children(type); \
-  ASSERT_IMPLEMENTS_getLocStart(type); \
+#define STMT(type, base)                                                       \
+  ASSERT_IMPLEMENTS_children(type);                                            \
+  ASSERT_IMPLEMENTS_getLocStart(type);                                         \
   ASSERT_IMPLEMENTS_getLocEnd(type);
 #include "clang/AST/StmtNodes.inc"
 }
 
 Stmt::child_range Stmt::children() {
   switch (getStmtClass()) {
-  case Stmt::NoStmtClass: llvm_unreachable("statement without class");
+  case Stmt::NoStmtClass:
+    llvm_unreachable("statement without class");
 #define ABSTRACT_STMT(type)
-#define STMT(type, base) \
-  case Stmt::type##Class: \
-    return static_cast<type*>(this)->children();
+#define STMT(type, base)                                                       \
+  case Stmt::type##Class:                                                      \
+    return static_cast<type *>(this)->children();
 #include "clang/AST/StmtNodes.inc"
   }
   llvm_unreachable("unknown statement kind!");
@@ -195,32 +190,32 @@ Stmt::child_range Stmt::children() {
 //
 // See also Expr.cpp:getExprLoc().
 namespace {
-  /// This implementation is used when a class provides a custom
-  /// implementation of getSourceRange.
-  template <class S, class T>
-  SourceRange getSourceRangeImpl(const Stmt *stmt,
-                                 SourceRange (T::*v)() const) {
-    return static_cast<const S*>(stmt)->getSourceRange();
-  }
+/// This implementation is used when a class provides a custom
+/// implementation of getSourceRange.
+template <class S, class T>
+SourceRange getSourceRangeImpl(const Stmt *stmt, SourceRange (T::*v)() const) {
+  return static_cast<const S *>(stmt)->getSourceRange();
+}
 
-  /// This implementation is used when a class doesn't provide a custom
-  /// implementation of getSourceRange.  Overload resolution should pick it over
-  /// the implementation above because it's more specialized according to
-  /// function template partial ordering.
-  template <class S>
-  SourceRange getSourceRangeImpl(const Stmt *stmt,
-                                 SourceRange (Stmt::*v)() const) {
-    return SourceRange(static_cast<const S*>(stmt)->getLocStart(),
-                       static_cast<const S*>(stmt)->getLocEnd());
-  }
+/// This implementation is used when a class doesn't provide a custom
+/// implementation of getSourceRange.  Overload resolution should pick it over
+/// the implementation above because it's more specialized according to
+/// function template partial ordering.
+template <class S>
+SourceRange getSourceRangeImpl(const Stmt *stmt,
+                               SourceRange (Stmt::*v)() const) {
+  return SourceRange(static_cast<const S *>(stmt)->getLocStart(),
+                     static_cast<const S *>(stmt)->getLocEnd());
+}
 }
 
 SourceRange Stmt::getSourceRange() const {
   switch (getStmtClass()) {
-  case Stmt::NoStmtClass: llvm_unreachable("statement without class");
+  case Stmt::NoStmtClass:
+    llvm_unreachable("statement without class");
 #define ABSTRACT_STMT(type)
-#define STMT(type, base) \
-  case Stmt::type##Class: \
+#define STMT(type, base)                                                       \
+  case Stmt::type##Class:                                                      \
     return getSourceRangeImpl<type>(this, &type::getSourceRange);
 #include "clang/AST/StmtNodes.inc"
   }
@@ -228,13 +223,14 @@ SourceRange Stmt::getSourceRange() const {
 }
 
 SourceLocation Stmt::getLocStart() const {
-//  llvm::errs() << "getLocStart() for " << getStmtClassName() << "\n";
+  //  llvm::errs() << "getLocStart() for " << getStmtClassName() << "\n";
   switch (getStmtClass()) {
-  case Stmt::NoStmtClass: llvm_unreachable("statement without class");
+  case Stmt::NoStmtClass:
+    llvm_unreachable("statement without class");
 #define ABSTRACT_STMT(type)
-#define STMT(type, base) \
-  case Stmt::type##Class: \
-    return static_cast<const type*>(this)->getLocStart();
+#define STMT(type, base)                                                       \
+  case Stmt::type##Class:                                                      \
+    return static_cast<const type *>(this)->getLocStart();
 #include "clang/AST/StmtNodes.inc"
   }
   llvm_unreachable("unknown statement kind");
@@ -242,19 +238,20 @@ SourceLocation Stmt::getLocStart() const {
 
 SourceLocation Stmt::getLocEnd() const {
   switch (getStmtClass()) {
-  case Stmt::NoStmtClass: llvm_unreachable("statement without class");
+  case Stmt::NoStmtClass:
+    llvm_unreachable("statement without class");
 #define ABSTRACT_STMT(type)
-#define STMT(type, base) \
-  case Stmt::type##Class: \
-    return static_cast<const type*>(this)->getLocEnd();
+#define STMT(type, base)                                                       \
+  case Stmt::type##Class:                                                      \
+    return static_cast<const type *>(this)->getLocEnd();
 #include "clang/AST/StmtNodes.inc"
   }
   llvm_unreachable("unknown statement kind");
 }
 
-CompoundStmt::CompoundStmt(const ASTContext &C, ArrayRef<Stmt*> Stmts,
+CompoundStmt::CompoundStmt(const ASTContext &C, ArrayRef<Stmt *> Stmts,
                            SourceLocation LB, SourceLocation RB)
-  : Stmt(CompoundStmtClass), LBracLoc(LB), RBracLoc(RB) {
+    : Stmt(CompoundStmtClass), LBracLoc(LB), RBracLoc(RB) {
   CompoundStmtBits.NumStmts = Stmts.size();
   assert(CompoundStmtBits.NumStmts == Stmts.size() &&
          "NumStmts doesn't fit in bits of CompoundStmtBits.NumStmts!");
@@ -264,7 +261,7 @@ CompoundStmt::CompoundStmt(const ASTContext &C, ArrayRef<Stmt*> Stmts,
     return;
   }
 
-  Body = new (C) Stmt*[Stmts.size()];
+  Body = new (C) Stmt *[Stmts.size()];
   std::copy(Stmts.begin(), Stmts.end(), Body);
 }
 
@@ -274,7 +271,7 @@ void CompoundStmt::setStmts(const ASTContext &C, Stmt **Stmts,
     C.Deallocate(Body);
   this->CompoundStmtBits.NumStmts = NumStmts;
 
-  Body = new (C) Stmt*[NumStmts];
+  Body = new (C) Stmt *[NumStmts];
   memcpy(Body, Stmts, sizeof(Stmt *) * NumStmts);
 }
 
@@ -283,20 +280,20 @@ const char *LabelStmt::getName() const {
 }
 
 AttributedStmt *AttributedStmt::Create(const ASTContext &C, SourceLocation Loc,
-                                       ArrayRef<const Attr*> Attrs,
+                                       ArrayRef<const Attr *> Attrs,
                                        Stmt *SubStmt) {
-  void *Mem = C.Allocate(sizeof(AttributedStmt) +
-                         sizeof(Attr*) * (Attrs.size() - 1),
-                         llvm::alignOf<AttributedStmt>());
+  void *Mem =
+      C.Allocate(sizeof(AttributedStmt) + sizeof(Attr *) * (Attrs.size() - 1),
+                 llvm::alignOf<AttributedStmt>());
   return new (Mem) AttributedStmt(Loc, Attrs, SubStmt);
 }
 
 AttributedStmt *AttributedStmt::CreateEmpty(const ASTContext &C,
                                             unsigned NumAttrs) {
   assert(NumAttrs > 0 && "NumAttrs should be greater than zero");
-  void *Mem = C.Allocate(sizeof(AttributedStmt) +
-                         sizeof(Attr*) * (NumAttrs - 1),
-                         llvm::alignOf<AttributedStmt>());
+  void *Mem =
+      C.Allocate(sizeof(AttributedStmt) + sizeof(Attr *) * (NumAttrs - 1),
+                 llvm::alignOf<AttributedStmt>());
   return new (Mem) AttributedStmt(EmptyShell(), NumAttrs);
 }
 
@@ -362,9 +359,7 @@ StringRef GCCAsmStmt::getClobber(unsigned i) const {
   return getClobberStringLiteral(i)->getString();
 }
 
-Expr *GCCAsmStmt::getOutputExpr(unsigned i) {
-  return cast<Expr>(Exprs[i]);
-}
+Expr *GCCAsmStmt::getOutputExpr(unsigned i) { return cast<Expr>(Exprs[i]); }
 
 /// getOutputConstraint - Return the constraint string for the specified
 /// output operand.  All output constraints are known to be non-empty (either
@@ -386,14 +381,10 @@ StringRef GCCAsmStmt::getInputConstraint(unsigned i) const {
   return getInputConstraintLiteral(i)->getString();
 }
 
-void GCCAsmStmt::setOutputsAndInputsAndClobbers(const ASTContext &C,
-                                                IdentifierInfo **Names,
-                                                StringLiteral **Constraints,
-                                                Stmt **Exprs,
-                                                unsigned NumOutputs,
-                                                unsigned NumInputs,
-                                                StringLiteral **Clobbers,
-                                                unsigned NumClobbers) {
+void GCCAsmStmt::setOutputsAndInputsAndClobbers(
+    const ASTContext &C, IdentifierInfo **Names, StringLiteral **Constraints,
+    Stmt **Exprs, unsigned NumOutputs, unsigned NumInputs,
+    StringLiteral **Clobbers, unsigned NumClobbers) {
   this->NumOutputs = NumOutputs;
   this->NumInputs = NumInputs;
   this->NumClobbers = NumClobbers;
@@ -401,19 +392,19 @@ void GCCAsmStmt::setOutputsAndInputsAndClobbers(const ASTContext &C,
   unsigned NumExprs = NumOutputs + NumInputs;
 
   C.Deallocate(this->Names);
-  this->Names = new (C) IdentifierInfo*[NumExprs];
+  this->Names = new (C) IdentifierInfo *[NumExprs];
   std::copy(Names, Names + NumExprs, this->Names);
 
   C.Deallocate(this->Exprs);
-  this->Exprs = new (C) Stmt*[NumExprs];
+  this->Exprs = new (C) Stmt *[NumExprs];
   std::copy(Exprs, Exprs + NumExprs, this->Exprs);
 
   C.Deallocate(this->Constraints);
-  this->Constraints = new (C) StringLiteral*[NumExprs];
+  this->Constraints = new (C) StringLiteral *[NumExprs];
   std::copy(Constraints, Constraints + NumExprs, this->Constraints);
 
   C.Deallocate(this->Clobbers);
-  this->Clobbers = new (C) StringLiteral*[NumClobbers];
+  this->Clobbers = new (C) StringLiteral *[NumClobbers];
   std::copy(Clobbers, Clobbers + NumClobbers, this->Clobbers);
 }
 
@@ -440,8 +431,9 @@ int GCCAsmStmt::getNamedOperand(StringRef SymbolicName) const {
 /// AnalyzeAsmString - Analyze the asm string of the current asm, decomposing
 /// it into pieces.  If the asm string is erroneous, emit errors and return
 /// true, otherwise return false.
-unsigned GCCAsmStmt::AnalyzeAsmString(SmallVectorImpl<AsmStringPiece>&Pieces,
-                                const ASTContext &C, unsigned &DiagOffs) const {
+unsigned GCCAsmStmt::AnalyzeAsmString(SmallVectorImpl<AsmStringPiece> &Pieces,
+                                      const ASTContext &C,
+                                      unsigned &DiagOffs) const {
   StringRef Str = getAsmString()->getString();
   const char *StrStart = Str.begin();
   const char *StrEnd = Str.end();
@@ -481,10 +473,18 @@ unsigned GCCAsmStmt::AnalyzeAsmString(SmallVectorImpl<AsmStringPiece>&Pieces,
 
     char CurChar = *CurPtr++;
     switch (CurChar) {
-    case '$': CurStringPiece += "$$"; continue;
-    case '{': CurStringPiece += (HasVariants ? "$(" : "{"); continue;
-    case '|': CurStringPiece += (HasVariants ? "$|" : "|"); continue;
-    case '}': CurStringPiece += (HasVariants ? "$)" : "}"); continue;
+    case '$':
+      CurStringPiece += "$$";
+      continue;
+    case '{':
+      CurStringPiece += (HasVariants ? "$(" : "{");
+      continue;
+    case '|':
+      CurStringPiece += (HasVariants ? "$|" : "|");
+      continue;
+    case '}':
+      CurStringPiece += (HasVariants ? "$)" : "}");
+      continue;
     case '%':
       break;
     default:
@@ -495,18 +495,18 @@ unsigned GCCAsmStmt::AnalyzeAsmString(SmallVectorImpl<AsmStringPiece>&Pieces,
     // Escaped "%" character in asm string.
     if (CurPtr == StrEnd) {
       // % at end of string is invalid (no escape).
-      DiagOffs = CurPtr-StrStart-1;
+      DiagOffs = CurPtr - StrStart - 1;
       return diag::err_asm_invalid_escape;
     }
 
     char EscapedChar = *CurPtr++;
-    if (EscapedChar == '%') {  // %% -> %
+    if (EscapedChar == '%') { // %% -> %
       // Escaped percentage sign.
       CurStringPiece += '%';
       continue;
     }
 
-    if (EscapedChar == '=') {  // %= -> Generate an unique ID.
+    if (EscapedChar == '=') { // %= -> Generate an unique ID.
       CurStringPiece += "${:uid}";
       continue;
     }
@@ -522,7 +522,7 @@ unsigned GCCAsmStmt::AnalyzeAsmString(SmallVectorImpl<AsmStringPiece>&Pieces,
     char Modifier = '\0';
     if (isLetter(EscapedChar)) {
       if (CurPtr == StrEnd) { // Premature end.
-        DiagOffs = CurPtr-StrStart-1;
+        DiagOffs = CurPtr - StrStart - 1;
         return diag::err_asm_invalid_escape;
       }
       Modifier = EscapedChar;
@@ -535,12 +535,12 @@ unsigned GCCAsmStmt::AnalyzeAsmString(SmallVectorImpl<AsmStringPiece>&Pieces,
 
       --CurPtr;
       while (CurPtr != StrEnd && isDigit(*CurPtr))
-        N = N*10 + ((*CurPtr++)-'0');
+        N = N * 10 + ((*CurPtr++) - '0');
 
       unsigned NumOperands =
-        getNumOutputs() + getNumPlusOperands() + getNumInputs();
+          getNumOutputs() + getNumPlusOperands() + getNumInputs();
       if (N >= NumOperands) {
-        DiagOffs = CurPtr-StrStart-1;
+        DiagOffs = CurPtr - StrStart - 1;
         return diag::err_asm_invalid_operand_number;
       }
 
@@ -550,10 +550,10 @@ unsigned GCCAsmStmt::AnalyzeAsmString(SmallVectorImpl<AsmStringPiece>&Pieces,
 
     // Handle %[foo], a symbolic operand reference.
     if (EscapedChar == '[') {
-      DiagOffs = CurPtr-StrStart-1;
+      DiagOffs = CurPtr - StrStart - 1;
 
       // Find the ']'.
-      const char *NameEnd = (const char*)memchr(CurPtr, ']', StrEnd-CurPtr);
+      const char *NameEnd = (const char *)memchr(CurPtr, ']', StrEnd - CurPtr);
       if (NameEnd == 0)
         return diag::err_asm_unterminated_symbolic_operand_name;
       if (NameEnd == CurPtr)
@@ -564,16 +564,16 @@ unsigned GCCAsmStmt::AnalyzeAsmString(SmallVectorImpl<AsmStringPiece>&Pieces,
       int N = getNamedOperand(SymbolicName);
       if (N == -1) {
         // Verify that an operand with that name exists.
-        DiagOffs = CurPtr-StrStart;
+        DiagOffs = CurPtr - StrStart;
         return diag::err_asm_unknown_symbolic_operand_name;
       }
       Pieces.push_back(AsmStringPiece(N, Modifier));
 
-      CurPtr = NameEnd+1;
+      CurPtr = NameEnd + 1;
       continue;
     }
 
-    DiagOffs = CurPtr-StrStart-1;
+    DiagOffs = CurPtr - StrStart - 1;
     return diag::err_asm_invalid_escape;
   }
 }
@@ -605,16 +605,12 @@ std::string MSAsmStmt::generateAsmString(const ASTContext &C) const {
   return AsmStr;
 }
 
-Expr *MSAsmStmt::getOutputExpr(unsigned i) {
-  return cast<Expr>(Exprs[i]);
-}
+Expr *MSAsmStmt::getOutputExpr(unsigned i) { return cast<Expr>(Exprs[i]); }
 
 Expr *MSAsmStmt::getInputExpr(unsigned i) {
   return cast<Expr>(Exprs[i + NumOutputs]);
 }
-void MSAsmStmt::setInputExpr(unsigned i, Expr *E) {
-  Exprs[i + NumOutputs] = E;
-}
+void MSAsmStmt::setInputExpr(unsigned i, Expr *E) { Exprs[i + NumOutputs] = E; }
 
 QualType CXXCatchStmt::getCaughtType() const {
   if (ExceptionDecl)
@@ -632,34 +628,34 @@ GCCAsmStmt::GCCAsmStmt(const ASTContext &C, SourceLocation asmloc,
                        StringLiteral **constraints, Expr **exprs,
                        StringLiteral *asmstr, unsigned numclobbers,
                        StringLiteral **clobbers, SourceLocation rparenloc)
-  : AsmStmt(GCCAsmStmtClass, asmloc, issimple, isvolatile, numoutputs,
-            numinputs, numclobbers), RParenLoc(rparenloc), AsmStr(asmstr) {
+    : AsmStmt(GCCAsmStmtClass, asmloc, issimple, isvolatile, numoutputs,
+              numinputs, numclobbers),
+      RParenLoc(rparenloc), AsmStr(asmstr) {
 
   unsigned NumExprs = NumOutputs + NumInputs;
 
-  Names = new (C) IdentifierInfo*[NumExprs];
+  Names = new (C) IdentifierInfo *[NumExprs];
   std::copy(names, names + NumExprs, Names);
 
-  Exprs = new (C) Stmt*[NumExprs];
+  Exprs = new (C) Stmt *[NumExprs];
   std::copy(exprs, exprs + NumExprs, Exprs);
 
-  Constraints = new (C) StringLiteral*[NumExprs];
+  Constraints = new (C) StringLiteral *[NumExprs];
   std::copy(constraints, constraints + NumExprs, Constraints);
 
-  Clobbers = new (C) StringLiteral*[NumClobbers];
+  Clobbers = new (C) StringLiteral *[NumClobbers];
   std::copy(clobbers, clobbers + NumClobbers, Clobbers);
 }
 
 MSAsmStmt::MSAsmStmt(const ASTContext &C, SourceLocation asmloc,
                      SourceLocation lbraceloc, bool issimple, bool isvolatile,
                      ArrayRef<Token> asmtoks, unsigned numoutputs,
-                     unsigned numinputs,
-                     ArrayRef<StringRef> constraints, ArrayRef<Expr*> exprs,
-                     StringRef asmstr, ArrayRef<StringRef> clobbers,
-                     SourceLocation endloc)
-  : AsmStmt(MSAsmStmtClass, asmloc, issimple, isvolatile, numoutputs,
-            numinputs, clobbers.size()), LBraceLoc(lbraceloc),
-            EndLoc(endloc), NumAsmToks(asmtoks.size()) {
+                     unsigned numinputs, ArrayRef<StringRef> constraints,
+                     ArrayRef<Expr *> exprs, StringRef asmstr,
+                     ArrayRef<StringRef> clobbers, SourceLocation endloc)
+    : AsmStmt(MSAsmStmtClass, asmloc, issimple, isvolatile, numoutputs,
+              numinputs, clobbers.size()),
+      LBraceLoc(lbraceloc), EndLoc(endloc), NumAsmToks(asmtoks.size()) {
 
   initialize(C, asmstr, asmtoks, constraints, exprs, clobbers);
 }
@@ -674,7 +670,7 @@ static StringRef copyIntoContext(const ASTContext &C, StringRef str) {
 void MSAsmStmt::initialize(const ASTContext &C, StringRef asmstr,
                            ArrayRef<Token> asmtoks,
                            ArrayRef<StringRef> constraints,
-                           ArrayRef<Expr*> exprs,
+                           ArrayRef<Expr *> exprs,
                            ArrayRef<StringRef> clobbers) {
   assert(NumAsmToks == asmtoks.size());
   assert(NumClobbers == clobbers.size());
@@ -685,7 +681,7 @@ void MSAsmStmt::initialize(const ASTContext &C, StringRef asmstr,
 
   AsmStr = copyIntoContext(C, asmstr);
 
-  Exprs = new (C) Stmt*[NumExprs];
+  Exprs = new (C) Stmt *[NumExprs];
   for (unsigned i = 0, e = NumExprs; i != e; ++i)
     Exprs[i] = exprs[i];
 
@@ -706,9 +702,9 @@ void MSAsmStmt::initialize(const ASTContext &C, StringRef asmstr,
 }
 
 ObjCForCollectionStmt::ObjCForCollectionStmt(Stmt *Elem, Expr *Collect,
-                                             Stmt *Body,  SourceLocation FCL,
+                                             Stmt *Body, SourceLocation FCL,
                                              SourceLocation RPL)
-: Stmt(ObjCForCollectionStmtClass) {
+    : Stmt(ObjCForCollectionStmtClass) {
   SubExprs[ELEM] = Elem;
   SubExprs[COLLECTION] = Collect;
   SubExprs[BODY] = Body;
@@ -719,9 +715,8 @@ ObjCForCollectionStmt::ObjCForCollectionStmt(Stmt *Elem, Expr *Collect,
 ObjCAtTryStmt::ObjCAtTryStmt(SourceLocation atTryLoc, Stmt *atTryStmt,
                              Stmt **CatchStmts, unsigned NumCatchStmts,
                              Stmt *atFinallyStmt)
-  : Stmt(ObjCAtTryStmtClass), AtTryLoc(atTryLoc),
-    NumCatchStmts(NumCatchStmts), HasFinally(atFinallyStmt != 0)
-{
+    : Stmt(ObjCAtTryStmtClass), AtTryLoc(atTryLoc),
+      NumCatchStmts(NumCatchStmts), HasFinally(atFinallyStmt != 0) {
   Stmt **Stmts = getStmts();
   Stmts[0] = atTryStmt;
   for (unsigned I = 0; I != NumCatchStmts; ++I)
@@ -732,13 +727,11 @@ ObjCAtTryStmt::ObjCAtTryStmt(SourceLocation atTryLoc, Stmt *atTryStmt,
 }
 
 ObjCAtTryStmt *ObjCAtTryStmt::Create(const ASTContext &Context,
-                                     SourceLocation atTryLoc,
-                                     Stmt *atTryStmt,
-                                     Stmt **CatchStmts,
-                                     unsigned NumCatchStmts,
+                                     SourceLocation atTryLoc, Stmt *atTryStmt,
+                                     Stmt **CatchStmts, unsigned NumCatchStmts,
                                      Stmt *atFinallyStmt) {
   unsigned Size = sizeof(ObjCAtTryStmt) +
-    (1 + NumCatchStmts + (atFinallyStmt != 0)) * sizeof(Stmt *);
+                  (1 + NumCatchStmts + (atFinallyStmt != 0)) * sizeof(Stmt *);
   void *Mem = Context.Allocate(Size, llvm::alignOf<ObjCAtTryStmt>());
   return new (Mem) ObjCAtTryStmt(atTryLoc, atTryStmt, CatchStmts, NumCatchStmts,
                                  atFinallyStmt);
@@ -747,8 +740,8 @@ ObjCAtTryStmt *ObjCAtTryStmt::Create(const ASTContext &Context,
 ObjCAtTryStmt *ObjCAtTryStmt::CreateEmpty(const ASTContext &Context,
                                           unsigned NumCatchStmts,
                                           bool HasFinally) {
-  unsigned Size = sizeof(ObjCAtTryStmt) +
-    (1 + NumCatchStmts + HasFinally) * sizeof(Stmt *);
+  unsigned Size =
+      sizeof(ObjCAtTryStmt) + (1 + NumCatchStmts + HasFinally) * sizeof(Stmt *);
   void *Mem = Context.Allocate(Size, llvm::alignOf<ObjCAtTryStmt>());
   return new (Mem) ObjCAtTryStmt(EmptyShell(), NumCatchStmts, HasFinally);
 }
@@ -762,7 +755,7 @@ SourceLocation ObjCAtTryStmt::getLocEnd() const {
 }
 
 CXXTryStmt *CXXTryStmt::Create(const ASTContext &C, SourceLocation tryLoc,
-                               Stmt *tryBlock, ArrayRef<Stmt*> handlers) {
+                               Stmt *tryBlock, ArrayRef<Stmt *> handlers) {
   std::size_t Size = sizeof(CXXTryStmt);
   Size += ((handlers.size() + 1) * sizeof(Stmt));
 
@@ -780,8 +773,8 @@ CXXTryStmt *CXXTryStmt::Create(const ASTContext &C, EmptyShell Empty,
 }
 
 CXXTryStmt::CXXTryStmt(SourceLocation tryLoc, Stmt *tryBlock,
-                       ArrayRef<Stmt*> handlers)
-  : Stmt(CXXTryStmtClass), TryLoc(tryLoc), NumHandlers(handlers.size()) {
+                       ArrayRef<Stmt *> handlers)
+    : Stmt(CXXTryStmtClass), TryLoc(tryLoc), NumHandlers(handlers.size()) {
   Stmt **Stmts = reinterpret_cast<Stmt **>(this + 1);
   Stmts[0] = tryBlock;
   std::copy(handlers.begin(), handlers.end(), Stmts + 1);
@@ -791,7 +784,7 @@ CXXForRangeStmt::CXXForRangeStmt(DeclStmt *Range, DeclStmt *BeginEndStmt,
                                  Expr *Cond, Expr *Inc, DeclStmt *LoopVar,
                                  Stmt *Body, SourceLocation FL,
                                  SourceLocation CL, SourceLocation RPL)
-  : Stmt(CXXForRangeStmtClass), ForLoc(FL), ColonLoc(CL), RParenLoc(RPL) {
+    : Stmt(CXXForRangeStmtClass), ForLoc(FL), ColonLoc(CL), RParenLoc(RPL) {
   SubExprs[RANGE] = Range;
   SubExprs[BEGINEND] = BeginEndStmt;
   SubExprs[COND] = Cond;
@@ -803,12 +796,12 @@ CXXForRangeStmt::CXXForRangeStmt(DeclStmt *Range, DeclStmt *BeginEndStmt,
 Expr *CXXForRangeStmt::getRangeInit() {
   DeclStmt *RangeStmt = getRangeStmt();
   VarDecl *RangeDecl = dyn_cast_or_null<VarDecl>(RangeStmt->getSingleDecl());
-  assert(RangeDecl &&& "for-range should have a single var decl");
+  assert(RangeDecl && &"for-range should have a single var decl");
   return RangeDecl->getInit();
 }
 
 const Expr *CXXForRangeStmt::getRangeInit() const {
-  return const_cast<CXXForRangeStmt*>(this)->getRangeInit();
+  return const_cast<CXXForRangeStmt *>(this)->getRangeInit();
 }
 
 VarDecl *CXXForRangeStmt::getLoopVariable() {
@@ -818,13 +811,12 @@ VarDecl *CXXForRangeStmt::getLoopVariable() {
 }
 
 const VarDecl *CXXForRangeStmt::getLoopVariable() const {
-  return const_cast<CXXForRangeStmt*>(this)->getLoopVariable();
+  return const_cast<CXXForRangeStmt *>(this)->getLoopVariable();
 }
 
 IfStmt::IfStmt(const ASTContext &C, SourceLocation IL, VarDecl *var, Expr *cond,
                Stmt *then, SourceLocation EL, Stmt *elsev)
-  : Stmt(IfStmtClass), IfLoc(IL), ElseLoc(EL)
-{
+    : Stmt(IfStmtClass), IfLoc(IL), ElseLoc(EL) {
   setConditionVariable(C, var);
   SubExprs[COND] = cond;
   SubExprs[THEN] = then;
@@ -846,15 +838,14 @@ void IfStmt::setConditionVariable(const ASTContext &C, VarDecl *V) {
   }
 
   SourceRange VarRange = V->getSourceRange();
-  SubExprs[VAR] = new (C) DeclStmt(DeclGroupRef(V), VarRange.getBegin(),
-                                   VarRange.getEnd());
+  SubExprs[VAR] =
+      new (C) DeclStmt(DeclGroupRef(V), VarRange.getBegin(), VarRange.getEnd());
 }
 
 ForStmt::ForStmt(const ASTContext &C, Stmt *Init, Expr *Cond, VarDecl *condVar,
                  Expr *Inc, Stmt *Body, SourceLocation FL, SourceLocation LP,
                  SourceLocation RP)
-  : Stmt(ForStmtClass), ForLoc(FL), LParenLoc(LP), RParenLoc(RP)
-{
+    : Stmt(ForStmtClass), ForLoc(FL), LParenLoc(LP), RParenLoc(RP) {
   SubExprs[INIT] = Init;
   setConditionVariable(C, condVar);
   SubExprs[COND] = Cond;
@@ -877,13 +868,12 @@ void ForStmt::setConditionVariable(const ASTContext &C, VarDecl *V) {
   }
 
   SourceRange VarRange = V->getSourceRange();
-  SubExprs[CONDVAR] = new (C) DeclStmt(DeclGroupRef(V), VarRange.getBegin(),
-                                       VarRange.getEnd());
+  SubExprs[CONDVAR] =
+      new (C) DeclStmt(DeclGroupRef(V), VarRange.getBegin(), VarRange.getEnd());
 }
 
 SwitchStmt::SwitchStmt(const ASTContext &C, VarDecl *Var, Expr *cond)
-  : Stmt(SwitchStmtClass), FirstCase(0), AllEnumCasesCovered(0)
-{
+    : Stmt(SwitchStmtClass), FirstCase(0), AllEnumCasesCovered(0) {
   setConditionVariable(C, Var);
   SubExprs[COND] = cond;
   SubExprs[BODY] = NULL;
@@ -904,8 +894,8 @@ void SwitchStmt::setConditionVariable(const ASTContext &C, VarDecl *V) {
   }
 
   SourceRange VarRange = V->getSourceRange();
-  SubExprs[VAR] = new (C) DeclStmt(DeclGroupRef(V), VarRange.getBegin(),
-                                   VarRange.getEnd());
+  SubExprs[VAR] =
+      new (C) DeclStmt(DeclGroupRef(V), VarRange.getBegin(), VarRange.getEnd());
 }
 
 Stmt *SwitchCase::getSubStmt() {
@@ -916,7 +906,7 @@ Stmt *SwitchCase::getSubStmt() {
 
 WhileStmt::WhileStmt(const ASTContext &C, VarDecl *Var, Expr *cond, Stmt *body,
                      SourceLocation WL)
-  : Stmt(WhileStmtClass) {
+    : Stmt(WhileStmtClass) {
   setConditionVariable(C, Var);
   SubExprs[COND] = cond;
   SubExprs[BODY] = body;
@@ -1024,8 +1014,7 @@ StmtRange OMPClause::children() {
 void OMPPrivateClause::setDefaultInits(ArrayRef<Expr *> DefaultInits) {
   assert(DefaultInits.size() == varlist_size() &&
          "Number of inits is not the same as the preallocated buffer");
-  std::copy(DefaultInits.begin(), DefaultInits.end(),
-            varlist_end());
+  std::copy(DefaultInits.begin(), DefaultInits.end(), varlist_end());
 }
 
 OMPPrivateClause *OMPPrivateClause::Create(const ASTContext &C,
@@ -1036,8 +1025,8 @@ OMPPrivateClause *OMPPrivateClause::Create(const ASTContext &C,
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPPrivateClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * 2 * VL.size());
-  OMPPrivateClause *Clause = new (Mem) OMPPrivateClause(StartLoc, EndLoc,
-                                                        VL.size());
+  OMPPrivateClause *Clause =
+      new (Mem) OMPPrivateClause(StartLoc, EndLoc, VL.size());
   Clause->setVars(VL);
   Clause->setDefaultInits(DefaultInits);
   return Clause;
@@ -1054,30 +1043,25 @@ OMPPrivateClause *OMPPrivateClause::CreateEmpty(const ASTContext &C,
 void OMPFirstPrivateClause::setPseudoVars(ArrayRef<DeclRefExpr *> PseudoVars) {
   assert(PseudoVars.size() == varlist_size() &&
          "Number of vars is not the same as the preallocated buffer");
-  std::copy(PseudoVars.begin(), PseudoVars.end(),
-            varlist_end());
+  std::copy(PseudoVars.begin(), PseudoVars.end(), varlist_end());
 }
 
 void OMPFirstPrivateClause::setInits(ArrayRef<Expr *> Inits) {
   assert(Inits.size() == varlist_size() &&
          "Number of inits is not the same as the preallocated buffer");
-  std::copy(Inits.begin(), Inits.end(),
-            getPseudoVars().end());
+  std::copy(Inits.begin(), Inits.end(), getPseudoVars().end());
 }
 
-OMPFirstPrivateClause *OMPFirstPrivateClause::Create(
-                                                const ASTContext &C,
-                                                SourceLocation StartLoc,
-                                                SourceLocation EndLoc,
-                                                ArrayRef<Expr *> VL,
-                                                ArrayRef<DeclRefExpr *> PseudoVars,
-                                                ArrayRef<Expr *> Inits) {
+OMPFirstPrivateClause *
+OMPFirstPrivateClause::Create(const ASTContext &C, SourceLocation StartLoc,
+                              SourceLocation EndLoc, ArrayRef<Expr *> VL,
+                              ArrayRef<DeclRefExpr *> PseudoVars,
+                              ArrayRef<Expr *> Inits) {
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPFirstPrivateClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * VL.size() * 3);
-  OMPFirstPrivateClause *Clause = new (Mem) OMPFirstPrivateClause(StartLoc,
-                                                                  EndLoc,
-                                                                  VL.size());
+  OMPFirstPrivateClause *Clause =
+      new (Mem) OMPFirstPrivateClause(StartLoc, EndLoc, VL.size());
   Clause->setVars(VL);
   Clause->setPseudoVars(PseudoVars);
   Clause->setInits(Inits);
@@ -1095,44 +1079,36 @@ OMPFirstPrivateClause *OMPFirstPrivateClause::CreateEmpty(const ASTContext &C,
 void OMPLastPrivateClause::setPseudoVars1(ArrayRef<DeclRefExpr *> PseudoVars) {
   assert(PseudoVars.size() == varlist_size() &&
          "Number of vars is not the same as the preallocated buffer");
-  std::copy(PseudoVars.begin(), PseudoVars.end(),
-            varlist_end());
+  std::copy(PseudoVars.begin(), PseudoVars.end(), varlist_end());
 }
 
 void OMPLastPrivateClause::setPseudoVars2(ArrayRef<DeclRefExpr *> PseudoVars) {
   assert(PseudoVars.size() == varlist_size() &&
          "Number of vars is not the same as the preallocated buffer");
-  std::copy(PseudoVars.begin(), PseudoVars.end(),
-            getPseudoVars1().end());
+  std::copy(PseudoVars.begin(), PseudoVars.end(), getPseudoVars1().end());
 }
 
 void OMPLastPrivateClause::setDefaultInits(ArrayRef<Expr *> DefaultInits) {
   assert(DefaultInits.size() == varlist_size() &&
          "Number of inits is not the same as the preallocated buffer");
-  std::copy(DefaultInits.begin(), DefaultInits.end(),
-            getPseudoVars2().end());
+  std::copy(DefaultInits.begin(), DefaultInits.end(), getPseudoVars2().end());
 }
 
 void OMPLastPrivateClause::setAssignments(ArrayRef<Expr *> Assignments) {
   assert(Assignments.size() == varlist_size() &&
          "Number of inits is not the same as the preallocated buffer");
-  std::copy(Assignments.begin(), Assignments.end(),
-            getDefaultInits().end());
+  std::copy(Assignments.begin(), Assignments.end(), getDefaultInits().end());
 }
 
-OMPLastPrivateClause *OMPLastPrivateClause::Create(const ASTContext &C,
-                                                   SourceLocation StartLoc,
-                                                   SourceLocation EndLoc,
-                                                   ArrayRef<Expr *> VL,
-                                                   ArrayRef<DeclRefExpr *> PseudoVars1,
-                                                   ArrayRef<DeclRefExpr *> PseudoVars2,
-                                                   ArrayRef<Expr *> Assignments) {
+OMPLastPrivateClause *OMPLastPrivateClause::Create(
+    const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+    ArrayRef<Expr *> VL, ArrayRef<DeclRefExpr *> PseudoVars1,
+    ArrayRef<DeclRefExpr *> PseudoVars2, ArrayRef<Expr *> Assignments) {
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPLastPrivateClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * VL.size() * 5);
-  OMPLastPrivateClause *Clause = new (Mem) OMPLastPrivateClause(StartLoc,
-                                                                EndLoc,
-                                                                VL.size());
+  OMPLastPrivateClause *Clause =
+      new (Mem) OMPLastPrivateClause(StartLoc, EndLoc, VL.size());
   Clause->setVars(VL);
   Clause->setPseudoVars1(PseudoVars1);
   Clause->setPseudoVars2(PseudoVars2);
@@ -1157,14 +1133,13 @@ OMPSharedClause *OMPSharedClause::Create(const ASTContext &C,
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPSharedClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * VL.size());
-  OMPSharedClause *Clause = new (Mem) OMPSharedClause(StartLoc, EndLoc,
-                                                      VL.size());
+  OMPSharedClause *Clause =
+      new (Mem) OMPSharedClause(StartLoc, EndLoc, VL.size());
   Clause->setVars(VL);
   return Clause;
 }
 
-OMPSharedClause *OMPSharedClause::CreateEmpty(const ASTContext &C,
-                                              unsigned N) {
+OMPSharedClause *OMPSharedClause::CreateEmpty(const ASTContext &C, unsigned N) {
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPSharedClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * N);
@@ -1174,36 +1149,30 @@ OMPSharedClause *OMPSharedClause::CreateEmpty(const ASTContext &C,
 void OMPCopyinClause::setPseudoVars1(ArrayRef<DeclRefExpr *> PseudoVars) {
   assert(PseudoVars.size() == varlist_size() &&
          "Number of vars is not the same as the preallocated buffer");
-  std::copy(PseudoVars.begin(), PseudoVars.end(),
-            varlist_end());
+  std::copy(PseudoVars.begin(), PseudoVars.end(), varlist_end());
 }
 
 void OMPCopyinClause::setPseudoVars2(ArrayRef<DeclRefExpr *> PseudoVars) {
   assert(PseudoVars.size() == varlist_size() &&
          "Number of vars is not the same as the preallocated buffer");
-  std::copy(PseudoVars.begin(), PseudoVars.end(),
-            getPseudoVars1().end());
+  std::copy(PseudoVars.begin(), PseudoVars.end(), getPseudoVars1().end());
 }
 
 void OMPCopyinClause::setAssignments(ArrayRef<Expr *> Assignments) {
   assert(Assignments.size() == varlist_size() &&
          "Number of inits is not the same as the preallocated buffer");
-  std::copy(Assignments.begin(), Assignments.end(),
-            getPseudoVars2().end());
+  std::copy(Assignments.begin(), Assignments.end(), getPseudoVars2().end());
 }
 
-OMPCopyinClause *OMPCopyinClause::Create(const ASTContext &C,
-                                         SourceLocation StartLoc,
-                                         SourceLocation EndLoc,
-                                         ArrayRef<Expr *> VL,
-                                         ArrayRef<DeclRefExpr *> PseudoVars1,
-                                         ArrayRef<DeclRefExpr *> PseudoVars2,
-                                         ArrayRef<Expr *> Assignments) {
+OMPCopyinClause *OMPCopyinClause::Create(
+    const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+    ArrayRef<Expr *> VL, ArrayRef<DeclRefExpr *> PseudoVars1,
+    ArrayRef<DeclRefExpr *> PseudoVars2, ArrayRef<Expr *> Assignments) {
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPCopyinClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * VL.size() * 4);
-  OMPCopyinClause *Clause = new (Mem) OMPCopyinClause(StartLoc, EndLoc,
-                                                      VL.size());
+  OMPCopyinClause *Clause =
+      new (Mem) OMPCopyinClause(StartLoc, EndLoc, VL.size());
   Clause->setVars(VL);
   Clause->setPseudoVars1(PseudoVars1);
   Clause->setPseudoVars2(PseudoVars2);
@@ -1211,8 +1180,7 @@ OMPCopyinClause *OMPCopyinClause::Create(const ASTContext &C,
   return Clause;
 }
 
-OMPCopyinClause *OMPCopyinClause::CreateEmpty(const ASTContext &C,
-                                              unsigned N) {
+OMPCopyinClause *OMPCopyinClause::CreateEmpty(const ASTContext &C, unsigned N) {
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPCopyinClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * N * 4);
@@ -1264,25 +1232,19 @@ OMPCopyPrivateClause *OMPCopyPrivateClause::CreateEmpty(const ASTContext &C,
   return new (Mem) OMPCopyPrivateClause(N);
 }
 
-OMPReductionClause *OMPReductionClause::Create(const ASTContext &C,
-                                               SourceLocation StartLoc,
-                                               SourceLocation EndLoc,
-                                               ArrayRef<Expr *> VL,
-                                               ArrayRef<Expr *> OpExprs,
-                                               ArrayRef<Expr *> HelperParams1,
-                                               ArrayRef<Expr *> HelperParams2,
-                                               ArrayRef<Expr *> DefaultInits,
-                                               OpenMPReductionClauseOperator Op,
-                                               NestedNameSpecifierLoc S,
-                                               DeclarationNameInfo OpName) {
-  assert (VL.size() == OpExprs.size() &&
-          "Number of expressions is not the same as number of variables!");
+OMPReductionClause *OMPReductionClause::Create(
+    const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+    ArrayRef<Expr *> VL, ArrayRef<Expr *> OpExprs,
+    ArrayRef<Expr *> HelperParams1, ArrayRef<Expr *> HelperParams2,
+    ArrayRef<Expr *> DefaultInits, OpenMPReductionClauseOperator Op,
+    NestedNameSpecifierLoc S, DeclarationNameInfo OpName) {
+  assert(VL.size() == OpExprs.size() &&
+         "Number of expressions is not the same as number of variables!");
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPReductionClause),
                                                   llvm::alignOf<Expr *>()) +
                          5 * sizeof(Expr *) * VL.size());
-  OMPReductionClause *Clause = new (Mem) OMPReductionClause(StartLoc, EndLoc,
-                                                            VL.size(),
-                                                            Op, S, OpName);
+  OMPReductionClause *Clause =
+      new (Mem) OMPReductionClause(StartLoc, EndLoc, VL.size(), Op, S, OpName);
   Clause->setVars(VL);
   Clause->setOpExprs(OpExprs);
   Clause->setHelperParameters1st(HelperParams1);
@@ -1387,6 +1349,120 @@ OMPMapClause *OMPMapClause::CreateEmpty(const ASTContext &C, unsigned N) {
   return new (Mem) OMPMapClause(N);
 }
 
+void OMPToClause::setWholeStartAddresses(ArrayRef<Expr *> WholeStartAddresses) {
+  assert(WholeStartAddresses.size() == varlist_size() &&
+         "Number of vars is not the same as the preallocated buffer");
+  std::copy(WholeStartAddresses.begin(), WholeStartAddresses.end(),
+            varlist_end());
+}
+
+void OMPToClause::setWholeSizesEndAddresses(
+    ArrayRef<Expr *> WholeSizesEndAddresses) {
+  assert(WholeSizesEndAddresses.size() == varlist_size() &&
+         "Number of vars is not the same as the preallocated buffer");
+  std::copy(WholeSizesEndAddresses.begin(), WholeSizesEndAddresses.end(),
+            getWholeStartAddresses().end());
+}
+
+void
+OMPToClause::setCopyingStartAddresses(ArrayRef<Expr *> CopyingStartAddresses) {
+  assert(CopyingStartAddresses.size() == varlist_size() &&
+         "Number of vars is not the same as the preallocated buffer");
+  std::copy(CopyingStartAddresses.begin(), CopyingStartAddresses.end(),
+            getWholeSizesEndAddresses().end());
+}
+
+void OMPToClause::setCopyingSizesEndAddresses(
+    ArrayRef<Expr *> CopyingSizesEndAddresses) {
+  assert(CopyingSizesEndAddresses.size() == varlist_size() &&
+         "Number of vars is not the same as the preallocated buffer");
+  std::copy(CopyingSizesEndAddresses.begin(), CopyingSizesEndAddresses.end(),
+            getCopyingStartAddresses().end());
+}
+
+OMPToClause *OMPToClause::Create(const ASTContext &C, SourceLocation StartLoc,
+                                 SourceLocation EndLoc, ArrayRef<Expr *> VL,
+                                 ArrayRef<Expr *> WholeStartAddresses,
+                                 ArrayRef<Expr *> WholeSizesEndAddresses,
+                                 ArrayRef<Expr *> CopyingStartAddresses,
+                                 ArrayRef<Expr *> CopyingSizesEndAddresses) {
+  void *Mem = C.Allocate(
+      llvm::RoundUpToAlignment(sizeof(OMPToClause), llvm::alignOf<Expr *>()) +
+      sizeof(Expr *) * VL.size() * 5);
+  OMPToClause *Clause = new (Mem) OMPToClause(StartLoc, EndLoc, VL.size());
+  Clause->setVars(VL);
+  Clause->setWholeStartAddresses(WholeStartAddresses);
+  Clause->setWholeSizesEndAddresses(WholeSizesEndAddresses);
+  Clause->setCopyingStartAddresses(CopyingStartAddresses);
+  Clause->setCopyingSizesEndAddresses(CopyingSizesEndAddresses);
+  return Clause;
+}
+
+OMPToClause *OMPToClause::CreateEmpty(const ASTContext &C, unsigned N) {
+  void *Mem = C.Allocate(
+      llvm::RoundUpToAlignment(sizeof(OMPToClause), llvm::alignOf<Expr *>()) +
+      sizeof(Expr *) * N * 5);
+  return new (Mem) OMPToClause(N);
+}
+
+void
+OMPFromClause::setWholeStartAddresses(ArrayRef<Expr *> WholeStartAddresses) {
+  assert(WholeStartAddresses.size() == varlist_size() &&
+         "Number of vars is not the same as the preallocated buffer");
+  std::copy(WholeStartAddresses.begin(), WholeStartAddresses.end(),
+            varlist_end());
+}
+
+void OMPFromClause::setWholeSizesEndAddresses(
+    ArrayRef<Expr *> WholeSizesEndAddresses) {
+  assert(WholeSizesEndAddresses.size() == varlist_size() &&
+         "Number of vars is not the same as the preallocated buffer");
+  std::copy(WholeSizesEndAddresses.begin(), WholeSizesEndAddresses.end(),
+            getWholeStartAddresses().end());
+}
+
+void OMPFromClause::setCopyingStartAddresses(
+    ArrayRef<Expr *> CopyingStartAddresses) {
+  assert(CopyingStartAddresses.size() == varlist_size() &&
+         "Number of vars is not the same as the preallocated buffer");
+  std::copy(CopyingStartAddresses.begin(), CopyingStartAddresses.end(),
+            getWholeSizesEndAddresses().end());
+}
+
+void OMPFromClause::setCopyingSizesEndAddresses(
+    ArrayRef<Expr *> CopyingSizesEndAddresses) {
+  assert(CopyingSizesEndAddresses.size() == varlist_size() &&
+         "Number of vars is not the same as the preallocated buffer");
+  std::copy(CopyingSizesEndAddresses.begin(), CopyingSizesEndAddresses.end(),
+            getCopyingStartAddresses().end());
+}
+
+OMPFromClause *
+OMPFromClause::Create(const ASTContext &C, SourceLocation StartLoc,
+                      SourceLocation EndLoc, ArrayRef<Expr *> VL,
+                      ArrayRef<Expr *> WholeStartAddresses,
+                      ArrayRef<Expr *> WholeSizesEndAddresses,
+                      ArrayRef<Expr *> CopyingStartAddresses,
+                      ArrayRef<Expr *> CopyingSizesEndAddresses) {
+  void *Mem = C.Allocate(
+      llvm::RoundUpToAlignment(sizeof(OMPFromClause), llvm::alignOf<Expr *>()) +
+      sizeof(Expr *) * VL.size() * 5);
+  OMPFromClause *Clause = new (Mem) OMPFromClause(StartLoc, EndLoc, VL.size());
+  Clause->setVars(VL);
+  Clause->setWholeStartAddresses(WholeStartAddresses);
+  Clause->setWholeSizesEndAddresses(WholeSizesEndAddresses);
+  Clause->setCopyingStartAddresses(CopyingStartAddresses);
+  Clause->setCopyingSizesEndAddresses(CopyingSizesEndAddresses);
+  return Clause;
+}
+
+OMPFromClause *OMPFromClause::CreateEmpty(const ASTContext &C, unsigned N) {
+  void *Mem = C.Allocate(
+      llvm::RoundUpToAlignment(sizeof(OMPFromClause), llvm::alignOf<Expr *>()) +
+      sizeof(Expr *) * N * 5);
+  return new (Mem) OMPFromClause(N);
+}
+
 OMPFlushClause *OMPFlushClause::Create(const ASTContext &C,
                                        SourceLocation StartLoc,
                                        SourceLocation EndLoc,
@@ -1394,9 +1470,8 @@ OMPFlushClause *OMPFlushClause::Create(const ASTContext &C,
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPFlushClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * VL.size());
-  OMPFlushClause *Clause = new (Mem) OMPFlushClause(StartLoc,
-                                                    EndLoc,
-                                                    VL.size());
+  OMPFlushClause *Clause =
+      new (Mem) OMPFlushClause(StartLoc, EndLoc, VL.size());
   Clause->setVars(VL);
   return Clause;
 }
@@ -1408,19 +1483,16 @@ OMPFlushClause *OMPFlushClause::CreateEmpty(const ASTContext &C, unsigned N) {
   return new (Mem) OMPFlushClause(N);
 }
 
-OMPDependClause *OMPDependClause::Create(const ASTContext &C,
-                                         SourceLocation StartLoc,
-                                         SourceLocation EndLoc,
-                                         ArrayRef<Expr *> VL,
-                                         ArrayRef<Expr *> Begins,
-                                         ArrayRef<Expr *> SizeInBytes,
-                                         OpenMPDependClauseType Ty,
-                                         SourceLocation TyLoc) {
+OMPDependClause *
+OMPDependClause::Create(const ASTContext &C, SourceLocation StartLoc,
+                        SourceLocation EndLoc, ArrayRef<Expr *> VL,
+                        ArrayRef<Expr *> Begins, ArrayRef<Expr *> SizeInBytes,
+                        OpenMPDependClauseType Ty, SourceLocation TyLoc) {
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPDependClause),
                                                   llvm::alignOf<Expr *>()) +
                          sizeof(Expr *) * VL.size() * 3);
-  OMPDependClause *Clause = new (Mem) OMPDependClause(StartLoc, EndLoc,
-                                                      VL.size(), Ty, TyLoc);
+  OMPDependClause *Clause =
+      new (Mem) OMPDependClause(StartLoc, EndLoc, VL.size(), Ty, TyLoc);
   Clause->setVars(VL);
   Clause->setBegins(Begins);
   Clause->setSizeInBytes(SizeInBytes);
@@ -1485,17 +1557,13 @@ OMPUniformClause::CreateEmpty(const ASTContext &C, unsigned N) {
 OMPLinearClause *OMPLinearClause::Create(const ASTContext &C,
                                          SourceLocation StartLoc,
                                          SourceLocation EndLoc,
-                                         ArrayRef<Expr *> VL,
-                                         Expr *St,
+                                         ArrayRef<Expr *> VL, Expr *St,
                                          SourceLocation StLoc) {
   void *Mem = C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPLinearClause),
                                                   llvm::alignOf<Expr *>()) +
-                         sizeof(Expr *) * VL.size() +
-                         sizeof(Expr *));
-  OMPLinearClause *Clause = new (Mem) OMPLinearClause(StartLoc,
-                                                      EndLoc,
-                                                      VL.size(),
-                                                      StLoc);
+                         sizeof(Expr *) * VL.size() + sizeof(Expr *));
+  OMPLinearClause *Clause =
+      new (Mem) OMPLinearClause(StartLoc, EndLoc, VL.size(), StLoc);
   Clause->setVars(VL);
   Clause->setStep(St);
   return Clause;
@@ -2257,6 +2325,30 @@ OMPTargetDirective *OMPTargetDirective::CreateEmpty(const ASTContext &C,
   return new (Mem) OMPTargetDirective(N);
 }
 
+OMPTargetDataDirective *OMPTargetDataDirective::Create(
+    const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+    ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt) {
+  void *Mem =
+      C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPTargetDataDirective),
+                                          llvm::alignOf<OMPClause *>()) +
+                 sizeof(OMPClause *) * Clauses.size() + sizeof(Stmt *));
+  OMPTargetDataDirective *Dir =
+      new (Mem) OMPTargetDataDirective(StartLoc, EndLoc, Clauses.size());
+  Dir->setClauses(Clauses);
+  Dir->setAssociatedStmt(AssociatedStmt);
+  return Dir;
+}
+
+OMPTargetDataDirective *OMPTargetDataDirective::CreateEmpty(const ASTContext &C,
+                                                            unsigned N,
+                                                            EmptyShell) {
+  void *Mem =
+      C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPTargetDataDirective),
+                                          llvm::alignOf<OMPClause *>()) +
+                 sizeof(OMPClause *) * N + sizeof(Stmt *));
+  return new (Mem) OMPTargetDataDirective(N);
+}
+
 CapturedStmt::Capture *CapturedStmt::getStoredCaptures() const {
   unsigned Size = sizeof(CapturedStmt) + sizeof(Stmt *) * (NumCaptures + 1);
 
@@ -2267,6 +2359,30 @@ CapturedStmt::Capture *CapturedStmt::getStoredCaptures() const {
   return reinterpret_cast<Capture *>(
       reinterpret_cast<char *>(const_cast<CapturedStmt *>(this))
       + FirstCaptureOffset);
+}
+
+OMPTargetUpdateDirective *
+OMPTargetUpdateDirective::Create(const ASTContext &C, SourceLocation StartLoc,
+                                 SourceLocation EndLoc,
+                                 ArrayRef<OMPClause *> Clauses) {
+  void *Mem =
+      C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPTargetUpdateDirective),
+                                          llvm::alignOf<OMPClause *>()) +
+                 sizeof(OMPClause *) * Clauses.size());
+  OMPTargetUpdateDirective *Dir =
+      new (Mem) OMPTargetUpdateDirective(StartLoc, EndLoc, Clauses.size());
+  Dir->setClauses(Clauses);
+  return Dir;
+}
+
+OMPTargetUpdateDirective *
+OMPTargetUpdateDirective::CreateEmpty(const ASTContext &C, unsigned N,
+                                      EmptyShell) {
+  void *Mem =
+      C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPTargetUpdateDirective),
+                                          llvm::alignOf<OMPClause *>()) +
+                 sizeof(OMPClause *) * N);
+  return new (Mem) OMPTargetUpdateDirective(N);
 }
 
 CapturedStmt::CapturedStmt(Stmt *S, CapturedRegionKind Kind,
@@ -2294,8 +2410,8 @@ CapturedStmt::CapturedStmt(Stmt *S, CapturedRegionKind Kind,
 }
 
 CapturedStmt::CapturedStmt(EmptyShell Empty, unsigned NumCaptures)
-  : Stmt(CapturedStmtClass, Empty), NumCaptures(NumCaptures),
-    TheCapturedDecl(0), RegionKind(CR_Default), TheRecordDecl(0) {
+    : Stmt(CapturedStmtClass, Empty), NumCaptures(NumCaptures),
+      TheCapturedDecl(0), RegionKind(CR_Default), TheRecordDecl(0) {
   getStoredStmts()[NumCaptures] = 0;
 }
 
@@ -2303,8 +2419,7 @@ CapturedStmt *CapturedStmt::Create(const ASTContext &Context, Stmt *S,
                                    CapturedRegionKind Kind,
                                    ArrayRef<Capture> Captures,
                                    ArrayRef<Expr *> CaptureInits,
-                                   CapturedDecl *CD,
-                                   RecordDecl *RD) {
+                                   CapturedDecl *CD, RecordDecl *RD) {
   // The layout is
   //
   // -----------------------------------------------------------
@@ -2346,8 +2461,8 @@ Stmt::child_range CapturedStmt::children() {
 }
 
 bool CapturedStmt::capturesVariable(const VarDecl *Var) const {
-  for (const_capture_iterator I = capture_begin(),
-                              E = capture_end(); I != E; ++I) {
+  for (const_capture_iterator I = capture_begin(), E = capture_end(); I != E;
+       ++I) {
     if (!I->capturesVariable())
       continue;
 

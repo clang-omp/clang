@@ -2456,6 +2456,14 @@ DEF_TRAVERSE_STMT(OMPTargetDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 
+DEF_TRAVERSE_STMT(OMPTargetDataDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTargetUpdateDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
 // FIXME: look at the following tricky-seeming exprs to see if we
 // need to recurse on anything.  These are ones that have methods
 // returning decls or qualtypes or nestednamespecifier -- though I'm

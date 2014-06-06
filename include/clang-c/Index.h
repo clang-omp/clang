@@ -2096,6 +2096,8 @@ enum CXCursorKind {
   CXCursor_OMPDistributeParallelForDirective = 257,
   CXCursor_OMPDistributeParallelForSimdDirective = 258,
   CXCursor_OMPTargetDirective            = 259,
+  CXCursor_OMPTargetDataDirective        = 260,
+  CXCursor_OMPTargetUpdateDirective      = 261,
 
   CXCursor_LastStmt                      = CXCursor_OMPTargetDirective,
 

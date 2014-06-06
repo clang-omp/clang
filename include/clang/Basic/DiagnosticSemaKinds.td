@@ -6780,6 +6780,8 @@ def err_omp_reduction_in_task : Error<
   "reduction variables may not be accessed in an explicit task">;
 def err_omp_once_referenced : Error<
   "variable can appear only once in OpenMP '%0' clause">;
+def err_omp_once_referenced_in_target_update : Error<
+  "variable can appear only once in OpenMP 'target update' construct">;
 def err_omp_const_variable : Error<
   "const-qualified variable cannot be %0">;
 def note_omp_explicit_dsa : Note<

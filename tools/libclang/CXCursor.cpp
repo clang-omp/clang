@@ -587,6 +587,12 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
   case Stmt::OMPTargetDirectiveClass:
     K = CXCursor_OMPTargetDirective;
     break;
+  case Stmt::OMPTargetDataDirectiveClass:
+    K = CXCursor_OMPTargetDataDirective;
+    break;
+  case Stmt::OMPTargetUpdateDirectiveClass:
+    K = CXCursor_OMPTargetUpdateDirective;
+    break;
   case Stmt::OMPCancelDirectiveClass:
     K = CXCursor_OMPCancelDirective;
     break;

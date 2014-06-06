@@ -121,6 +121,20 @@ OpenMPDirectiveKind Parser::ParseOpenMPDirective() {
     }
     break;
   }
+  case OMPD_target: {
+    Token SavedToken = PP.LookAhead(0);
+    if (!SavedToken.isAnnotation()) {
+      StringRef Spelling = PP.getSpelling(SavedToken);
+      if (Spelling == "data") {
+        DKind = OMPD_target_data;
+        ConsumeAnyToken();
+      } else if (Spelling == "update") {
+        DKind = OMPD_target_update;
+        ConsumeAnyToken();
+      }
+    }
+    break;
+  }
   default:
     if (!Tok.isAnnotation()) {
       StringRef Spelling = PP.getSpelling(Tok);
@@ -639,7 +653,8 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
   case OMPD_taskgroup:
   case OMPD_atomic:
   case OMPD_ordered:
-  case OMPD_target: {
+  case OMPD_target:
+  case OMPD_target_data: {
     // Do not read token if the end of directive or flush directive.
     if (Tok.isNot(tok::annot_pragma_openmp_end))
       ConsumeAnyToken();
@@ -706,11 +721,14 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
   }
   case OMPD_cancel:
   case OMPD_cancellation_point:
+  case OMPD_target_update:
   case OMPD_flush: {
     if (!StandAloneAllowed) {
       Diag(Tok, diag::err_omp_immediate_directive)
           << getOpenMPDirectiveName(DKind);
     }
+    ParseScope OMPDirectiveScope(this, ScopeFlags);
+    Actions.StartOpenMPDSABlock(DKind, DirName, Actions.getCurScope());
     if (DKind == OMPD_flush) {
       if (PP.LookAhead(0).is(tok::l_paren)) {
         // For flush directive set clause kind to pseudo flush clause.
@@ -752,9 +770,25 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
         if (Tok.is(tok::comma))
           ConsumeAnyToken();
       }
+    } else if (DKind == OMPD_target_update) {
+      ConsumeAnyToken();
+      while (Tok.isNot(tok::annot_pragma_openmp_end)) {
+        OpenMPClauseKind CKind = Tok.isAnnotation()
+                                     ? OMPC_unknown
+                                     : getOpenMPClauseKind(PP.getSpelling(Tok));
+        OMPClause *Clause =
+            ParseOpenMPClause(DKind, CKind, !FirstClauses[CKind].getInt());
+        FirstClauses[CKind].setInt(true);
+        if (Clause) {
+          FirstClauses[CKind].setPointer(Clause);
+          Clauses.push_back(Clause);
+        }
+
+        // Skip ',' if any.
+        if (Tok.is(tok::comma))
+          ConsumeAnyToken();
+      }
     }
-    ParseScope OMPDirectiveScope(this, ScopeFlags);
-    Actions.StartOpenMPDSABlock(DKind, DirName, Actions.getCurScope());
     Directive = Actions.ActOnOpenMPExecutableDirective(
         DKind, DirName, Clauses, 0, Loc, Tok.getLocation(), ConstructType);
     // Exit scope.
@@ -1132,7 +1166,7 @@ Decl *Parser::ParseOpenMPDeclareReduction(
 ///       aligned-clause | simdlen-clause | num_teams-clause |
 ///       thread_limit-clause | uniform-clause | inbranch-clause |
 ///       notinbranch-clause | dist_schedule-clause | depend-clause |
-///       device-clause | map-clause
+///       device-clause | map-clause | to-clause | from-clause
 ///
 OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
                                      OpenMPClauseKind CKind, bool FirstClause) {
@@ -1244,6 +1278,8 @@ OMPClause *Parser::ParseOpenMPClause(OpenMPDirectiveKind DKind,
   case OMPC_aligned:
   case OMPC_uniform:
   case OMPC_map:
+  case OMPC_to:
+  case OMPC_from:
     Clause = ParseOpenMPVarListClause(CKind);
     break;
   case OMPC_flush:
@@ -1465,6 +1501,12 @@ OMPClause *Parser::ParseOpenMPClause(OpenMPClauseKind Kind) {
 ///    map-clause:
 ///       'map' '(' map-kind ':' list ')'
 ///
+///    to-clause:
+///       'to' '(' list ')'
+///
+///    from-clause:
+///       'from' '(' list ')'
+///
 OMPClause *Parser::ParseOpenMPVarListClause(OpenMPClauseKind Kind) {
   assert(Kind != OMPC_uniform);
   SourceLocation Loc = Tok.getLocation();
@@ -1585,7 +1627,8 @@ OMPClause *Parser::ParseOpenMPVarListClause(OpenMPClauseKind Kind) {
           Tok.isNot(tok::colon))) {
     // Parse variable
     AllowCEANExpressions CEANRAII(*this,
-                                  Kind == OMPC_depend || Kind == OMPC_map);
+                                  Kind == OMPC_depend || Kind == OMPC_map ||
+                                  Kind == OMPC_from || Kind == OMPC_to);
     ExprResult VarExpr = ParseAssignmentExpression();
     if (VarExpr.isUsable()) {
       Vars.push_back(VarExpr.take());

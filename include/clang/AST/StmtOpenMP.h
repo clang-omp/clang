@@ -329,9 +329,8 @@ public:
   }
   ArrayRef<Expr *> getCounters() const {
     return llvm::makeArrayRef(
-        reinterpret_cast<Expr *const *>(
-            &(reinterpret_cast<Stmt *const *>(
-                 &getClausesStorage()[getNumClauses()])[5])),
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &getClausesStorage()[getNumClauses()])[5])),
         CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
@@ -463,9 +462,8 @@ public:
   }
   ArrayRef<Expr *> getCounters() const {
     return llvm::makeArrayRef(
-        reinterpret_cast<Expr *const *>(
-            &(reinterpret_cast<Stmt *const *>(
-                 &getClausesStorage()[getNumClauses()])[5])),
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &getClausesStorage()[getNumClauses()])[5])),
         CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
@@ -594,11 +592,11 @@ public:
         &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[4]);
   }
   ArrayRef<Expr *> getCounters() const {
-    return llvm::makeArrayRef(reinterpret_cast<Expr *const *>(
-                                  &(reinterpret_cast<Stmt *const *>(
-                                       &reinterpret_cast<OMPClause *const *>(
-                                            this + 1)[getNumClauses()])[5])),
-                              CollapsedNum);
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[5])),
+        CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
@@ -726,11 +724,11 @@ public:
         &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[4]);
   }
   ArrayRef<Expr *> getCounters() const {
-    return llvm::makeArrayRef(reinterpret_cast<Expr *const *>(
-                                  &(reinterpret_cast<Stmt *const *>(
-                                       &reinterpret_cast<OMPClause *const *>(
-                                            this + 1)[getNumClauses()])[5])),
-                              CollapsedNum);
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[5])),
+        CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
@@ -860,11 +858,11 @@ public:
         &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[4]);
   }
   ArrayRef<Expr *> getCounters() const {
-    return llvm::makeArrayRef(reinterpret_cast<Expr *const *>(
-                                  &(reinterpret_cast<Stmt *const *>(
-                                       &reinterpret_cast<OMPClause *const *>(
-                                            this + 1)[getNumClauses()])[5])),
-                              CollapsedNum);
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[5])),
+        CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
@@ -994,11 +992,11 @@ public:
         &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[4]);
   }
   ArrayRef<Expr *> getCounters() const {
-    return llvm::makeArrayRef(reinterpret_cast<Expr *const *>(
-                                  &(reinterpret_cast<Stmt *const *>(
-                                       &reinterpret_cast<OMPClause *const *>(
-                                            this + 1)[getNumClauses()])[5])),
-                              CollapsedNum);
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[5])),
+        CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
@@ -1146,11 +1144,11 @@ public:
         &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[6]);
   }
   ArrayRef<Expr *> getCounters() const {
-    return llvm::makeArrayRef(reinterpret_cast<Expr *const *>(
-                                  &(reinterpret_cast<Stmt *const *>(
-                                       &reinterpret_cast<OMPClause *const *>(
-                                            this + 1)[getNumClauses()])[7])),
-                              CollapsedNum);
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[7])),
+        CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
@@ -1307,11 +1305,11 @@ public:
         &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[6]);
   }
   ArrayRef<Expr *> getCounters() const {
-    return llvm::makeArrayRef(reinterpret_cast<Expr *const *>(
-                                  &(reinterpret_cast<Stmt *const *>(
-                                       &reinterpret_cast<OMPClause *const *>(
-                                            this + 1)[getNumClauses()])[7])),
-                              CollapsedNum);
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[7])),
+        CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
   Expr *getNewIterVar() {
@@ -2407,9 +2405,8 @@ public:
   }
   ArrayRef<Expr *> getCounters() const {
     return llvm::makeArrayRef(
-        reinterpret_cast<Expr *const *>(
-            &(reinterpret_cast<Stmt *const *>(
-                 &getClausesStorage()[getNumClauses()])[5])),
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &getClausesStorage()[getNumClauses()])[5])),
         CollapsedNum);
   }
   unsigned getCollapsedNumber() const { return CollapsedNum; }
@@ -2637,6 +2634,137 @@ public:
   }
 };
 
+/// \brief This represents '#pragma omp target data' directive.
+///
+/// \code
+/// #pragma omp target data device(0) if(a) map(b[:])
+/// \endcode
+/// In this example directive '#pragma omp target data' has clauses 'device'
+/// with the value '0', 'if' with condition 'a' and 'map' with array
+/// section 'b[:]'.
+///
+class OMPTargetDataDirective : public OMPExecutableDirective {
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTargetDataDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                         unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetDataDirectiveClass, OMPD_target_data, StartLoc, EndLoc, N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(sizeof(OMPTargetDataDirective),
+                                         llvm::alignOf<OMPClause *>())),
+            true, 1) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTargetDataDirective(unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetDataDirectiveClass, OMPD_target_data, SourceLocation(),
+            SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(sizeof(OMPTargetDataDirective),
+                                         llvm::alignOf<OMPClause *>())),
+            true, 1) {}
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTargetDataDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTargetDataDirective *CreateEmpty(const ASTContext &C, unsigned N,
+                                             EmptyShell);
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTargetDataDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp target update' directive.
+///
+/// \code
+/// #pragma omp target update to(a) from(b) device(1)
+/// \endcode
+/// In this example directive '#pragma omp target update' has clause 'to' with
+/// argument 'a', clause 'from' with argument 'b' and clause 'device' with
+/// argument '1'.
+///
+class OMPTargetUpdateDirective : public OMPExecutableDirective {
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTargetUpdateDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                           unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetUpdateDirectiveClass, OMPD_target_update, StartLoc, EndLoc,
+            N, reinterpret_cast<OMPClause **>(
+                   reinterpret_cast<char *>(this) +
+                   llvm::RoundUpToAlignment(sizeof(OMPTargetUpdateDirective),
+                                            llvm::alignOf<OMPClause *>())),
+            false, 0) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTargetUpdateDirective(unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetUpdateDirectiveClass, OMPD_target_update, SourceLocation(),
+            SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(sizeof(OMPTargetUpdateDirective),
+                                         llvm::alignOf<OMPClause *>())),
+            false, 0) {}
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  ///
+  static OMPTargetUpdateDirective *Create(const ASTContext &C,
+                                          SourceLocation StartLoc,
+                                          SourceLocation EndLoc,
+                                          ArrayRef<OMPClause *> Clauses);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTargetUpdateDirective *CreateEmpty(const ASTContext &C, unsigned N,
+                                               EmptyShell);
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTargetUpdateDirectiveClass;
+  }
+};
 } // end namespace clang
 
 #endif

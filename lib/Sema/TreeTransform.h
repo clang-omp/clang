@@ -1511,6 +1511,26 @@ public:
                                           KindLoc);
   }
 
+  /// \brief Build a new OpenMP 'to' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPToClause(ArrayRef<Expr *> VarList,
+                                SourceLocation StartLoc,
+                                SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPToClause(VarList, StartLoc, EndLoc);
+  }
+
+  /// \brief Build a new OpenMP 'from' clause.
+  ///
+  /// By default, performs semantic analysis to build the new statement.
+  /// Subclasses may override this routine to provide different behavior.
+  OMPClause *RebuildOMPFromClause(ArrayRef<Expr *> VarList,
+                                  SourceLocation StartLoc,
+                                  SourceLocation EndLoc) {
+    return getSema().ActOnOpenMPFromClause(VarList, StartLoc, EndLoc);
+  }
+
   /// \brief Build a new OpenMP 'ordered' clause.
   ///
   /// By default, performs semantic analysis to build the new statement.
@@ -6495,7 +6515,7 @@ TreeTransform<Derived>::TransformCXXForRangeStmt(CXXForRangeStmt *S) {
   return FinishCXXForRangeStmt(NewStmt.get(), Body.get());
 }
 
-template<typename Derived>
+template <typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformMSDependentExistsStmt(
                                                     MSDependentExistsStmt *S) {
@@ -6982,6 +7002,26 @@ TreeTransform<Derived>::TransformOMPTargetDirective(OMPTargetDirective *D) {
 }
 
 template <typename Derived>
+StmtResult TreeTransform<Derived>::TransformOMPTargetDataDirective(
+    OMPTargetDataDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_target_data, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template <typename Derived>
+StmtResult TreeTransform<Derived>::TransformOMPTargetUpdateDirective(
+    OMPTargetUpdateDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_target_update, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template <typename Derived>
 OMPClause *TreeTransform<Derived>::TransformOMPIfClause(OMPIfClause *C) {
   // Transform condition.
   ExprResult E = getDerived().TransformExpr(C->getCondition());
@@ -7248,6 +7288,38 @@ OMPClause *TreeTransform<Derived>::TransformOMPMapClause(OMPMapClause *C) {
   }
   return getDerived().RebuildOMPMapClause(
       Vars, C->getLocStart(), C->getLocEnd(), C->getKind(), C->getKindLoc());
+}
+
+template <typename Derived>
+OMPClause *TreeTransform<Derived>::TransformOMPToClause(OMPToClause *C) {
+  llvm::SmallVector<Expr *, 16> Vars;
+  Vars.reserve(C->varlist_size());
+  for (OMPToClause::varlist_iterator I = C->varlist_begin(),
+                                     E = C->varlist_end();
+       I != E; ++I) {
+    ExprResult EVar = getDerived().TransformExpr(cast<Expr>(*I));
+    if (EVar.isInvalid())
+      return 0;
+    Vars.push_back(EVar.take());
+  }
+  return getDerived().RebuildOMPToClause(Vars, C->getLocStart(),
+                                         C->getLocEnd());
+}
+
+template <typename Derived>
+OMPClause *TreeTransform<Derived>::TransformOMPFromClause(OMPFromClause *C) {
+  llvm::SmallVector<Expr *, 16> Vars;
+  Vars.reserve(C->varlist_size());
+  for (OMPFromClause::varlist_iterator I = C->varlist_begin(),
+                                       E = C->varlist_end();
+       I != E; ++I) {
+    ExprResult EVar = getDerived().TransformExpr(cast<Expr>(*I));
+    if (EVar.isInvalid())
+      return 0;
+    Vars.push_back(EVar.take());
+  }
+  return getDerived().RebuildOMPFromClause(Vars, C->getLocStart(),
+                                           C->getLocEnd());
 }
 
 template <typename Derived>
@@ -10917,7 +10989,7 @@ TreeTransform<Derived>::RebuildCXXPseudoDestructorExpr(Expr *Base,
                                             /*TemplateArgs*/ 0);
 }
 
-template<typename Derived>
+template <typename Derived>
 StmtResult
 TreeTransform<Derived>::TransformCapturedStmt(CapturedStmt *S) {
   SourceLocation Loc = S->getLocStart();

@@ -1876,6 +1876,8 @@ public:
   void VisitOMPCancellationPointDirective(
                        const OMPCancellationPointDirective *D);
   void VisitOMPTargetDirective(const OMPTargetDirective *D);
+  void VisitOMPTargetDataDirective(const OMPTargetDataDirective *D);
+  void VisitOMPTargetUpdateDirective(const OMPTargetUpdateDirective *D);
 
 private:
   void AddDeclarationNameInfo(const Stmt *S);
@@ -2035,6 +2037,14 @@ void OMPClauseEnqueue::VisitOMPDependClause(const OMPDependClause *C) {
 }
 
 void OMPClauseEnqueue::VisitOMPMapClause(const OMPMapClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPToClause(const OMPToClause *C) {
+  VisitOMPClauseList(C);
+}
+
+void OMPClauseEnqueue::VisitOMPFromClause(const OMPFromClause *C) {
   VisitOMPClauseList(C);
 }
 
@@ -2476,6 +2486,16 @@ void EnqueueVisitor::VisitOMPCancellationPointDirective(
 }
 
 void EnqueueVisitor::VisitOMPTargetDirective(const OMPTargetDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void
+EnqueueVisitor::VisitOMPTargetDataDirective(const OMPTargetDataDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void EnqueueVisitor::VisitOMPTargetUpdateDirective(
+    const OMPTargetUpdateDirective *D) {
   VisitOMPExecutableDirective(D);
 }
 
@@ -4110,6 +4130,10 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPCancellationPointDirective");
   case CXCursor_OMPTargetDirective:
     return cxstring::createRef("OMPTargetDirective");
+  case CXCursor_OMPTargetDataDirective:
+    return cxstring::createRef("OMPTargetDataDirective");
+  case CXCursor_OMPTargetUpdateDirective:
+    return cxstring::createRef("OMPTargetUpdateDirective");
   }
 
   llvm_unreachable("Unhandled CXCursorKind");

@@ -13,94 +13,100 @@
 //===----------------------------------------------------------------------===//
 
 #ifndef OPENMP_DIRECTIVE
-#  define OPENMP_DIRECTIVE(Name)
+#define OPENMP_DIRECTIVE(Name)
 #endif
 #ifndef OPENMP_DIRECTIVE_EXT
-#  define OPENMP_DIRECTIVE_EXT(Name, Str)
+#define OPENMP_DIRECTIVE_EXT(Name, Str)
 #endif
 #ifndef OPENMP_CLAUSE
-#  define OPENMP_CLAUSE(Name, Class)
+#define OPENMP_CLAUSE(Name, Class)
 #endif
 #ifndef OPENMP_PARALLEL_CLAUSE
-#  define OPENMP_PARALLEL_CLAUSE(Name)
+#define OPENMP_PARALLEL_CLAUSE(Name)
 #endif
 #ifndef OPENMP_TEAMS_CLAUSE
-#  define OPENMP_TEAMS_CLAUSE(Name)
+#define OPENMP_TEAMS_CLAUSE(Name)
 #endif
 #ifndef OPENMP_DISTRIBUTE_CLAUSE
-#  define OPENMP_DISTRIBUTE_CLAUSE(Name)
+#define OPENMP_DISTRIBUTE_CLAUSE(Name)
 #endif
 #ifndef OPENMP_FOR_CLAUSE
-#  define OPENMP_FOR_CLAUSE(Name)
+#define OPENMP_FOR_CLAUSE(Name)
 #endif
 #ifndef OPENMP_SIMD_CLAUSE
-#  define OPENMP_SIMD_CLAUSE(Name)
+#define OPENMP_SIMD_CLAUSE(Name)
 #endif
 #ifndef OPENMP_PARALLEL_FOR_SIMD_CLAUSE
-#  define OPENMP_PARALLEL_FOR_SIMD_CLAUSE(Name)
+#define OPENMP_PARALLEL_FOR_SIMD_CLAUSE(Name)
 #endif
 #ifndef OPENMP_FOR_SIMD_CLAUSE
-#  define OPENMP_FOR_SIMD_CLAUSE(Name)
+#define OPENMP_FOR_SIMD_CLAUSE(Name)
 #endif
 #ifndef OPENMP_DISTRIBUTE_SIMD_CLAUSE
-#  define OPENMP_DISTRIBUTE_SIMD_CLAUSE(Name)
+#define OPENMP_DISTRIBUTE_SIMD_CLAUSE(Name)
 #endif
 #ifndef OPENMP_DISTRIBUTE_PARALLEL_FOR_CLAUSE
-#  define OPENMP_DISTRIBUTE_PARALLEL_FOR_CLAUSE(Name)
+#define OPENMP_DISTRIBUTE_PARALLEL_FOR_CLAUSE(Name)
 #endif
 #ifndef OPENMP_DISTRIBUTE_PARALLEL_FOR_SIMD_CLAUSE
-#  define OPENMP_DISTRIBUTE_PARALLEL_FOR_SIMD_CLAUSE(Name)
+#define OPENMP_DISTRIBUTE_PARALLEL_FOR_SIMD_CLAUSE(Name)
 #endif
 #ifndef OPENMP_DECLARE_SIMD_CLAUSE
-#  define OPENMP_DECLARE_SIMD_CLAUSE(Name)
+#define OPENMP_DECLARE_SIMD_CLAUSE(Name)
 #endif
 #ifndef OPENMP_PARALLEL_FOR_CLAUSE
-#  define OPENMP_PARALLEL_FOR_CLAUSE(Name)
+#define OPENMP_PARALLEL_FOR_CLAUSE(Name)
 #endif
 #ifndef OPENMP_SECTIONS_CLAUSE
-#  define OPENMP_SECTIONS_CLAUSE(Name)
+#define OPENMP_SECTIONS_CLAUSE(Name)
 #endif
 #ifndef OPENMP_PARALLEL_SECTIONS_CLAUSE
-#  define OPENMP_PARALLEL_SECTIONS_CLAUSE(Name)
+#define OPENMP_PARALLEL_SECTIONS_CLAUSE(Name)
 #endif
 #ifndef OPENMP_SINGLE_CLAUSE
-#  define OPENMP_SINGLE_CLAUSE(Name)
+#define OPENMP_SINGLE_CLAUSE(Name)
 #endif
 #ifndef OPENMP_TASK_CLAUSE
-#  define OPENMP_TASK_CLAUSE(Name)
+#define OPENMP_TASK_CLAUSE(Name)
 #endif
 #ifndef OPENMP_ATOMIC_CLAUSE
-#  define OPENMP_ATOMIC_CLAUSE(Name)
+#define OPENMP_ATOMIC_CLAUSE(Name)
 #endif
 #ifndef OPENMP_FLUSH_CLAUSE
-#  define OPENMP_FLUSH_CLAUSE(Name)
+#define OPENMP_FLUSH_CLAUSE(Name)
 #endif
 #ifndef OPENMP_CANCEL_CLAUSE
-#  define OPENMP_CANCEL_CLAUSE(Name)
+#define OPENMP_CANCEL_CLAUSE(Name)
 #endif
 #ifndef OPENMP_TARGET_CLAUSE
-#  define OPENMP_TARGET_CLAUSE(Name)
+#define OPENMP_TARGET_CLAUSE(Name)
+#endif
+#ifndef OPENMP_TARGET_DATA_CLAUSE
+#define OPENMP_TARGET_DATA_CLAUSE(Name)
+#endif
+#ifndef OPENMP_TARGET_UPDATE_CLAUSE
+#define OPENMP_TARGET_UPDATE_CLAUSE(Name)
 #endif
 #ifndef OPENMP_DEFAULT_KIND
-#  define OPENMP_DEFAULT_KIND(Name)
+#define OPENMP_DEFAULT_KIND(Name)
 #endif
 #ifndef OPENMP_PROC_BIND_KIND
-#  define OPENMP_PROC_BIND_KIND(Name)
+#define OPENMP_PROC_BIND_KIND(Name)
 #endif
 #ifndef OPENMP_REDUCTION_OPERATOR
-#  define OPENMP_REDUCTION_OPERATOR(Name, Symbol)
+#define OPENMP_REDUCTION_OPERATOR(Name, Symbol)
 #endif
 #ifndef OPENMP_MAP_KIND
-#  define OPENMP_MAP_KIND(Name, Kind)
+#define OPENMP_MAP_KIND(Name, Kind)
 #endif
 #ifndef OPENMP_DEPENDENCE_TYPE
-#  define OPENMP_DEPENDENCE_TYPE(Name, Type)
+#define OPENMP_DEPENDENCE_TYPE(Name, Type)
 #endif
 #ifndef OPENMP_SCHEDULE_KIND
-#  define OPENMP_SCHEDULE_KIND(Name)
+#define OPENMP_SCHEDULE_KIND(Name)
 #endif
 #ifndef OPENMP_DIST_SCHEDULE_KIND
-#  define OPENMP_DIST_SCHEDULE_KIND(Name)
+#define OPENMP_DIST_SCHEDULE_KIND(Name)
 #endif
 
 // OpenMP directives.
@@ -126,6 +132,8 @@ OPENMP_DIRECTIVE(teams)
 OPENMP_DIRECTIVE(distribute)
 OPENMP_DIRECTIVE(cancel)
 OPENMP_DIRECTIVE(target)
+OPENMP_DIRECTIVE_EXT(target_data, "target data")
+OPENMP_DIRECTIVE_EXT(target_update, "target update")
 OPENMP_DIRECTIVE_EXT(parallel_for, "parallel for")
 OPENMP_DIRECTIVE_EXT(parallel_sections, "parallel sections")
 OPENMP_DIRECTIVE_EXT(declare_reduction, "declare reduction")
@@ -155,6 +163,8 @@ OPENMP_CLAUSE(reduction, OMPReductionClause)
 OPENMP_CLAUSE(lastprivate, OMPLastPrivateClause)
 OPENMP_CLAUSE(copyprivate, OMPCopyPrivateClause)
 OPENMP_CLAUSE(map, OMPMapClause)
+OPENMP_CLAUSE(to, OMPToClause)
+OPENMP_CLAUSE(from, OMPFromClause)
 OPENMP_CLAUSE(schedule, OMPScheduleClause)
 OPENMP_CLAUSE(dist_schedule, OMPDistScheduleClause)
 OPENMP_CLAUSE(collapse, OMPCollapseClause)
@@ -414,6 +424,17 @@ OPENMP_TARGET_CLAUSE(if)
 OPENMP_TARGET_CLAUSE(device)
 OPENMP_TARGET_CLAUSE(map)
 
+// Clauses allowed for OpenMP directive 'target data'.
+OPENMP_TARGET_DATA_CLAUSE(if)
+OPENMP_TARGET_DATA_CLAUSE(device)
+OPENMP_TARGET_DATA_CLAUSE(map)
+
+// Clauses allowed for OpenMP directive 'target update'.
+OPENMP_TARGET_UPDATE_CLAUSE(if)
+OPENMP_TARGET_UPDATE_CLAUSE(device)
+OPENMP_TARGET_UPDATE_CLAUSE(to)
+OPENMP_TARGET_UPDATE_CLAUSE(from)
+
 // Possible mapping types for 'map' clause.
 OPENMP_MAP_KIND(alloc, "alloc")
 OPENMP_MAP_KIND(to, "to")
@@ -421,6 +442,8 @@ OPENMP_MAP_KIND(from, "from")
 OPENMP_MAP_KIND(tofrom, "tofrom")
 
 #undef OPENMP_TARGET_CLAUSE
+#undef OPENMP_TARGET_UPDATE_CLAUSE
+#undef OPENMP_TARGET_DATA_CLAUSE
 #undef OPENMP_REDUCTION_OPERATOR
 #undef OPENMP_MAP_KIND
 #undef OPENMP_DEPENDENCE_TYPE

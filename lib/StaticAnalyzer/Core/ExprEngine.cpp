@@ -735,6 +735,8 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
     case Stmt::OMPCancelDirectiveClass:
     case Stmt::OMPCancellationPointDirectiveClass:
     case Stmt::OMPTargetDirectiveClass:
+    case Stmt::OMPTargetDataDirectiveClass:
+    case Stmt::OMPTargetUpdateDirectiveClass:
     case Stmt::CapturedStmtClass:
       llvm_unreachable("Stmt should not be in analyzer evaluation loop");
 
