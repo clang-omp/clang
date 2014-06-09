@@ -1823,8 +1823,11 @@ CodeGenFunction::EmitOMPDistributeDirective(const OMPDistributeDirective &S) {
   EmitOMPDirectiveWithLoop(OMPD_distribute, OMPD_distribute, S);
 }
 
-/// Generate an instructions for '#pragma omp teams' directive.
-void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
+/// Generate an instructions for directive with 'teams' region.
+void
+CodeGenFunction::EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
+                                           OpenMPDirectiveKind SKind,
+                                           const OMPExecutableDirective &S) {
   // Generate shared args for captured stmt.
   CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
   llvm::Value *Arg = GenerateCapturedStmtArgument(*CS);
@@ -1840,7 +1843,7 @@ void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I)
+    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
       EmitInitOMPClause(*(*I), S);
   llvm::Value *NumTeams = CGM.OpenMPSupport.getNumTeams();
   llvm::Value *ThreadLimit = CGM.OpenMPSupport.getThreadLimit();
@@ -1860,7 +1863,7 @@ void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I)
+    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
       EmitAfterInitOMPClause(*(*I), S);
 
   // Generate microtask.
@@ -1935,24 +1938,31 @@ void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I)
+      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
         CGF.EmitPreOMPClause(*(*I), S);
 
-    CGF.EmitStmt(CS->getCapturedStmt());
+    switch (DKind) {
+    case OMPD_target_teams:
+    case OMPD_teams:
+      CGF.EmitStmt(CS->getCapturedStmt());
+      break;
+    default:
+      break;
+    }
     CGF.EnsureInsertPoint();
 
     // CodeGen for clauses (call end).
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I)
+      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
         CGF.EmitPostOMPClause(*(*I), S);
 
     // CodeGen for clauses (closing steps).
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I)
+      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
         CGF.EmitCloseOMPClause(*(*I), S);
   }
 
@@ -1977,7 +1987,7 @@ void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I)
+    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
       EmitFinalOMPClause(*(*I), S);
 
   // Remove list of private globals from the stack.
@@ -4381,6 +4391,7 @@ void CodeGenFunction::EmitOMPConditionalIfHelper(
   //   __kmpc_EndCall();
   // }
   //
+  RunCleanupsScope ExecutedScope(*this);
   if (HasClauses) {
     // Pre-process private and firstprivate clauses
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
@@ -5281,6 +5292,8 @@ bool CodeGenFunction::CGPragmaOmpSimd::walkLocalVariablesToEmit(
     CGF->CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
   }
 
+  RunCleanupsScope ExecutedScope(*CGF);
+
   // Here we push index parameter into openmp map.
   // It is useful for loop counters calculation.
   const CapturedDecl *CD =
@@ -5460,6 +5473,11 @@ CodeGenFunction::CGPragmaOmpSimd::emitLinearFinal(CodeGenFunction &CGF) const {
   }
 }
 
+/// Generate an instructions for '#pragma omp teams' directive.
+void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
+  EmitOMPDirectiveWithTeams(OMPD_teams, OMPD_unknown, S);
+}
+
 // Generate the instructions for '#pragma omp simd' directive.
 void CodeGenFunction::EmitOMPSimdDirective(const OMPSimdDirective &S) {
   RunCleanupsScope ExecutedScope(*this);
@@ -5528,5 +5546,11 @@ void CodeGenFunction::EmitOMPTargetUpdateDirective(
     const OMPTargetUpdateDirective &S) {
   // TODO Need to implement proper codegen for target oriented directives.
   ;
+}
+
+// Generate the instructions for '#pragma omp target teams' directive.
+void
+CodeGenFunction::EmitOMPTargetTeamsDirective(const OMPTargetTeamsDirective &S) {
+  EmitOMPDirectiveWithTeams(OMPD_target_teams, OMPD_target, S);
 }
 

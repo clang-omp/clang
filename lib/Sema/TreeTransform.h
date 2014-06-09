@@ -7022,6 +7022,16 @@ StmtResult TreeTransform<Derived>::TransformOMPTargetUpdateDirective(
 }
 
 template <typename Derived>
+StmtResult TreeTransform<Derived>::TransformOMPTargetTeamsDirective(
+    OMPTargetTeamsDirective *D) {
+  DeclarationNameInfo DirName;
+  getDerived().getSema().StartOpenMPDSABlock(OMPD_target_teams, DirName, 0);
+  StmtResult Res = getDerived().TransformOMPExecutableDirective(D);
+  getDerived().getSema().EndOpenMPDSABlock(Res.get());
+  return Res;
+}
+
+template <typename Derived>
 OMPClause *TreeTransform<Derived>::TransformOMPIfClause(OMPIfClause *C) {
   // Transform condition.
   ExprResult E = getDerived().TransformExpr(C->getCondition());

@@ -2277,6 +2277,13 @@ void ASTStmtWriter::VisitOMPTeamsDirective(OMPTeamsDirective *D) {
   Code = serialization::STMT_OMP_TEAMS_DIRECTIVE;
 }
 
+void ASTStmtWriter::VisitOMPTargetTeamsDirective(OMPTargetTeamsDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  VisitOMPExecutableDirective(D);
+  Code = serialization::STMT_OMP_TARGET_TEAMS_DIRECTIVE;
+}
+
 void ASTStmtWriter::VisitOMPDistributeDirective(OMPDistributeDirective *D) {
   VisitStmt(D);
   Record.push_back(D->getNumClauses());

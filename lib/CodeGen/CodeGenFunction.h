@@ -2091,6 +2091,7 @@ public:
   void EmitOMPTargetDirective(const OMPTargetDirective &S);
   void EmitOMPTargetDataDirective(const OMPTargetDataDirective &S);
   void EmitOMPTargetUpdateDirective(const OMPTargetUpdateDirective &S);
+  void EmitOMPTargetTeamsDirective(const OMPTargetTeamsDirective &S);
   void EmitInitOMPClause(const OMPClause &C,
                          const OMPExecutableDirective &S);
   void EmitAfterInitOMPClause(const OMPClause &C,
@@ -2189,6 +2190,9 @@ public:
     OpenMPDirectiveKind DKind,
     OpenMPDirectiveKind SKind,
     const OMPExecutableDirective &S);
+  void EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
+                                 OpenMPDirectiveKind SKind,
+                                 const OMPExecutableDirective &S);
   void EmitOMPBarrier(SourceLocation L, unsigned Flags);
   void EmitOMPCancelBarrier(SourceLocation L, unsigned Flags,
                             bool IgnoreResult = false);

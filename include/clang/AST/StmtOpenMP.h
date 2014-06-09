@@ -2634,6 +2634,72 @@ public:
   }
 };
 
+/// \brief This represents '#pragma omp target teams' directive.
+///
+/// \code
+/// #pragma omp target teams device(0) if(a) map(b[:]) num_teams(10)
+/// \endcode
+/// In this example directive '#pragma omp target teams' has clauses 'device'
+/// with the value '0', 'if' with condition 'a', 'map' with array
+/// section 'b[:]' and 'num_teams' with number of teams '10'.
+///
+class OMPTargetTeamsDirective : public OMPExecutableDirective {
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTargetTeamsDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                          unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDirectiveClass, OMPD_target_teams, StartLoc, EndLoc,
+            N, reinterpret_cast<OMPClause **>(
+                   reinterpret_cast<char *>(this) +
+                   llvm::RoundUpToAlignment(sizeof(OMPTargetTeamsDirective),
+                                            llvm::alignOf<OMPClause *>())),
+            true, 1) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTargetTeamsDirective(unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDirectiveClass, OMPD_target_teams, SourceLocation(),
+            SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(sizeof(OMPTargetTeamsDirective),
+                                         llvm::alignOf<OMPClause *>())),
+            true, 1) {}
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTargetTeamsDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTargetTeamsDirective *CreateEmpty(const ASTContext &C, unsigned N,
+                                              EmptyShell);
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTargetTeamsDirectiveClass;
+  }
+};
+
 /// \brief This represents '#pragma omp target data' directive.
 ///
 /// \code

@@ -2385,6 +2385,30 @@ OMPTargetUpdateDirective::CreateEmpty(const ASTContext &C, unsigned N,
   return new (Mem) OMPTargetUpdateDirective(N);
 }
 
+OMPTargetTeamsDirective *OMPTargetTeamsDirective::Create(
+    const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+    ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt) {
+  void *Mem =
+      C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPTargetTeamsDirective),
+                                          llvm::alignOf<OMPClause *>()) +
+                 sizeof(OMPClause *) * Clauses.size() + sizeof(Stmt *));
+  OMPTargetTeamsDirective *Dir =
+      new (Mem) OMPTargetTeamsDirective(StartLoc, EndLoc, Clauses.size());
+  Dir->setClauses(Clauses);
+  Dir->setAssociatedStmt(AssociatedStmt);
+  return Dir;
+}
+
+OMPTargetTeamsDirective *
+OMPTargetTeamsDirective::CreateEmpty(const ASTContext &C, unsigned N,
+                                     EmptyShell) {
+  void *Mem =
+      C.Allocate(llvm::RoundUpToAlignment(sizeof(OMPTargetTeamsDirective),
+                                          llvm::alignOf<OMPClause *>()) +
+                 sizeof(OMPClause *) * N + sizeof(Stmt *));
+  return new (Mem) OMPTargetTeamsDirective(N);
+}
+
 CapturedStmt::CapturedStmt(Stmt *S, CapturedRegionKind Kind,
                            ArrayRef<Capture> Captures,
                            ArrayRef<Expr *> CaptureInits,

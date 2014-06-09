@@ -1871,6 +1871,7 @@ public:
   void VisitOMPFlushDirective(const OMPFlushDirective *D);
   void VisitOMPOrderedDirective(const OMPOrderedDirective *D);
   void VisitOMPTeamsDirective(const OMPTeamsDirective *D);
+  void VisitOMPTargetTeamsDirective(const OMPTargetTeamsDirective *D);
   void VisitOMPDistributeDirective(const OMPDistributeDirective *D);
   void VisitOMPCancelDirective(const OMPCancelDirective *D);
   void VisitOMPCancellationPointDirective(
@@ -2468,6 +2469,11 @@ void EnqueueVisitor::VisitOMPOrderedDirective(const OMPOrderedDirective *D) {
 }
 
 void EnqueueVisitor::VisitOMPTeamsDirective(const OMPTeamsDirective *D) {
+  VisitOMPExecutableDirective(D);
+}
+
+void
+EnqueueVisitor::VisitOMPTargetTeamsDirective(const OMPTargetTeamsDirective *D) {
   VisitOMPExecutableDirective(D);
 }
 
@@ -4122,6 +4128,8 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("OMPOrderedDirective");
   case CXCursor_OMPTeamsDirective:
     return cxstring::createRef("OMPTeamsDirective");
+  case CXCursor_OMPTargetTeamsDirective:
+    return cxstring::createRef("OMPTargetTeamsDirective");
   case CXCursor_OMPDistributeDirective:
     return cxstring::createRef("OMPDisitributeDirective");
   case CXCursor_OMPCancelDirective:

@@ -1144,6 +1144,12 @@ void StmtPrinter::VisitOMPTargetUpdateDirective(OMPTargetUpdateDirective *Node) 
   Indent() << "#pragma omp target update ";
   VisitOMPExecutableDirective(Node);
 }
+
+void StmtPrinter::VisitOMPTargetTeamsDirective(OMPTargetTeamsDirective *Node) {
+  Indent() << "#pragma omp target teams ";
+  VisitOMPExecutableDirective(Node);
+}
+
 //===----------------------------------------------------------------------===//
 //  Expr printing methods.
 //===----------------------------------------------------------------------===//

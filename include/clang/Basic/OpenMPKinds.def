@@ -87,6 +87,9 @@
 #ifndef OPENMP_TARGET_UPDATE_CLAUSE
 #define OPENMP_TARGET_UPDATE_CLAUSE(Name)
 #endif
+#ifndef OPENMP_TARGET_TEAMS_CLAUSE
+#define OPENMP_TARGET_TEAMS_CLAUSE(Name)
+#endif
 #ifndef OPENMP_DEFAULT_KIND
 #define OPENMP_DEFAULT_KIND(Name)
 #endif
@@ -147,6 +150,7 @@ OPENMP_DIRECTIVE_EXT(distribute_simd, "distribute simd")
 OPENMP_DIRECTIVE_EXT(distribute_parallel_for, "distribute parallel for")
 OPENMP_DIRECTIVE_EXT(distribute_parallel_for_simd,
                      "distribute parallel for simd")
+OPENMP_DIRECTIVE_EXT(target_teams, "target teams")
 
 // OpenMP clauses.
 OPENMP_CLAUSE(if, OMPIfClause)
@@ -441,8 +445,21 @@ OPENMP_MAP_KIND(to, "to")
 OPENMP_MAP_KIND(from, "from")
 OPENMP_MAP_KIND(tofrom, "tofrom")
 
+// Clauses allowed for OpenMP directive 'target teams'.
+OPENMP_TARGET_TEAMS_CLAUSE(if)
+OPENMP_TARGET_TEAMS_CLAUSE(device)
+OPENMP_TARGET_TEAMS_CLAUSE(map)
+OPENMP_TARGET_TEAMS_CLAUSE(num_teams)
+OPENMP_TARGET_TEAMS_CLAUSE(thread_limit)
+OPENMP_TARGET_TEAMS_CLAUSE(default)
+OPENMP_TARGET_TEAMS_CLAUSE(private)
+OPENMP_TARGET_TEAMS_CLAUSE(firstprivate)
+OPENMP_TARGET_TEAMS_CLAUSE(shared)
+OPENMP_TARGET_TEAMS_CLAUSE(reduction)
+
 #undef OPENMP_TARGET_CLAUSE
 #undef OPENMP_TARGET_UPDATE_CLAUSE
+#undef OPENMP_TARGET_TEAMS_CLAUSE
 #undef OPENMP_TARGET_DATA_CLAUSE
 #undef OPENMP_REDUCTION_OPERATOR
 #undef OPENMP_MAP_KIND

@@ -2098,6 +2098,7 @@ enum CXCursorKind {
   CXCursor_OMPTargetDirective            = 259,
   CXCursor_OMPTargetDataDirective        = 260,
   CXCursor_OMPTargetUpdateDirective      = 261,
+  CXCursor_OMPTargetTeamsDirective       = 262,
 
   CXCursor_LastStmt                      = CXCursor_OMPTargetDirective,
 

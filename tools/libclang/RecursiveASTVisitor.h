@@ -2440,6 +2440,10 @@ DEF_TRAVERSE_STMT(OMPTeamsDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 
+DEF_TRAVERSE_STMT(OMPTargetTeamsDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
 DEF_TRAVERSE_STMT(OMPDistributeDirective, {
   return TraverseOMPExecutableDirective(S);
 })

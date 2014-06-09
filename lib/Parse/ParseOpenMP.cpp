@@ -131,6 +131,9 @@ OpenMPDirectiveKind Parser::ParseOpenMPDirective() {
       } else if (Spelling == "update") {
         DKind = OMPD_target_update;
         ConsumeAnyToken();
+      } else if (Spelling == "teams") {
+        DKind = OMPD_target_teams;
+        ConsumeAnyToken();
       }
     }
     break;
@@ -654,7 +657,8 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
   case OMPD_atomic:
   case OMPD_ordered:
   case OMPD_target:
-  case OMPD_target_data: {
+  case OMPD_target_data: 
+  case OMPD_target_teams: {
     // Do not read token if the end of directive or flush directive.
     if (Tok.isNot(tok::annot_pragma_openmp_end))
       ConsumeAnyToken();
