@@ -5518,6 +5518,7 @@ void CodeGenFunction::EmitOMPTargetDirective(const OMPTargetDirective &S) {
 // Generate the instructions for '#pragma omp target data' directive.
 void
 CodeGenFunction::EmitOMPTargetDataDirective(const OMPTargetDataDirective &S) {
+  // TODO Need to implement proper codegen for target oriented directives.
   CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
   EmitStmt(CS->getCapturedStmt());
 }
@@ -5525,6 +5526,7 @@ CodeGenFunction::EmitOMPTargetDataDirective(const OMPTargetDataDirective &S) {
 // Generate the instructions for '#pragma omp target update' directive.
 void CodeGenFunction::EmitOMPTargetUpdateDirective(
     const OMPTargetUpdateDirective &S) {
+  // TODO Need to implement proper codegen for target oriented directives.
   ;
 }
 

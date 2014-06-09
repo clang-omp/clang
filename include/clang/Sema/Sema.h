@@ -7418,8 +7418,7 @@ public:
                                             Stmt *AStmt,
                                             SourceLocation StartLoc,
                                             SourceLocation EndLoc);
-  /// \brief Called on well-formed '\#pragma omp target update' after parsing
-  /// of the  associated statement.
+  /// \brief Called on well-formed '\#pragma omp target update' after parsing.
   StmtResult ActOnOpenMPTargetUpdateDirective(ArrayRef<OMPClause *> Clauses,
                                               SourceLocation StartLoc,
                                               SourceLocation EndLoc);
