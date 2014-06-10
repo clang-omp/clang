@@ -2082,6 +2082,14 @@ public:
       const OMPDistributeParallelForDirective &S);
   void EmitOMPDistributeParallelForSimdDirective(
       const OMPDistributeParallelForSimdDirective &S);
+  void EmitOMPTeamsDistributeParallelForDirective(
+      const OMPTeamsDistributeParallelForDirective &S);
+  void EmitOMPTeamsDistributeParallelForSimdDirective(
+      const OMPTeamsDistributeParallelForSimdDirective &S);
+  void EmitOMPTargetTeamsDistributeParallelForDirective(
+      const OMPTargetTeamsDistributeParallelForDirective &S);
+  void EmitOMPTargetTeamsDistributeParallelForSimdDirective(
+      const OMPTargetTeamsDistributeParallelForSimdDirective &S);
   void EmitOMPTaskDirective(const OMPTaskDirective &S);
   void EmitOMPSectionsDirective(const OMPSectionsDirective &S);
   void EmitOMPParallelSectionsDirective(const OMPParallelSectionsDirective &S);
@@ -2092,6 +2100,13 @@ public:
   void EmitOMPTargetDataDirective(const OMPTargetDataDirective &S);
   void EmitOMPTargetUpdateDirective(const OMPTargetUpdateDirective &S);
   void EmitOMPTargetTeamsDirective(const OMPTargetTeamsDirective &S);
+  void EmitOMPTeamsDistributeDirective(const OMPTeamsDistributeDirective &S);
+  void
+  EmitOMPTeamsDistributeSimdDirective(const OMPTeamsDistributeSimdDirective &S);
+  void EmitOMPTargetTeamsDistributeDirective(
+      const OMPTargetTeamsDistributeDirective &S);
+  void EmitOMPTargetTeamsDistributeSimdDirective(
+      const OMPTargetTeamsDistributeSimdDirective &S);
   void EmitInitOMPClause(const OMPClause &C,
                          const OMPExecutableDirective &S);
   void EmitAfterInitOMPClause(const OMPClause &C,
@@ -2188,10 +2203,10 @@ public:
     const OMPExecutableDirective &S);
   void EmitOMPDirectiveWithParallel(
     OpenMPDirectiveKind DKind,
-    OpenMPDirectiveKind SKind,
+    ArrayRef<OpenMPDirectiveKind> SKinds,
     const OMPExecutableDirective &S);
   void EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
-                                 OpenMPDirectiveKind SKind,
+                                 ArrayRef<OpenMPDirectiveKind> SKinds,
                                  const OMPExecutableDirective &S);
   void EmitOMPBarrier(SourceLocation L, unsigned Flags);
   void EmitOMPCancelBarrier(SourceLocation L, unsigned Flags,

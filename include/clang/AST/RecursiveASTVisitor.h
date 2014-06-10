@@ -2415,6 +2415,22 @@ DEF_TRAVERSE_STMT(OMPDistributeParallelForSimdDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 
+DEF_TRAVERSE_STMT(OMPTeamsDistributeDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTeamsDistributeSimdDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTargetTeamsDistributeDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTargetTeamsDistributeSimdDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
 DEF_TRAVERSE_STMT(OMPSectionsDirective, {
   return TraverseOMPExecutableDirective(S);
 })
@@ -2493,6 +2509,22 @@ DEF_TRAVERSE_STMT(OMPTargetUpdateDirective, {
 })
 
 DEF_TRAVERSE_STMT(OMPTargetTeamsDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTeamsDistributeParallelForDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTeamsDistributeParallelForSimdDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTargetTeamsDistributeParallelForDirective, {
+  return TraverseOMPExecutableDirective(S);
+})
+
+DEF_TRAVERSE_STMT(OMPTargetTeamsDistributeParallelForSimdDirective, {
   return TraverseOMPExecutableDirective(S);
 })
 

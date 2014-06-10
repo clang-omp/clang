@@ -134,6 +134,88 @@ OpenMPDirectiveKind Parser::ParseOpenMPDirective() {
       } else if (Spelling == "teams") {
         DKind = OMPD_target_teams;
         ConsumeAnyToken();
+        Token SavedToken = PP.LookAhead(0);
+        if (!SavedToken.isAnnotation()) {
+          OpenMPDirectiveKind SDKind =
+              getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+          if (SDKind == OMPD_distribute) {
+            DKind = OMPD_target_teams_distribute;
+            ConsumeAnyToken();
+            Token SavedToken = PP.LookAhead(0);
+            if (!SavedToken.isAnnotation()) {
+              OpenMPDirectiveKind SDKind =
+                  getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+              if (SDKind == OMPD_simd) {
+                DKind = OMPD_target_teams_distribute_simd;
+                ConsumeAnyToken();
+              } else if (SDKind == OMPD_parallel) {
+                SavedToken = PP.LookAhead(1);
+                if (!SavedToken.isAnnotation()) {
+                  OpenMPDirectiveKind SDKind =
+                      getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+                  if (SDKind == OMPD_for) {
+                    DKind = OMPD_target_teams_distribute_parallel_for;
+                    ConsumeAnyToken();
+                    ConsumeAnyToken();
+                    SavedToken = PP.LookAhead(0);
+                    if (!SavedToken.isAnnotation()) {
+                      OpenMPDirectiveKind SDKind =
+                          getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+                      if (SDKind == OMPD_simd) {
+                        DKind = OMPD_target_teams_distribute_parallel_for_simd;
+                        ConsumeAnyToken();
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    break;
+  }
+  case OMPD_teams: {
+    // This is to get correct directive name in the error message below.
+    // This whole switch actually should be extracted into a helper routine
+    // and reused in ParseOpenMPDeclarativeOrExecutableDirective below.
+    Token SavedToken = PP.LookAhead(0);
+    if (!SavedToken.isAnnotation()) {
+      OpenMPDirectiveKind SDKind =
+          getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+      if (SDKind == OMPD_distribute) {
+        DKind = OMPD_teams_distribute;
+        ConsumeAnyToken();
+        Token SavedToken = PP.LookAhead(0);
+        if (!SavedToken.isAnnotation()) {
+          OpenMPDirectiveKind SDKind =
+              getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+          if (SDKind == OMPD_simd) {
+            DKind = OMPD_teams_distribute_simd;
+            ConsumeAnyToken();
+          } else if (SDKind == OMPD_parallel) {
+            SavedToken = PP.LookAhead(1);
+            if (!SavedToken.isAnnotation()) {
+              OpenMPDirectiveKind SDKind =
+                  getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+              if (SDKind == OMPD_for) {
+                DKind = OMPD_teams_distribute_parallel_for;
+                ConsumeAnyToken();
+                ConsumeAnyToken();
+                SavedToken = PP.LookAhead(0);
+                if (!SavedToken.isAnnotation()) {
+                  OpenMPDirectiveKind SDKind =
+                      getOpenMPDirectiveKind(PP.getSpelling(SavedToken));
+                  if (SDKind == OMPD_simd) {
+                    DKind = OMPD_teams_distribute_parallel_for_simd;
+                    ConsumeAnyToken();
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
     break;
@@ -504,6 +586,18 @@ void Parser::LateParsedOpenMPDeclaration::ParseLexedMethodDeclarations() {
 ///         annot_pragma_openmp 'distribute parallel for simd' {clause}
 /// annot_pragma_openmp_end
 ///
+///       teams-distribute-parallel-for-directive:
+///         annot_pragma_openmp 'teams distribute parallel for' {clause} annot_pragma_openmp_end
+///
+///       teams-distribute-parallel-for-simd-directive:
+///         annot_pragma_openmp 'teams distribute parallel for simd' {clause} annot_pragma_openmp_end
+///
+///       target-teams-distribute-parallel-for-directive:
+///         annot_pragma_openmp 'target teams distribute parallel for' {clause} annot_pragma_openmp_end
+///
+///       target-teams-distribute-parallel-for-simd-directive:
+///         annot_pragma_openmp 'target teams distribute parallel for simd' {clause} annot_pragma_openmp_end
+///
 ///       sections-directive:
 ///         annot_pragma_openmp 'sections' {clause} annot_pragma_openmp_end
 ///
@@ -545,6 +639,22 @@ void Parser::LateParsedOpenMPDeclaration::ParseLexedMethodDeclarations() {
 ///
 ///       ordered-directive:
 ///         annot_pragma_openmp 'ordered' annot_pragma_openmp_end
+///
+///       teams-distribute-directive:
+///         annot_pragma_openmp 'teams distribute ' {clause}
+///         annot_pragma_openmp_end
+///
+///       teams-distribute-simd-directive:
+///         annot_pragma_openmp 'teams distribute simd' {clause}
+///         annot_pragma_openmp_end
+///
+///       target-teams-distribute-directive:
+///         annot_pragma_openmp 'target teams distribute ' {clause}
+///         annot_pragma_openmp_end
+///
+///       target-teams-distribute-simd-directive:
+///         annot_pragma_openmp 'target teams distribute simd' {clause}
+///         annot_pragma_openmp_end
 ///
 StmtResult
 Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
@@ -648,6 +758,10 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
   case OMPD_distribute_simd:
   case OMPD_distribute_parallel_for:
   case OMPD_distribute_parallel_for_simd:
+  case OMPD_teams_distribute_parallel_for:
+  case OMPD_teams_distribute_parallel_for_simd:
+  case OMPD_target_teams_distribute_parallel_for:
+  case OMPD_target_teams_distribute_parallel_for_simd:
   case OMPD_sections:
   case OMPD_section:
   case OMPD_single:
@@ -657,8 +771,12 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
   case OMPD_atomic:
   case OMPD_ordered:
   case OMPD_target:
-  case OMPD_target_data: 
-  case OMPD_target_teams: {
+  case OMPD_target_data:
+  case OMPD_target_teams:
+  case OMPD_teams_distribute:
+  case OMPD_teams_distribute_simd:
+  case OMPD_target_teams_distribute:
+  case OMPD_target_teams_distribute_simd: {
     // Do not read token if the end of directive or flush directive.
     if (Tok.isNot(tok::annot_pragma_openmp_end))
       ConsumeAnyToken();
@@ -696,7 +814,11 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
       int NumArgs = (DKind == OMPD_simd || DKind == OMPD_for_simd ||
                      DKind == OMPD_parallel_for_simd ||
                      DKind == OMPD_distribute_parallel_for_simd ||
-                     DKind == OMPD_distribute_simd)
+                     DKind == OMPD_teams_distribute_parallel_for_simd ||
+                     DKind == OMPD_target_teams_distribute_parallel_for_simd ||
+                     DKind == OMPD_distribute_simd ||
+                     DKind == OMPD_teams_distribute_simd ||
+                     DKind == OMPD_target_teams_distribute_simd)
                         ? 3
                         : 1;
       Actions.ActOnCapturedRegionStart(Loc, getCurScope(), CR_OpenMP, NumArgs);

@@ -7093,7 +7093,7 @@ private:
   /// \brief A helper to add two simd-specific arguments into captured stmt.
   CapturedStmt *AddSimdArgsIntoCapturedStmt(CapturedStmt *Cap, Expr *NewVar);
 
-  /// \brief A helper to add two distributeparallel-specific arguments into
+  /// \brief A helper to add two distribute parallel-specific arguments into
   /// captured stmt.
   Stmt *AddDistributedParallelArgsIntoCapturedStmt(CapturedStmt *Cap,
                                                    Expr *NewVar,
@@ -7304,15 +7304,33 @@ public:
                                                 SourceLocation StartLoc,
                                                 SourceLocation EndLoc);
   /// \brief Called on well-formed '\#pragma omp distribute parallel for' after
-  /// parsing
-  /// of the associated statement.
+  /// parsing of the associated statement.
   StmtResult ActOnOpenMPDistributeParallelForDirective(
       OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
       SourceLocation StartLoc, SourceLocation EndLoc);
   /// \brief Called on well-formed '\#pragma omp distribute parallel for simd'
-  /// after parsing
-  /// of the associated statement.
+  /// after parsing of the associated statement.
   StmtResult ActOnOpenMPDistributeParallelForSimdDirective(
+      OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+      SourceLocation StartLoc, SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp teams distribute parallel for'
+  /// after parsing of the associated statement.
+  StmtResult ActOnOpenMPTeamsDistributeParallelForDirective(
+      OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+      SourceLocation StartLoc, SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp teams distribute parallel for
+  /// simd' after parsing of the associated statement.
+  StmtResult ActOnOpenMPTeamsDistributeParallelForSimdDirective(
+      OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+      SourceLocation StartLoc, SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp target teams distribute
+  /// parallel for' after parsing of the associated statement.
+  StmtResult ActOnOpenMPTargetTeamsDistributeParallelForDirective(
+      OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+      SourceLocation StartLoc, SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp target teams distribute
+  /// parallel for simd' after parsing of the associated statement.
+  StmtResult ActOnOpenMPTargetTeamsDistributeParallelForSimdDirective(
       OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
       SourceLocation StartLoc, SourceLocation EndLoc);
 
@@ -7428,6 +7446,27 @@ public:
                                              Stmt *AStmt,
                                              SourceLocation StartLoc,
                                              SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp teams distribute' after parsing
+  /// of the associated statement.
+  StmtResult ActOnOpenMPTeamsDistributeDirective(ArrayRef<OMPClause *> Clauses,
+                                                 Stmt *AStmt,
+                                                 SourceLocation StartLoc,
+                                                 SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp teams distribute simd' after
+  /// parsing of the associated statement.
+  StmtResult ActOnOpenMPTeamsDistributeSimdDirective(
+      OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+      SourceLocation StartLoc, SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp target teams distribute' after
+  /// parsing of the associated statement.
+  StmtResult ActOnOpenMPTargetTeamsDistributeDirective(
+      ArrayRef<OMPClause *> Clauses, Stmt *AStmt, SourceLocation StartLoc,
+      SourceLocation EndLoc);
+  /// \brief Called on well-formed '\#pragma omp target teams distribute simd'
+  /// after parsing of the associated statement.
+  StmtResult ActOnOpenMPTargetTeamsDistributeSimdDirective(
+      OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+      SourceLocation StartLoc, SourceLocation EndLoc);
 
   OMPClause *ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind, Expr *Expr,
                                          SourceLocation StartLoc,

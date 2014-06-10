@@ -199,6 +199,22 @@ void CodeGenFunction::EmitStmt(const Stmt *S) {
       EmitOMPDistributeParallelForSimdDirective(
           cast<OMPDistributeParallelForSimdDirective>(*S));
       break;
+    case Stmt::OMPTeamsDistributeParallelForDirectiveClass:
+      EmitOMPTeamsDistributeParallelForDirective(
+          cast<OMPTeamsDistributeParallelForDirective>(*S));
+      break;
+    case Stmt::OMPTeamsDistributeParallelForSimdDirectiveClass:
+      EmitOMPTeamsDistributeParallelForSimdDirective(
+          cast<OMPTeamsDistributeParallelForSimdDirective>(*S));
+      break;
+    case Stmt::OMPTargetTeamsDistributeParallelForDirectiveClass:
+      EmitOMPTargetTeamsDistributeParallelForDirective(
+          cast<OMPTargetTeamsDistributeParallelForDirective>(*S));
+      break;
+    case Stmt::OMPTargetTeamsDistributeParallelForSimdDirectiveClass:
+      EmitOMPTargetTeamsDistributeParallelForSimdDirective(
+          cast<OMPTargetTeamsDistributeParallelForSimdDirective>(*S));
+      break;
     case Stmt::OMPTaskDirectiveClass:
       EmitOMPTaskDirective(cast<OMPTaskDirective>(*S));
       break;
@@ -241,6 +257,21 @@ void CodeGenFunction::EmitStmt(const Stmt *S) {
     break;
   case Stmt::OMPTargetTeamsDirectiveClass:
     EmitOMPTargetTeamsDirective(cast<OMPTargetTeamsDirective>(*S));
+    break;
+  case Stmt::OMPTeamsDistributeDirectiveClass:
+    EmitOMPTeamsDistributeDirective(cast<OMPTeamsDistributeDirective>(*S));
+    break;
+  case Stmt::OMPTeamsDistributeSimdDirectiveClass:
+    EmitOMPTeamsDistributeSimdDirective(
+        cast<OMPTeamsDistributeSimdDirective>(*S));
+    break;
+  case Stmt::OMPTargetTeamsDistributeDirectiveClass:
+    EmitOMPTargetTeamsDistributeDirective(
+        cast<OMPTargetTeamsDistributeDirective>(*S));
+    break;
+  case Stmt::OMPTargetTeamsDistributeSimdDirectiveClass:
+    EmitOMPTargetTeamsDistributeSimdDirective(
+        cast<OMPTargetTeamsDistributeSimdDirective>(*S));
     break;
   case Stmt::ObjCAtTryStmtClass:
     EmitObjCAtTryStmt(cast<ObjCAtTryStmt>(*S));

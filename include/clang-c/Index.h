@@ -2099,6 +2099,14 @@ enum CXCursorKind {
   CXCursor_OMPTargetDataDirective        = 260,
   CXCursor_OMPTargetUpdateDirective      = 261,
   CXCursor_OMPTargetTeamsDirective       = 262,
+  CXCursor_OMPTeamsDistributeDirective   = 263,
+  CXCursor_OMPTeamsDistributeSimdDirective = 264,
+  CXCursor_OMPTargetTeamsDistributeDirective = 265,
+  CXCursor_OMPTargetTeamsDistributeSimdDirective = 266,
+  CXCursor_OMPTeamsDistributeParallelForDirective = 267,
+  CXCursor_OMPTeamsDistributeParallelForSimdDirective = 268,
+  CXCursor_OMPTargetTeamsDistributeParallelForDirective = 269,
+  CXCursor_OMPTargetTeamsDistributeParallelForSimdDirective = 270,
 
   CXCursor_LastStmt                      = CXCursor_OMPTargetDirective,
 

@@ -536,6 +536,18 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
   case Stmt::OMPDistributeParallelForSimdDirectiveClass:
     K = CXCursor_OMPDistributeParallelForSimdDirective;
     break;
+  case Stmt::OMPTeamsDistributeParallelForDirectiveClass:
+    K = CXCursor_OMPTeamsDistributeParallelForDirective;
+    break;
+  case Stmt::OMPTeamsDistributeParallelForSimdDirectiveClass:
+    K = CXCursor_OMPTeamsDistributeParallelForSimdDirective;
+    break;
+  case Stmt::OMPTargetTeamsDistributeParallelForDirectiveClass:
+    K = CXCursor_OMPTargetTeamsDistributeParallelForDirective;
+    break;
+  case Stmt::OMPTargetTeamsDistributeParallelForSimdDirectiveClass:
+    K = CXCursor_OMPTargetTeamsDistributeParallelForSimdDirective;
+    break;
   case Stmt::OMPSectionsDirectiveClass:
     K = CXCursor_OMPSectionsDirective;
     break;
@@ -601,6 +613,18 @@ CXCursor cxcursor::MakeCXCursor(const Stmt *S, const Decl *Parent,
     break;
   case Stmt::OMPCancellationPointDirectiveClass:
     K = CXCursor_OMPCancellationPointDirective;
+    break;
+  case Stmt::OMPTeamsDistributeDirectiveClass:
+    K = CXCursor_OMPTeamsDistributeDirective;
+    break;
+  case Stmt::OMPTeamsDistributeSimdDirectiveClass:
+    K = CXCursor_OMPTeamsDistributeSimdDirective;
+    break;
+  case Stmt::OMPTargetTeamsDistributeDirectiveClass:
+    K = CXCursor_OMPTargetTeamsDistributeDirective;
+    break;
+  case Stmt::OMPTargetTeamsDistributeSimdDirectiveClass:
+    K = CXCursor_OMPTargetTeamsDistributeSimdDirective;
     break;
   }
   

@@ -2101,7 +2101,8 @@ void ASTStmtWriter::VisitOMPForSimdDirective(OMPForSimdDirective *D) {
   Code = serialization::STMT_OMP_FOR_SIMD_DIRECTIVE;
 }
 
-void ASTStmtWriter::VisitOMPParallelForSimdDirective(OMPParallelForSimdDirective *D) {
+void ASTStmtWriter::VisitOMPParallelForSimdDirective(
+    OMPParallelForSimdDirective *D) {
   VisitStmt(D);
   Record.push_back(D->getNumClauses());
   Record.push_back(D->getCollapsedNumber());
@@ -2116,7 +2117,8 @@ void ASTStmtWriter::VisitOMPParallelForSimdDirective(OMPParallelForSimdDirective
   Code = serialization::STMT_OMP_PARALLEL_FOR_SIMD_DIRECTIVE;
 }
 
-void ASTStmtWriter::VisitOMPDistributeSimdDirective(OMPDistributeSimdDirective *D) {
+void
+ASTStmtWriter::VisitOMPDistributeSimdDirective(OMPDistributeSimdDirective *D) {
   VisitStmt(D);
   Record.push_back(D->getNumClauses());
   Record.push_back(D->getCollapsedNumber());
@@ -2131,7 +2133,8 @@ void ASTStmtWriter::VisitOMPDistributeSimdDirective(OMPDistributeSimdDirective *
   Code = serialization::STMT_OMP_DISTRIBUTE_SIMD_DIRECTIVE;
 }
 
-void ASTStmtWriter::VisitOMPDistributeParallelForDirective(OMPDistributeParallelForDirective *D) {
+void ASTStmtWriter::VisitOMPDistributeParallelForDirective(
+    OMPDistributeParallelForDirective *D) {
   VisitStmt(D);
   Record.push_back(D->getNumClauses());
   Record.push_back(D->getCollapsedNumber());
@@ -2148,7 +2151,8 @@ void ASTStmtWriter::VisitOMPDistributeParallelForDirective(OMPDistributeParallel
   Code = serialization::STMT_OMP_DISTRIBUTE_PARALLEL_FOR_DIRECTIVE;
 }
 
-void ASTStmtWriter::VisitOMPDistributeParallelForSimdDirective(OMPDistributeParallelForSimdDirective *D) {
+void ASTStmtWriter::VisitOMPDistributeParallelForSimdDirective(
+    OMPDistributeParallelForSimdDirective *D) {
   VisitStmt(D);
   Record.push_back(D->getNumClauses());
   Record.push_back(D->getCollapsedNumber());
@@ -2165,6 +2169,79 @@ void ASTStmtWriter::VisitOMPDistributeParallelForSimdDirective(OMPDistributePara
   Code = serialization::STMT_OMP_DISTRIBUTE_PARALLEL_FOR_SIMD_DIRECTIVE;
 }
 
+void ASTStmtWriter::VisitOMPTeamsDistributeParallelForDirective(
+    OMPTeamsDistributeParallelForDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  Record.push_back(D->getCollapsedNumber());
+  VisitOMPExecutableDirective(D);
+  Writer.AddStmt(D->getNewIterVar());
+  Writer.AddStmt(D->getNewIterEnd());
+  Writer.AddStmt(D->getInit());
+  Writer.AddStmt(D->getFinal());
+  Writer.AddStmt(D->getLowerBound());
+  Writer.AddStmt(D->getUpperBound());
+  for (unsigned i = 0, N = D->getCollapsedNumber(); i < N; ++i) {
+    Writer.AddStmt(D->getCounters()[i]);
+  }
+  Code = serialization::STMT_OMP_TEAMS_DISTRIBUTE_PARALLEL_FOR_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTeamsDistributeParallelForSimdDirective(
+    OMPTeamsDistributeParallelForSimdDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  Record.push_back(D->getCollapsedNumber());
+  VisitOMPExecutableDirective(D);
+  Writer.AddStmt(D->getNewIterVar());
+  Writer.AddStmt(D->getNewIterEnd());
+  Writer.AddStmt(D->getInit());
+  Writer.AddStmt(D->getFinal());
+  Writer.AddStmt(D->getLowerBound());
+  Writer.AddStmt(D->getUpperBound());
+  for (unsigned i = 0, N = D->getCollapsedNumber(); i < N; ++i) {
+    Writer.AddStmt(D->getCounters()[i]);
+  }
+  Code = serialization::STMT_OMP_TEAMS_DISTRIBUTE_PARALLEL_FOR_SIMD_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTargetTeamsDistributeParallelForDirective(
+    OMPTargetTeamsDistributeParallelForDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  Record.push_back(D->getCollapsedNumber());
+  VisitOMPExecutableDirective(D);
+  Writer.AddStmt(D->getNewIterVar());
+  Writer.AddStmt(D->getNewIterEnd());
+  Writer.AddStmt(D->getInit());
+  Writer.AddStmt(D->getFinal());
+  Writer.AddStmt(D->getLowerBound());
+  Writer.AddStmt(D->getUpperBound());
+  for (unsigned i = 0, N = D->getCollapsedNumber(); i < N; ++i) {
+    Writer.AddStmt(D->getCounters()[i]);
+  }
+  Code = serialization::STMT_OMP_TARGET_TEAMS_DISTRIBUTE_PARALLEL_FOR_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTargetTeamsDistributeParallelForSimdDirective(
+    OMPTargetTeamsDistributeParallelForSimdDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  Record.push_back(D->getCollapsedNumber());
+  VisitOMPExecutableDirective(D);
+  Writer.AddStmt(D->getNewIterVar());
+  Writer.AddStmt(D->getNewIterEnd());
+  Writer.AddStmt(D->getInit());
+  Writer.AddStmt(D->getFinal());
+  Writer.AddStmt(D->getLowerBound());
+  Writer.AddStmt(D->getUpperBound());
+  for (unsigned i = 0, N = D->getCollapsedNumber(); i < N; ++i) {
+    Writer.AddStmt(D->getCounters()[i]);
+  }
+  Code = serialization::
+      STMT_OMP_TARGET_TEAMS_DISTRIBUTE_PARALLEL_FOR_SIMD_DIRECTIVE;
+}
+
 void ASTStmtWriter::VisitOMPSectionsDirective(OMPSectionsDirective *D) {
   VisitStmt(D);
   Record.push_back(D->getNumClauses());
@@ -2172,7 +2249,8 @@ void ASTStmtWriter::VisitOMPSectionsDirective(OMPSectionsDirective *D) {
   Code = serialization::STMT_OMP_SECTIONS_DIRECTIVE;
 }
 
-void ASTStmtWriter::VisitOMPParallelSectionsDirective(OMPParallelSectionsDirective *D) {
+void ASTStmtWriter::VisitOMPParallelSectionsDirective(
+    OMPParallelSectionsDirective *D) {
   VisitStmt(D);
   Record.push_back(D->getNumClauses());
   VisitOMPExecutableDirective(D);
@@ -2333,6 +2411,68 @@ void ASTStmtWriter::VisitOMPTargetUpdateDirective(OMPTargetUpdateDirective *D) {
   Record.push_back(D->getNumClauses());
   VisitOMPExecutableDirective(D);
   Code = serialization::STMT_OMP_TARGET_UPDATE_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTeamsDistributeDirective(
+    OMPTeamsDistributeDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  Record.push_back(D->getCollapsedNumber());
+  VisitOMPExecutableDirective(D);
+  Writer.AddStmt(D->getNewIterVar());
+  Writer.AddStmt(D->getNewIterEnd());
+  Writer.AddStmt(D->getInit());
+  for (unsigned i = 0, N = D->getCollapsedNumber(); i < N; ++i) {
+    Writer.AddStmt(D->getCounters()[i]);
+  }
+  Code = serialization::STMT_OMP_TEAMS_DISTRIBUTE_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTeamsDistributeSimdDirective(
+    OMPTeamsDistributeSimdDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  Record.push_back(D->getCollapsedNumber());
+  VisitOMPExecutableDirective(D);
+  Writer.AddStmt(D->getNewIterVar());
+  Writer.AddStmt(D->getNewIterEnd());
+  Writer.AddStmt(D->getInit());
+  Writer.AddStmt(D->getFinal());
+  for (unsigned i = 0, N = D->getCollapsedNumber(); i < N; ++i) {
+    Writer.AddStmt(D->getCounters()[i]);
+  }
+  Code = serialization::STMT_OMP_TEAMS_DISTRIBUTE_SIMD_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTargetTeamsDistributeDirective(
+    OMPTargetTeamsDistributeDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  Record.push_back(D->getCollapsedNumber());
+  VisitOMPExecutableDirective(D);
+  Writer.AddStmt(D->getNewIterVar());
+  Writer.AddStmt(D->getNewIterEnd());
+  Writer.AddStmt(D->getInit());
+  for (unsigned i = 0, N = D->getCollapsedNumber(); i < N; ++i) {
+    Writer.AddStmt(D->getCounters()[i]);
+  }
+  Code = serialization::STMT_OMP_TARGET_TEAMS_DISTRIBUTE_DIRECTIVE;
+}
+
+void ASTStmtWriter::VisitOMPTargetTeamsDistributeSimdDirective(
+    OMPTargetTeamsDistributeSimdDirective *D) {
+  VisitStmt(D);
+  Record.push_back(D->getNumClauses());
+  Record.push_back(D->getCollapsedNumber());
+  VisitOMPExecutableDirective(D);
+  Writer.AddStmt(D->getNewIterVar());
+  Writer.AddStmt(D->getNewIterEnd());
+  Writer.AddStmt(D->getInit());
+  Writer.AddStmt(D->getFinal());
+  for (unsigned i = 0, N = D->getCollapsedNumber(); i < N; ++i) {
+    Writer.AddStmt(D->getCounters()[i]);
+  }
+  Code = serialization::STMT_OMP_TARGET_TEAMS_DISTRIBUTE_SIMD_DIRECTIVE;
 }
 
 //===----------------------------------------------------------------------===//

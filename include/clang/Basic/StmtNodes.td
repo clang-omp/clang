@@ -213,4 +213,12 @@ def OMPTargetDirective : DStmt<OMPExecutableDirective>;
 def OMPTargetDataDirective : DStmt<OMPExecutableDirective>;
 def OMPTargetUpdateDirective : DStmt<OMPExecutableDirective>;
 def OMPTargetTeamsDirective : DStmt<OMPExecutableDirective>;
+def OMPTeamsDistributeDirective : DStmt<OMPExecutableDirective>;
+def OMPTeamsDistributeSimdDirective : DStmt<OMPExecutableDirective>;
+def OMPTargetTeamsDistributeDirective : DStmt<OMPExecutableDirective>;
+def OMPTargetTeamsDistributeSimdDirective : DStmt<OMPExecutableDirective>;
+def OMPTeamsDistributeParallelForDirective : DStmt<OMPExecutableDirective>;
+def OMPTeamsDistributeParallelForSimdDirective : DStmt<OMPExecutableDirective>;
+def OMPTargetTeamsDistributeParallelForDirective : DStmt<OMPExecutableDirective>;
+def OMPTargetTeamsDistributeParallelForSimdDirective : DStmt<OMPExecutableDirective>;
 

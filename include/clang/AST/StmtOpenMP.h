@@ -1342,6 +1342,663 @@ public:
   }
 };
 
+/// \brief This represents '#pragma omp teams distribute parallel for'
+/// directive.
+///
+/// \code
+/// #pragma omp teams distribute parallel for private(a,b) reduction(+:c,d)
+/// \endcode
+/// In this example directive '#pragma omp teams distribute parallel for' has
+/// clauses 'private' with the variables 'a' and 'b' and 'reduction' with
+/// operator '+' and variables 'c' and 'd'.
+///
+class OMPTeamsDistributeParallelForDirective : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTeamsDistributeParallelForDirective(SourceLocation StartLoc,
+                                         SourceLocation EndLoc,
+                                         unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(
+            OMPTeamsDistributeParallelForDirectiveClass,
+            OMPD_teams_distribute_parallel_for, StartLoc, EndLoc, N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTeamsDistributeParallelForDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 7 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTeamsDistributeParallelForDirective(unsigned CollapsedNum,
+                                                  unsigned N)
+      : OMPExecutableDirective(
+            OMPTeamsDistributeParallelForDirectiveClass,
+            OMPD_teams_distribute_parallel_for, SourceLocation(),
+            SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTeamsDistributeParallelForDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 7 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setLowerBound(Expr *LB) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5] = LB;
+  }
+  void setUpperBound(Expr *UB) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[6] = UB;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum && "Number of variables is not the same "
+                                        "as the number of collapsed loops.");
+    std::copy(
+        VL.begin(), VL.end(),
+        &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[7]));
+  }
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTeamsDistributeParallelForDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt, Expr *NewIterVar,
+         Expr *NewIterEnd, Expr *Init, Expr *Final, Expr *LowerBound,
+         Expr *UpperBound, ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTeamsDistributeParallelForDirective *
+  CreateEmpty(const ASTContext &C, unsigned CollapsedNum, unsigned N,
+              EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[4]);
+  }
+  Expr *getLowerBound() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[5]);
+  }
+  Expr *getUpperBound() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[6]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[7])),
+        CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+  Expr *getLowerBound() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]);
+  }
+  Expr *getUpperBound() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[6]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTeamsDistributeParallelForDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp teams distribute parallel for simd'
+/// directive.
+///
+/// \code
+/// #pragma omp teams distribute parallel for simd private(a,b) reduction(+:c,d)
+/// \endcode
+/// In this example directive '#pragma omp teams distribute parallel for simd'
+/// has clauses 'private' with the variables 'a' and 'b' and 'reduction' with
+/// operator '+' and variables 'c' and 'd'.
+///
+class OMPTeamsDistributeParallelForSimdDirective
+    : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTeamsDistributeParallelForSimdDirective(SourceLocation StartLoc,
+                                             SourceLocation EndLoc,
+                                             unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(
+            OMPTeamsDistributeParallelForSimdDirectiveClass,
+            OMPD_teams_distribute_parallel_for_simd, StartLoc, EndLoc, N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTeamsDistributeParallelForSimdDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 7 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTeamsDistributeParallelForSimdDirective(unsigned CollapsedNum,
+                                                      unsigned N)
+      : OMPExecutableDirective(
+            OMPTeamsDistributeParallelForSimdDirectiveClass,
+            OMPD_teams_distribute_parallel_for_simd, SourceLocation(),
+            SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTeamsDistributeParallelForSimdDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 7 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setLowerBound(Expr *LB) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5] = LB;
+  }
+  void setUpperBound(Expr *UB) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[6] = UB;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum && "Number of variables is not the same "
+                                        "as the number of collapsed loops.");
+    std::copy(
+        VL.begin(), VL.end(),
+        &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[7]));
+  }
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTeamsDistributeParallelForSimdDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt, Expr *NewIterVar,
+         Expr *NewIterEnd, Expr *Init, Expr *Final, Expr *LowerBound,
+         Expr *UpperBound, ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTeamsDistributeParallelForSimdDirective *
+  CreateEmpty(const ASTContext &C, unsigned CollapsedNum, unsigned N,
+              EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[4]);
+  }
+  Expr *getLowerBound() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[5]);
+  }
+  Expr *getUpperBound() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[6]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[7])),
+        CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+  Expr *getLowerBound() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]);
+  }
+  Expr *getUpperBound() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[6]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTeamsDistributeParallelForSimdDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp target teams distribute parallel for'
+/// directive.
+///
+/// \code
+/// #pragma omp target teams distribute parallel for private(a,b)
+/// reduction(+:c,d)
+/// \endcode
+/// In this example directive '#pragma omp target teams distribute parallel for'
+/// has clauses 'private' with the variables 'a' and 'b' and 'reduction' with
+/// operator '+' and variables 'c' and 'd'.
+///
+class OMPTargetTeamsDistributeParallelForDirective
+    : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTargetTeamsDistributeParallelForDirective(SourceLocation StartLoc,
+                                               SourceLocation EndLoc,
+                                               unsigned CollapsedNum,
+                                               unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDistributeParallelForDirectiveClass,
+            OMPD_target_teams_distribute_parallel_for, StartLoc, EndLoc, N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTargetTeamsDistributeParallelForDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 7 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTargetTeamsDistributeParallelForDirective(unsigned CollapsedNum,
+                                                        unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDistributeParallelForDirectiveClass,
+            OMPD_target_teams_distribute_parallel_for, SourceLocation(),
+            SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTargetTeamsDistributeParallelForDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 7 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setLowerBound(Expr *LB) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5] = LB;
+  }
+  void setUpperBound(Expr *UB) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[6] = UB;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum && "Number of variables is not the same "
+                                        "as the number of collapsed loops.");
+    std::copy(
+        VL.begin(), VL.end(),
+        &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[7]));
+  }
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTargetTeamsDistributeParallelForDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt, Expr *NewIterVar,
+         Expr *NewIterEnd, Expr *Init, Expr *Final, Expr *LowerBound,
+         Expr *UpperBound, ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTargetTeamsDistributeParallelForDirective *
+  CreateEmpty(const ASTContext &C, unsigned CollapsedNum, unsigned N,
+              EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[4]);
+  }
+  Expr *getLowerBound() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[5]);
+  }
+  Expr *getUpperBound() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[6]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[7])),
+        CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+  Expr *getLowerBound() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]);
+  }
+  Expr *getUpperBound() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[6]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() ==
+           OMPTargetTeamsDistributeParallelForDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp target teams distribute parallel for
+/// simd' directive.
+///
+/// \code
+/// #pragma omp target teams distribute parallel for simd private(a,b)
+/// reduction(+:c,d)
+/// \endcode
+/// In this example directive '#pragma omp target teams distribute parallel for
+/// simd' has clauses 'private' with the variables 'a' and 'b' and 'reduction'
+/// with operator '+' and variables 'c' and 'd'.
+///
+class OMPTargetTeamsDistributeParallelForSimdDirective
+    : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTargetTeamsDistributeParallelForSimdDirective(SourceLocation StartLoc,
+                                                   SourceLocation EndLoc,
+                                                   unsigned CollapsedNum,
+                                                   unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDistributeParallelForSimdDirectiveClass,
+            OMPD_target_teams_distribute_parallel_for_simd, StartLoc, EndLoc, N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTargetTeamsDistributeParallelForSimdDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 7 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTargetTeamsDistributeParallelForSimdDirective(
+      unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDistributeParallelForSimdDirectiveClass,
+            OMPD_target_teams_distribute_parallel_for_simd, SourceLocation(),
+            SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTargetTeamsDistributeParallelForSimdDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 7 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setLowerBound(Expr *LB) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5] = LB;
+  }
+  void setUpperBound(Expr *UB) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[6] = UB;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum && "Number of variables is not the same "
+                                        "as the number of collapsed loops.");
+    std::copy(
+        VL.begin(), VL.end(),
+        &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[7]));
+  }
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTargetTeamsDistributeParallelForSimdDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt, Expr *NewIterVar,
+         Expr *NewIterEnd, Expr *Init, Expr *Final, Expr *LowerBound,
+         Expr *UpperBound, ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTargetTeamsDistributeParallelForSimdDirective *
+  CreateEmpty(const ASTContext &C, unsigned CollapsedNum, unsigned N,
+              EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[4]);
+  }
+  Expr *getLowerBound() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[5]);
+  }
+  Expr *getUpperBound() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &reinterpret_cast<OMPClause *const *>(this + 1)[getNumClauses()])[6]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(&(reinterpret_cast<Stmt *const *>(
+            &reinterpret_cast<OMPClause *const *>(this +
+                                                  1)[getNumClauses()])[7])),
+        CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+  Expr *getLowerBound() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]);
+  }
+  Expr *getUpperBound() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[6]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() ==
+           OMPTargetTeamsDistributeParallelForSimdDirectiveClass;
+  }
+};
+
 /// \brief This represents '#pragma omp sections' directive.
 ///
 /// \code
@@ -2831,6 +3488,557 @@ public:
     return T->getStmtClass() == OMPTargetUpdateDirectiveClass;
   }
 };
+
+/// \brief This represents '#pragma omp teams distribute' directive.
+///
+/// \code
+/// #pragma omp teams distribute private(a,b) collapse(2)
+/// \endcode
+/// In this example directive '#pragma omp teams distribute' has clauses
+/// 'private' with the variables 'a' and 'b', and 'collapse' with number '2' of
+/// loops to be collapsed.
+///
+class OMPTeamsDistributeDirective : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTeamsDistributeDirective(SourceLocation StartLoc, SourceLocation EndLoc,
+                              unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(
+            OMPTeamsDistributeDirectiveClass, OMPD_teams_distribute, StartLoc,
+            EndLoc, N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(sizeof(OMPTeamsDistributeDirective),
+                                         llvm::alignOf<OMPClause *>())),
+            true, 5 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTeamsDistributeDirective(unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(
+            OMPTeamsDistributeDirectiveClass, OMPD_teams_distribute,
+            SourceLocation(), SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(sizeof(OMPTeamsDistributeDirective),
+                                         llvm::alignOf<OMPClause *>())),
+            true, 5 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+  // 5 is for AssociatedStmt, NewIterVar, NewIterEnd, Init, Final
+  // and CollapsedNum is for Counters.
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum && "Number of variables is not the same "
+                                        "as the number of collapsed loops.");
+    std::copy(
+        VL.begin(), VL.end(),
+        &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
+  }
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTeamsDistributeDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt, Expr *NewIterVar,
+         Expr *NewIterEnd, Expr *Init, Expr *Final, ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTeamsDistributeDirective *CreateEmpty(const ASTContext &C,
+                                                  unsigned CollapsedNum,
+                                                  unsigned N, EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[4]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(
+            &(reinterpret_cast<Stmt *const *>(
+                 &getClausesStorage()[getNumClauses()])[5])),
+        CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTeamsDistributeDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp teams distribute simd' directive.
+///
+/// \code
+/// #pragma omp teams simd distribute private(a,b) collapse(2)
+/// \endcode
+/// In this example directive '#pragma omp teams distribute simd' has clauses
+/// 'private' with the variables 'a' and 'b', and 'collapse' with number '2' of
+/// loops to be collapsed.
+///
+class OMPTeamsDistributeSimdDirective : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTeamsDistributeSimdDirective(SourceLocation StartLoc,
+                                  SourceLocation EndLoc, unsigned CollapsedNum,
+                                  unsigned N)
+      : OMPExecutableDirective(OMPTeamsDistributeSimdDirectiveClass,
+                               OMPD_teams_distribute_simd, StartLoc, EndLoc, N,
+                               reinterpret_cast<OMPClause **>(
+                                   reinterpret_cast<char *>(this) +
+                                   llvm::RoundUpToAlignment(
+                                       sizeof(OMPTeamsDistributeSimdDirective),
+                                       llvm::alignOf<OMPClause *>())),
+                               true, 5 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTeamsDistributeSimdDirective(unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(OMPTeamsDistributeSimdDirectiveClass,
+                               OMPD_teams_distribute_simd, SourceLocation(),
+                               SourceLocation(), N,
+                               reinterpret_cast<OMPClause **>(
+                                   reinterpret_cast<char *>(this) +
+                                   llvm::RoundUpToAlignment(
+                                       sizeof(OMPTeamsDistributeSimdDirective),
+                                       llvm::alignOf<OMPClause *>())),
+                               true, 5 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+  // 5 is for AssociatedStmt, NewIterVar, NewIterEnd, Init, Final
+  // and CollapsedNum is for Counters.
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum && "Number of variables is not the same "
+                                        "as the number of collapsed loops.");
+    std::copy(
+        VL.begin(), VL.end(),
+        &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
+  }
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTeamsDistributeSimdDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt, Expr *NewIterVar,
+         Expr *NewIterEnd, Expr *Init, Expr *Final, ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTeamsDistributeSimdDirective *CreateEmpty(const ASTContext &C,
+                                                      unsigned CollapsedNum,
+                                                      unsigned N, EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[4]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(
+            &(reinterpret_cast<Stmt *const *>(
+                 &getClausesStorage()[getNumClauses()])[5])),
+        CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTeamsDistributeSimdDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp target teams distribute' directive.
+///
+/// \code
+/// #pragma omp target teams distribute private(a,b) collapse(2)
+/// \endcode
+/// In this example directive '#pragma omp target teams distribute' has clauses
+/// 'private' with the variables 'a' and 'b', and 'collapse' with number '2' of
+/// loops to be collapsed.
+///
+class OMPTargetTeamsDistributeDirective : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTargetTeamsDistributeDirective(SourceLocation StartLoc,
+                                    SourceLocation EndLoc,
+                                    unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDistributeDirectiveClass,
+            OMPD_target_teams_distribute, StartLoc, EndLoc, N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTargetTeamsDistributeDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 5 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTargetTeamsDistributeDirective(unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDistributeDirectiveClass,
+            OMPD_target_teams_distribute, SourceLocation(), SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTargetTeamsDistributeDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 5 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+  // 5 is for AssociatedStmt, NewIterVar, NewIterEnd, Init, Final
+  // and CollapsedNum is for Counters.
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum && "Number of variables is not the same "
+                                        "as the number of collapsed loops.");
+    std::copy(
+        VL.begin(), VL.end(),
+        &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
+  }
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTargetTeamsDistributeDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt, Expr *NewIterVar,
+         Expr *NewIterEnd, Expr *Init, Expr *Final, ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTargetTeamsDistributeDirective *CreateEmpty(const ASTContext &C,
+                                                        unsigned CollapsedNum,
+                                                        unsigned N, EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[4]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(
+            &(reinterpret_cast<Stmt *const *>(
+                 &getClausesStorage()[getNumClauses()])[5])),
+        CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTargetTeamsDistributeDirectiveClass;
+  }
+};
+
+/// \brief This represents '#pragma omp target teams distribute simd' directive.
+///
+/// \code
+/// #pragma omp target teams simd distribute private(a,b) collapse(2)
+/// \endcode
+/// In this example directive '#pragma omp teams distribute simd' has clauses
+/// 'private' with the variables 'a' and 'b', and 'collapse' with number '2' of
+/// loops to be collapsed.
+///
+class OMPTargetTeamsDistributeSimdDirective : public OMPExecutableDirective {
+  friend class ASTStmtReader;
+  unsigned CollapsedNum;
+  /// \brief Build directive with the given start and end location.
+  ///
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param N The number of clauses.
+  ///
+  OMPTargetTeamsDistributeSimdDirective(SourceLocation StartLoc,
+                                        SourceLocation EndLoc,
+                                        unsigned CollapsedNum, unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDistributeSimdDirectiveClass,
+            OMPD_target_teams_distribute_simd, StartLoc, EndLoc, N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTargetTeamsDistributeSimdDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 5 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+
+  /// \brief Build an empty directive.
+  ///
+  /// \param N Number of clauses.
+  ///
+  explicit OMPTargetTeamsDistributeSimdDirective(unsigned CollapsedNum,
+                                                 unsigned N)
+      : OMPExecutableDirective(
+            OMPTargetTeamsDistributeSimdDirectiveClass,
+            OMPD_target_teams_distribute_simd, SourceLocation(),
+            SourceLocation(), N,
+            reinterpret_cast<OMPClause **>(
+                reinterpret_cast<char *>(this) +
+                llvm::RoundUpToAlignment(
+                    sizeof(OMPTargetTeamsDistributeSimdDirective),
+                    llvm::alignOf<OMPClause *>())),
+            true, 5 + CollapsedNum),
+        CollapsedNum(CollapsedNum) {}
+  // 5 is for AssociatedStmt, NewIterVar, NewIterEnd, Init, Final
+  // and CollapsedNum is for Counters.
+  void setNewIterVar(Expr *V) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1] = V;
+  }
+  void setNewIterEnd(Expr *E) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2] = E;
+  }
+  void setInit(Expr *I) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3] = I;
+  }
+  void setFinal(Expr *F) {
+    reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4] = F;
+  }
+  void setCounters(ArrayRef<Expr *> VL) {
+    assert(VL.size() == CollapsedNum && "Number of variables is not the same "
+                                        "as the number of collapsed loops.");
+    std::copy(
+        VL.begin(), VL.end(),
+        &(reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[5]));
+  }
+
+public:
+  /// \brief Creates directive with a list of \a Clauses.
+  ///
+  /// \param C AST context.
+  /// \param StartLoc Starting location of the directive kind.
+  /// \param EndLoc Ending Location of the directive.
+  /// \param Clauses List of clauses.
+  /// \param AssociatedStmt Statement, associated with the directive.
+  ///
+  static OMPTargetTeamsDistributeSimdDirective *
+  Create(const ASTContext &C, SourceLocation StartLoc, SourceLocation EndLoc,
+         ArrayRef<OMPClause *> Clauses, Stmt *AssociatedStmt, Expr *NewIterVar,
+         Expr *NewIterEnd, Expr *Init, Expr *Final, ArrayRef<Expr *> VarCnts);
+
+  /// \brief Creates an empty directive with the place for \a N clauses.
+  ///
+  /// \param C AST context.
+  /// \param N The number of clauses.
+  ///
+  static OMPTargetTeamsDistributeSimdDirective *
+  CreateEmpty(const ASTContext &C, unsigned CollapsedNum, unsigned N,
+              EmptyShell);
+
+  Expr *getNewIterVar() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() const {
+    return cast_or_null<Expr>(reinterpret_cast<Stmt *const *>(
+        &getClausesStorage()[getNumClauses()])[4]);
+  }
+  ArrayRef<Expr *> getCounters() const {
+    return llvm::makeArrayRef(
+        reinterpret_cast<Expr *const *>(
+            &(reinterpret_cast<Stmt *const *>(
+                 &getClausesStorage()[getNumClauses()])[5])),
+        CollapsedNum);
+  }
+  unsigned getCollapsedNumber() const { return CollapsedNum; }
+  Expr *getNewIterVar() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[1]);
+  }
+  Expr *getNewIterEnd() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[2]);
+  }
+  Expr *getInit() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[3]);
+  }
+  Expr *getFinal() {
+    return cast_or_null<Expr>(
+        reinterpret_cast<Stmt **>(&getClausesStorage()[getNumClauses()])[4]);
+  }
+
+  static bool classof(const Stmt *T) {
+    return T->getStmtClass() == OMPTargetTeamsDistributeSimdDirectiveClass;
+  }
+};
+
 } // end namespace clang
 
 #endif

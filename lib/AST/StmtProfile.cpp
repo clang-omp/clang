@@ -319,6 +319,26 @@ void StmtProfiler::VisitOMPDistributeParallelForSimdDirective(
   VisitOMPExecutableDirective(S);
 }
 
+void StmtProfiler::VisitOMPTeamsDistributeParallelForDirective(
+    const OMPTeamsDistributeParallelForDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTeamsDistributeParallelForSimdDirective(
+    const OMPTeamsDistributeParallelForSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTargetTeamsDistributeParallelForDirective(
+    const OMPTargetTeamsDistributeParallelForDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTargetTeamsDistributeParallelForSimdDirective(
+    const OMPTargetTeamsDistributeParallelForSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
 void StmtProfiler::VisitOMPSectionsDirective(const OMPSectionsDirective *S) {
   VisitOMPExecutableDirective(S);
 }
@@ -410,6 +430,26 @@ StmtProfiler::VisitOMPTargetUpdateDirective(const OMPTargetUpdateDirective *S) {
 
 void
 StmtProfiler::VisitOMPTargetTeamsDirective(const OMPTargetTeamsDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTeamsDistributeDirective(
+    const OMPTeamsDistributeDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTeamsDistributeSimdDirective(
+    const OMPTeamsDistributeSimdDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTargetTeamsDistributeDirective(
+    const OMPTargetTeamsDistributeDirective *S) {
+  VisitOMPExecutableDirective(S);
+}
+
+void StmtProfiler::VisitOMPTargetTeamsDistributeSimdDirective(
+    const OMPTargetTeamsDistributeSimdDirective *S) {
   VisitOMPExecutableDirective(S);
 }
 

@@ -287,7 +287,14 @@ OpenMPClauseKind DSAStackTy::getDSA(StackTy::reverse_iterator Iter, VarDecl *D,
         Kind == OMPD_parallel_sections ||
         Kind == OMPD_distribute_parallel_for ||
         Kind == OMPD_distribute_parallel_for_simd ||
-        Kind == OMPD_target_teams)
+        Kind == OMPD_teams_distribute_parallel_for ||
+        Kind == OMPD_teams_distribute_parallel_for_simd ||
+        Kind == OMPD_target_teams_distribute_parallel_for ||
+        Kind == OMPD_target_teams_distribute_parallel_for_simd ||
+        Kind == OMPD_target_teams || Kind == OMPD_teams_distribute ||
+        Kind == OMPD_teams_distribute_simd ||
+        Kind == OMPD_target_teams_distribute ||
+        Kind == OMPD_target_teams_distribute_simd)
       return OMPC_shared;
 
     // OpenMP [2.9.1.1, Data-sharing Attribute Rules for Variables Referenced
@@ -316,7 +323,11 @@ OpenMPClauseKind DSAStackTy::getDSA(StackTy::reverse_iterator Iter, VarDecl *D,
             I->Directive == OMPD_parallel_for_simd ||
             I->Directive == OMPD_parallel_sections ||
             I->Directive == OMPD_distribute_parallel_for ||
-            I->Directive == OMPD_distribute_parallel_for_simd)
+            I->Directive == OMPD_distribute_parallel_for_simd ||
+            I->Directive == OMPD_teams_distribute_parallel_for ||
+            I->Directive == OMPD_teams_distribute_parallel_for_simd ||
+            I->Directive == OMPD_target_teams_distribute_parallel_for ||
+            I->Directive == OMPD_target_teams_distribute_parallel_for_simd)
           break;
       }
       Kind = OMPD_task;
@@ -373,8 +384,16 @@ bool DSAStackTy::isOpenMPLocal(VarDecl *D, StackTy::reverse_iterator Iter) {
            I->Directive != OMPD_parallel_sections &&
            I->Directive != OMPD_distribute_parallel_for &&
            I->Directive != OMPD_distribute_parallel_for_simd &&
+           I->Directive != OMPD_teams_distribute_parallel_for &&
+           I->Directive != OMPD_teams_distribute_parallel_for_simd &&
+           I->Directive != OMPD_target_teams_distribute_parallel_for &&
+           I->Directive != OMPD_target_teams_distribute_parallel_for_simd &&
            I->Directive != OMPD_task && I->Directive != OMPD_teams &&
-           I->Directive != OMPD_target_teams) {
+           I->Directive != OMPD_target_teams &&
+           I->Directive != OMPD_teams_distribute &&
+           I->Directive != OMPD_teams_distribute_simd &&
+           I->Directive != OMPD_target_teams_distribute &&
+           I->Directive != OMPD_target_teams_distribute_simd) {
       ++I;
     }
     if (I == E)
@@ -416,9 +435,16 @@ OpenMPClauseKind DSAStackTy::getTopDSA(VarDecl *D, DeclRefExpr *&E) {
   OpenMPDirectiveKind Kind = getCurrentDirective();
   if (Kind != OMPD_parallel && Kind != OMPD_parallel_for &&
       Kind != OMPD_parallel_for_simd && Kind != OMPD_distribute_parallel_for &&
-      Kind != OMPD_distribute_parallel_for_simd && Kind != OMPD_task &&
-      Kind != OMPD_teams && Kind != OMPD_parallel_sections &&
-      Kind != OMPD_target_teams) {
+      Kind != OMPD_distribute_parallel_for_simd &&
+      Kind != OMPD_teams_distribute_parallel_for &&
+      Kind != OMPD_teams_distribute_parallel_for_simd &&
+      Kind != OMPD_target_teams_distribute_parallel_for &&
+      Kind != OMPD_target_teams_distribute_parallel_for_simd &&
+      Kind != OMPD_task && Kind != OMPD_teams &&
+      Kind != OMPD_parallel_sections && Kind != OMPD_target_teams &&
+      Kind != OMPD_teams_distribute && Kind != OMPD_teams_distribute_simd &&
+      Kind != OMPD_target_teams_distribute &&
+      Kind != OMPD_target_teams_distribute_simd) {
     if (isOpenMPLocal(D, Stack.rbegin() + 1) && D->isLocalVarDecl() &&
         (D->getStorageClass() == SC_Auto || D->getStorageClass() == SC_None))
       return OMPC_private;
@@ -537,9 +563,17 @@ DeclContext *DSAStackTy::GetOpenMPFunctionRegion() {
         I->Directive == OMPD_parallel_for_simd ||
         I->Directive == OMPD_distribute_parallel_for ||
         I->Directive == OMPD_distribute_parallel_for_simd ||
+        I->Directive == OMPD_teams_distribute_parallel_for ||
+        I->Directive == OMPD_teams_distribute_parallel_for_simd ||
+        I->Directive == OMPD_target_teams_distribute_parallel_for ||
+        I->Directive == OMPD_target_teams_distribute_parallel_for_simd ||
         I->Directive == OMPD_teams || I->Directive == OMPD_task ||
         I->Directive == OMPD_parallel_sections ||
-        I->Directive == OMPD_target_teams)
+        I->Directive == OMPD_target_teams ||
+        I->Directive == OMPD_teams_distribute ||
+        I->Directive == OMPD_teams_distribute_simd ||
+        I->Directive == OMPD_target_teams_distribute ||
+        I->Directive == OMPD_target_teams_distribute_simd)
       return I->CurScope->getEntity();
   }
   return 0;
@@ -562,7 +596,11 @@ bool Sema::HasOpenMPSimdRegion() {
          HasOpenMPRegion(OMPD_parallel_for_simd) ||
          HasOpenMPRegion(OMPD_distribute_simd) ||
          HasOpenMPRegion(OMPD_for_simd) ||
-         HasOpenMPRegion(OMPD_distribute_parallel_for_simd);
+         HasOpenMPRegion(OMPD_distribute_parallel_for_simd) ||
+         HasOpenMPRegion(OMPD_teams_distribute_parallel_for_simd) ||
+         HasOpenMPRegion(OMPD_target_teams_distribute_parallel_for_simd) ||
+         HasOpenMPRegion(OMPD_teams_distribute_simd) ||
+         HasOpenMPRegion(OMPD_target_teams_distribute_simd);
 }
 
 bool Sema::IsDeclContextInOpenMPTarget(DeclContext *DC) {
@@ -1665,8 +1703,15 @@ public:
            DKind == OMPD_parallel_for_simd ||
            DKind == OMPD_distribute_parallel_for ||
            DKind == OMPD_distribute_parallel_for_simd || DKind == OMPD_task ||
+           DKind == OMPD_teams_distribute_parallel_for ||
+           DKind == OMPD_teams_distribute_parallel_for_simd ||
+           DKind == OMPD_target_teams_distribute_parallel_for ||
+           DKind == OMPD_target_teams_distribute_parallel_for_simd ||
            DKind == OMPD_teams || DKind == OMPD_parallel_sections ||
-           DKind == OMPD_target_teams)) {
+           DKind == OMPD_target_teams || DKind == OMPD_teams_distribute ||
+           DKind == OMPD_teams_distribute_simd ||
+           DKind == OMPD_target_teams_distribute ||
+           DKind == OMPD_target_teams_distribute_simd)) {
         ErrorFound = true;
         Actions.Diag(ELoc, diag::err_omp_no_dsa_for_variable) << VD;
         return;
@@ -1689,10 +1734,31 @@ public:
                                   OMPD_distribute_parallel_for, PrevRef) ||
            Stack->hasInnermostDSA(VD, OMPC_reduction,
                                   OMPD_distribute_parallel_for_simd, PrevRef) ||
+           Stack->hasInnermostDSA(VD, OMPC_reduction,
+                                  OMPD_teams_distribute_parallel_for,
+                                  PrevRef) ||
+           Stack->hasInnermostDSA(VD, OMPC_reduction,
+                                  OMPD_teams_distribute_parallel_for_simd,
+                                  PrevRef) ||
+           Stack->hasInnermostDSA(VD, OMPC_reduction,
+                                  OMPD_target_teams_distribute_parallel_for,
+                                  PrevRef) ||
+           Stack->hasInnermostDSA(
+               VD, OMPC_reduction,
+               OMPD_target_teams_distribute_parallel_for_simd, PrevRef) ||
            Stack->hasInnermostDSA(VD, OMPC_reduction, OMPD_parallel_sections,
                                   PrevRef) ||
            Stack->hasInnermostDSA(VD, OMPC_reduction, OMPD_teams, PrevRef) ||
            Stack->hasInnermostDSA(VD, OMPC_reduction, OMPD_target_teams,
+                                  PrevRef) ||
+           Stack->hasInnermostDSA(VD, OMPC_reduction, OMPD_teams_distribute,
+                                  PrevRef) ||
+           Stack->hasInnermostDSA(VD, OMPC_reduction,
+                                  OMPD_teams_distribute_simd, PrevRef) ||
+           Stack->hasInnermostDSA(VD, OMPC_reduction,
+                                  OMPD_target_teams_distribute, PrevRef) ||
+           Stack->hasInnermostDSA(VD, OMPC_reduction,
+                                  OMPD_target_teams_distribute_simd,
                                   PrevRef))) {
         ErrorFound = true;
         Actions.Diag(ELoc, diag::err_omp_reduction_in_task);
@@ -1760,9 +1826,11 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
         ConstructTypeMatches = ParentKind == OMPD_parallel;
         break;
       case OMPD_for:
-        ConstructTypeMatches = ParentKind == OMPD_for ||
-                               ParentKind == OMPD_parallel_for ||
-                               ParentKind == OMPD_distribute_parallel_for;
+        ConstructTypeMatches =
+            ParentKind == OMPD_for || ParentKind == OMPD_parallel_for ||
+            ParentKind == OMPD_distribute_parallel_for ||
+            ParentKind == OMPD_teams_distribute_parallel_for ||
+            ParentKind == OMPD_target_teams_distribute_parallel_for;
         break;
       case OMPD_sections:
         ConstructTypeMatches =
@@ -1785,6 +1853,8 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
     case OMPD_for:
     case OMPD_sections:
     case OMPD_distribute_parallel_for:
+    case OMPD_teams_distribute_parallel_for:
+    case OMPD_target_teams_distribute_parallel_for:
     case OMPD_parallel_for:
     case OMPD_parallel_sections:
     case OMPD_single:
@@ -1797,8 +1867,7 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       //  explicit task, critical, ordered, atomic, or master region.
       // OpenMP [2.16, Nesting of Regions, p. 3]
       //  A master region may not be closely nested inside a worksharing,
-      // atomic,
-      //  or explicit task region.
+      //  atomic, or explicit task region.
       NestingProhibited =
           Kind == OMPD_for || Kind == OMPD_sections || Kind == OMPD_for_simd ||
           Kind == OMPD_distribute_simd || Kind == OMPD_distribute ||
@@ -1905,6 +1974,18 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       NestingProhibited = true;
       Region = "a distribute parallel for simd";
       break;
+    case OMPD_teams_distribute_parallel_for_simd:
+      // OpenMP [2.16, Nesting of Regions, p. 8]
+      //  OpenMP constructs may not be nested inside a simd region.
+      NestingProhibited = true;
+      Region = "a teams distribute parallel for simd";
+      break;
+    case OMPD_target_teams_distribute_parallel_for_simd:
+      // OpenMP [2.16, Nesting of Regions, p. 8]
+      //  OpenMP constructs may not be nested inside a simd region.
+      NestingProhibited = true;
+      Region = "a target teams distribute parallel for simd";
+      break;
     case OMPD_ordered:
       // OpenMP [2.16, Nesting of Regions, p. 1]
       //  A worksharing region may not be closely nested inside a worksharing,
@@ -1936,8 +2017,49 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
           Kind == OMPD_barrier || Kind == OMPD_task || Kind == OMPD_ordered ||
           Kind == OMPD_teams || Kind == OMPD_atomic || Kind == OMPD_critical ||
           Kind == OMPD_taskgroup || Kind == OMPD_cancel ||
-          Kind == OMPD_cancellation_point || Kind == OMPD_target_teams;
+          Kind == OMPD_cancellation_point || Kind == OMPD_target_teams ||
+          Kind == OMPD_teams_distribute || Kind == OMPD_teams_distribute_simd ||
+          Kind == OMPD_target_teams_distribute ||
+          Kind == OMPD_target_teams_distribute_simd ||
+          Kind == OMPD_teams_distribute_parallel_for ||
+          Kind == OMPD_teams_distribute_parallel_for_simd ||
+          Kind == OMPD_target_teams_distribute_parallel_for ||
+          Kind == OMPD_target_teams_distribute_parallel_for_simd;
       Region = "a teams";
+      break;
+    case OMPD_teams_distribute:
+      NestingProhibited =
+          Kind == OMPD_for || Kind == OMPD_sections || Kind == OMPD_for_simd ||
+          Kind == OMPD_distribute_simd || Kind == OMPD_distribute ||
+          Kind == OMPD_distribute_parallel_for ||
+          Kind == OMPD_distribute_parallel_for_simd || Kind == OMPD_single ||
+          Kind == OMPD_master || Kind == OMPD_barrier ||
+          (Kind == OMPD_cancel && !ConstructTypeMatches) ||
+          (Kind == OMPD_cancellation_point && !ConstructTypeMatches);
+      Region = "a teams distribute";
+      break;
+    case OMPD_target_teams_distribute:
+      NestingProhibited =
+          Kind == OMPD_for || Kind == OMPD_sections || Kind == OMPD_for_simd ||
+          Kind == OMPD_distribute_simd || Kind == OMPD_distribute ||
+          Kind == OMPD_distribute_parallel_for ||
+          Kind == OMPD_distribute_parallel_for_simd || Kind == OMPD_single ||
+          Kind == OMPD_master || Kind == OMPD_barrier ||
+          (Kind == OMPD_cancel && !ConstructTypeMatches) ||
+          (Kind == OMPD_cancellation_point && !ConstructTypeMatches);
+      Region = "a target teams distribute";
+      break;
+    case OMPD_teams_distribute_simd:
+      // OpenMP [2.16, Nesting of Regions, p. 8]
+      //  OpenMP constructs may not be nested inside a simd region.
+      NestingProhibited = true;
+      Region = "a teams distribute simd";
+      break;
+    case OMPD_target_teams_distribute_simd:
+      // OpenMP [2.16, Nesting of Regions, p. 8]
+      //  OpenMP constructs may not be nested inside a simd region.
+      NestingProhibited = true;
+      Region = "a target teams distribute simd";
       break;
     case OMPD_target_teams:
       // OpenMP [2.16, Nesting of Regions, p. 11]
@@ -1950,7 +2072,14 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
           Kind == OMPD_barrier || Kind == OMPD_task || Kind == OMPD_ordered ||
           Kind == OMPD_teams || Kind == OMPD_atomic || Kind == OMPD_critical ||
           Kind == OMPD_taskgroup || Kind == OMPD_cancel ||
-          Kind == OMPD_cancellation_point || Kind == OMPD_target_teams;
+          Kind == OMPD_cancellation_point || Kind == OMPD_target_teams ||
+          Kind == OMPD_teams_distribute || Kind == OMPD_teams_distribute_simd ||
+          Kind == OMPD_target_teams_distribute ||
+          Kind == OMPD_target_teams_distribute_simd ||
+          Kind == OMPD_teams_distribute_parallel_for ||
+          Kind == OMPD_teams_distribute_parallel_for_simd ||
+          Kind == OMPD_target_teams_distribute_parallel_for ||
+          Kind == OMPD_target_teams_distribute_parallel_for_simd;
       Region = "a target teams";
       break;
     case OMPD_distribute:
@@ -2031,7 +2160,11 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
     // OpenMP [2.16, Nesting of Regions, p. 10]
     //  If specified, a teams construct must be contained within a target
     // construct.
-    if (Kind == OMPD_teams && ParentKind != OMPD_target) {
+    if ((Kind == OMPD_teams || Kind == OMPD_teams_distribute ||
+         Kind == OMPD_teams_distribute_simd ||
+         Kind == OMPD_teams_distribute_parallel_for ||
+         Kind == OMPD_teams_distribute_parallel_for_simd) &&
+        ParentKind != OMPD_target) {
       Diag(StartLoc, diag::err_omp_prohibited_teams_region);
       return StmtError();
     }
@@ -2155,6 +2288,22 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
     Res = ActOnOpenMPDistributeParallelForSimdDirective(
         Kind, ClausesWithImplicit, AStmt, StartLoc, EndLoc);
     break;
+  case OMPD_teams_distribute_parallel_for:
+    Res = ActOnOpenMPTeamsDistributeParallelForDirective(
+        Kind, ClausesWithImplicit, AStmt, StartLoc, EndLoc);
+    break;
+  case OMPD_teams_distribute_parallel_for_simd:
+    Res = ActOnOpenMPTeamsDistributeParallelForSimdDirective(
+        Kind, ClausesWithImplicit, AStmt, StartLoc, EndLoc);
+    break;
+  case OMPD_target_teams_distribute_parallel_for:
+    Res = ActOnOpenMPTargetTeamsDistributeParallelForDirective(
+        Kind, ClausesWithImplicit, AStmt, StartLoc, EndLoc);
+    break;
+  case OMPD_target_teams_distribute_parallel_for_simd:
+    Res = ActOnOpenMPTargetTeamsDistributeParallelForSimdDirective(
+        Kind, ClausesWithImplicit, AStmt, StartLoc, EndLoc);
+    break;
   case OMPD_teams:
     Res =
         ActOnOpenMPTeamsDirective(ClausesWithImplicit, AStmt, StartLoc, EndLoc);
@@ -2194,6 +2343,22 @@ StmtResult Sema::ActOnOpenMPExecutableDirective(
       return StmtError();
     Res =
         ActOnOpenMPCancellationPointDirective(StartLoc, EndLoc, ConstructType);
+    break;
+  case OMPD_teams_distribute:
+    Res = ActOnOpenMPTeamsDistributeDirective(ClausesWithImplicit, AStmt,
+                                              StartLoc, EndLoc);
+    break;
+  case OMPD_teams_distribute_simd:
+    Res = ActOnOpenMPTeamsDistributeSimdDirective(Kind, ClausesWithImplicit,
+                                                  AStmt, StartLoc, EndLoc);
+    break;
+  case OMPD_target_teams_distribute:
+    Res = ActOnOpenMPTargetTeamsDistributeDirective(ClausesWithImplicit, AStmt,
+                                                    StartLoc, EndLoc);
+    break;
+  case OMPD_target_teams_distribute_simd:
+    Res = ActOnOpenMPTargetTeamsDistributeSimdDirective(
+        Kind, ClausesWithImplicit, AStmt, StartLoc, EndLoc);
     break;
   default:
     break;
@@ -2389,7 +2554,11 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
 
   if (Kind == OMPD_simd || Kind == OMPD_for_simd ||
       Kind == OMPD_parallel_for_simd || Kind == OMPD_distribute_simd ||
-      Kind == OMPD_distribute_parallel_for_simd) {
+      Kind == OMPD_distribute_parallel_for_simd ||
+      Kind == OMPD_teams_distribute_simd ||
+      Kind == OMPD_target_teams_distribute_simd ||
+      Kind == OMPD_teams_distribute_parallel_for_simd ||
+      Kind == OMPD_target_teams_distribute_parallel_for_simd) {
     // OpenMP [2.8.1] No exception can be raised in the simd region.
     EhChecker Check;
     if (CStmt && Check.Visit(CStmt)) {
@@ -2915,6 +3084,140 @@ StmtResult Sema::ActOnOpenMPDistributeParallelForSimdDirective(
 
   // Rebuild the directive.
   return Owned(OMPDistributeParallelForSimdDirective::Create(
+      Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
+      NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts));
+}
+
+StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForDirective(
+    OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+    SourceLocation StartLoc, SourceLocation EndLoc) {
+  // Prepare the output arguments for routine CollapseOpenMPLoop
+  Expr *NewEnd = 0;
+  Expr *NewVar = 0;
+  Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
+  SmallVector<Expr *, 4> VarCnts;
+
+  // Do the collapse.
+  if (!CollapseOpenMPLoop(Kind, Clauses, AStmt, StartLoc, EndLoc, NewVar,
+                          NewEnd, NewVarCntExpr, NewFinal, VarCnts)) {
+    return StmtError();
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  // Create variables for lower/upper bound
+  Expr *LowerBound = 0;
+  Expr *UpperBound = 0;
+  if (NewVar && AStmt) {
+    AStmt = AddDistributedParallelArgsIntoCapturedStmt(
+        cast<CapturedStmt>(AStmt), NewVar, LowerBound, UpperBound);
+  }
+  // Rebuild the directive.
+  return Owned(OMPTeamsDistributeParallelForDirective::Create(
+      Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
+      NewFinal, LowerBound, UpperBound, VarCnts));
+}
+
+StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForSimdDirective(
+    OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+    SourceLocation StartLoc, SourceLocation EndLoc) {
+  // Prepare the output arguments for routine CollapseOpenMPLoop
+  Expr *NewEnd = 0;
+  Expr *NewVar = 0;
+  Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
+  SmallVector<Expr *, 4> VarCnts;
+
+  // Do the collapse.
+  if (!CollapseOpenMPLoop(Kind, Clauses, AStmt, StartLoc, EndLoc, NewVar,
+                          NewEnd, NewVarCntExpr, NewFinal, VarCnts)) {
+    return StmtError();
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  // Create variables for lower/upper bound
+  Expr *LowerBound = 0;
+  Expr *UpperBound = 0;
+  if (NewVar && AStmt) {
+    AStmt = AddDistributedParallelArgsIntoCapturedStmt(
+        cast<CapturedStmt>(AStmt), NewVar, LowerBound, UpperBound);
+  }
+
+  // Add two arguments into captured stmt for index and last_iter.
+  CapturedStmt *CapturedBody =
+      AddSimdArgsIntoCapturedStmt(cast<CapturedStmt>(AStmt), NewVar);
+
+  // Rebuild the directive.
+  return Owned(OMPTeamsDistributeParallelForSimdDirective::Create(
+      Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
+      NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts));
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForDirective(
+    OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+    SourceLocation StartLoc, SourceLocation EndLoc) {
+  // Prepare the output arguments for routine CollapseOpenMPLoop
+  Expr *NewEnd = 0;
+  Expr *NewVar = 0;
+  Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
+  SmallVector<Expr *, 4> VarCnts;
+
+  // Do the collapse.
+  if (!CollapseOpenMPLoop(Kind, Clauses, AStmt, StartLoc, EndLoc, NewVar,
+                          NewEnd, NewVarCntExpr, NewFinal, VarCnts)) {
+    return StmtError();
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  // Create variables for lower/upper bound
+  Expr *LowerBound = 0;
+  Expr *UpperBound = 0;
+  if (NewVar && AStmt) {
+    AStmt = AddDistributedParallelArgsIntoCapturedStmt(
+        cast<CapturedStmt>(AStmt), NewVar, LowerBound, UpperBound);
+  }
+  // Rebuild the directive.
+  return Owned(OMPTargetTeamsDistributeParallelForDirective::Create(
+      Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
+      NewFinal, LowerBound, UpperBound, VarCnts));
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForSimdDirective(
+    OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+    SourceLocation StartLoc, SourceLocation EndLoc) {
+  // Prepare the output arguments for routine CollapseOpenMPLoop
+  Expr *NewEnd = 0;
+  Expr *NewVar = 0;
+  Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
+  SmallVector<Expr *, 4> VarCnts;
+
+  // Do the collapse.
+  if (!CollapseOpenMPLoop(Kind, Clauses, AStmt, StartLoc, EndLoc, NewVar,
+                          NewEnd, NewVarCntExpr, NewFinal, VarCnts)) {
+    return StmtError();
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  // Create variables for lower/upper bound
+  Expr *LowerBound = 0;
+  Expr *UpperBound = 0;
+  if (NewVar && AStmt) {
+    AStmt = AddDistributedParallelArgsIntoCapturedStmt(
+        cast<CapturedStmt>(AStmt), NewVar, LowerBound, UpperBound);
+  }
+
+  // Add two arguments into captured stmt for index and last_iter.
+  CapturedStmt *CapturedBody =
+      AddSimdArgsIntoCapturedStmt(cast<CapturedStmt>(AStmt), NewVar);
+
+  // Rebuild the directive.
+  return Owned(OMPTargetTeamsDistributeParallelForSimdDirective::Create(
       Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
       NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts));
 }
@@ -3717,6 +4020,25 @@ public:
     FoundTeams = D;
     return false;
   }
+  bool VisitOMPTeamsDistributeDirective(OMPTeamsDistributeDirective *D) {
+    FoundTeams = D;
+    return false;
+  }
+  bool
+  VisitOMPTeamsDistributeSimdDirective(OMPTeamsDistributeSimdDirective *D) {
+    FoundTeams = D;
+    return false;
+  }
+  bool VisitOMPTeamsDistributeParallelForDirective(
+      OMPTeamsDistributeParallelForDirective *D) {
+    FoundTeams = D;
+    return false;
+  }
+  bool VisitOMPTeamsDistributeParallelForSimdDirective(
+      OMPTeamsDistributeParallelForSimdDirective *D) {
+    FoundTeams = D;
+    return false;
+  }
   bool VisitCompoundStmt(CompoundStmt *S) {
     bool Flag = false;
     for (Stmt::child_range R = S->children(); R; ++R) {
@@ -3770,6 +4092,108 @@ StmtResult Sema::ActOnOpenMPTargetUpdateDirective(ArrayRef<OMPClause *> Clauses,
   getCurFunction()->setHasBranchProtectedScope();
   return Owned(
       OMPTargetUpdateDirective::Create(Context, StartLoc, EndLoc, Clauses));
+}
+
+StmtResult Sema::ActOnOpenMPTeamsDistributeDirective(
+    ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+    SourceLocation StartLoc, SourceLocation EndLoc) {
+  // Prepare the output arguments for routine CollapseOpenMPLoop
+  Expr *NewEnd = 0;
+  Expr *NewVar = 0;
+  Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
+  SmallVector<Expr *, 4> VarCnts;
+
+  // Do the collapse.
+  if (!CollapseOpenMPLoop(OMPD_teams_distribute, Clauses, AStmt, StartLoc,
+                          EndLoc, NewVar, NewEnd, NewVarCntExpr, NewFinal,
+                          VarCnts)) {
+    return StmtError();
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+  return Owned(OMPTeamsDistributeDirective::Create(
+      Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
+      NewFinal, VarCnts));
+}
+
+StmtResult Sema::ActOnOpenMPTeamsDistributeSimdDirective(
+    OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+    SourceLocation StartLoc, SourceLocation EndLoc) {
+  // Prepare the output arguments for routine CollapseOpenMPLoop
+  Expr *NewEnd = 0;
+  Expr *NewVar = 0;
+  Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
+  SmallVector<Expr *, 4> VarCnts;
+
+  // Do the collapse.
+  if (!CollapseOpenMPLoop(Kind, Clauses, AStmt, StartLoc, EndLoc, NewVar,
+                          NewEnd, NewVarCntExpr, NewFinal, VarCnts)) {
+    return StmtError();
+  }
+
+  // Add two arguments into captured stmt for index and last_iter.
+  CapturedStmt *CapturedBody =
+      AddSimdArgsIntoCapturedStmt(cast<CapturedStmt>(AStmt), NewVar);
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  // Rebuild the directive.
+  return Owned(OMPTeamsDistributeSimdDirective::Create(
+      Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
+      NewVarCntExpr, NewFinal, VarCnts));
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDistributeDirective(
+    ArrayRef<OMPClause *> Clauses, Stmt *AStmt, SourceLocation StartLoc,
+    SourceLocation EndLoc) {
+  // Prepare the output arguments for routine CollapseOpenMPLoop
+  Expr *NewEnd = 0;
+  Expr *NewVar = 0;
+  Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
+  SmallVector<Expr *, 4> VarCnts;
+
+  // Do the collapse.
+  if (!CollapseOpenMPLoop(OMPD_target_teams_distribute, Clauses, AStmt,
+                          StartLoc, EndLoc, NewVar, NewEnd, NewVarCntExpr,
+                          NewFinal, VarCnts)) {
+    return StmtError();
+  }
+
+  getCurFunction()->setHasBranchProtectedScope();
+  return Owned(OMPTargetTeamsDistributeDirective::Create(
+      Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
+      NewFinal, VarCnts));
+}
+
+StmtResult Sema::ActOnOpenMPTargetTeamsDistributeSimdDirective(
+    OpenMPDirectiveKind Kind, ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
+    SourceLocation StartLoc, SourceLocation EndLoc) {
+  // Prepare the output arguments for routine CollapseOpenMPLoop
+  Expr *NewEnd = 0;
+  Expr *NewVar = 0;
+  Expr *NewVarCntExpr = 0;
+  Expr *NewFinal = 0;
+  SmallVector<Expr *, 4> VarCnts;
+
+  // Do the collapse.
+  if (!CollapseOpenMPLoop(Kind, Clauses, AStmt, StartLoc, EndLoc, NewVar,
+                          NewEnd, NewVarCntExpr, NewFinal, VarCnts)) {
+    return StmtError();
+  }
+
+  // Add two arguments into captured stmt for index and last_iter.
+  CapturedStmt *CapturedBody =
+      AddSimdArgsIntoCapturedStmt(cast<CapturedStmt>(AStmt), NewVar);
+
+  getCurFunction()->setHasBranchProtectedScope();
+
+  // Rebuild the directive.
+  return Owned(OMPTargetTeamsDistributeSimdDirective::Create(
+      Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
+      NewVarCntExpr, NewFinal, VarCnts));
 }
 
 OMPClause *Sema::ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind, Expr *Expr,
@@ -7590,7 +8014,11 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
              CKind != OMPC_lastprivate &&
              (CurrentDir == OMPD_for || CurrentDir == OMPD_parallel_for ||
               CurrentDir == OMPD_distribute ||
-              CurrentDir == OMPD_distribute_parallel_for)) {
+              CurrentDir == OMPD_distribute_parallel_for ||
+              CurrentDir == OMPD_teams_distribute ||
+              CurrentDir == OMPD_target_teams_distribute ||
+              CurrentDir == OMPD_teams_distribute_parallel_for ||
+              CurrentDir == OMPD_target_teams_distribute_parallel_for)) {
     Diag(InitLoc, diag::err_omp_for_loop_var_dsa) << getOpenMPClauseName(CKind);
     if (PrevRef) {
       Diag(PrevRef->getExprLoc(), diag::note_omp_explicit_dsa)
@@ -7605,7 +8033,11 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
              (CurrentDir == OMPD_simd || CurrentDir == OMPD_for_simd ||
               CurrentDir == OMPD_parallel_for_simd ||
               CurrentDir == OMPD_distribute_parallel_for_simd ||
-              CurrentDir == OMPD_distribute_simd)) {
+              CurrentDir == OMPD_teams_distribute_parallel_for_simd ||
+              CurrentDir == OMPD_target_teams_distribute_parallel_for_simd ||
+              CurrentDir == OMPD_distribute_simd ||
+              CurrentDir == OMPD_teams_distribute_simd ||
+              CurrentDir == OMPD_target_teams_distribute_simd)) {
     // OpenMP [2.11.1.1, Data-sharing Attribute Rules for Variables Referenced
     // in a Construct, C/C++]
     // The loop iteration variable in the associated for-loop of a simd

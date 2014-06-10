@@ -24,12 +24,12 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
+#include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/TypeBuilder.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/CallSite.h"
 using namespace clang;
 using namespace CodeGen;
@@ -345,7 +345,15 @@ static bool isLoopDirective(const OMPExecutableDirective *ED) {
          isa<OMPForSimdDirective>(ED) || isa<OMPDistributeDirective>(ED) ||
          isa<OMPDistributeSimdDirective>(ED) ||
          isa<OMPDistributeParallelForDirective>(ED) ||
-         isa<OMPDistributeParallelForSimdDirective>(ED);
+         isa<OMPDistributeParallelForSimdDirective>(ED) ||
+         isa<OMPTeamsDistributeParallelForDirective>(ED) ||
+         isa<OMPTeamsDistributeParallelForSimdDirective>(ED) ||
+         isa<OMPTargetTeamsDistributeParallelForDirective>(ED) ||
+         isa<OMPTargetTeamsDistributeParallelForSimdDirective>(ED) ||
+         isa<OMPTeamsDistributeDirective>(ED) ||
+         isa<OMPTeamsDistributeSimdDirective>(ED) ||
+         isa<OMPTargetTeamsDistributeDirective>(ED) ||
+         isa<OMPTargetTeamsDistributeSimdDirective>(ED);
 }
 
 static const Expr *getInitFromLoopDirective(const OMPExecutableDirective *ED) {
@@ -379,6 +387,38 @@ static const Expr *getInitFromLoopDirective(const OMPExecutableDirective *ED) {
   }
   if (const OMPDistributeParallelForSimdDirective *D =
           dyn_cast<OMPDistributeParallelForSimdDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPTargetTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPTargetTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPTeamsDistributeDirective *D =
+          dyn_cast<OMPTeamsDistributeDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeSimdDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPTargetTeamsDistributeDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeDirective>(ED)) {
+    return D->getInit();
+  }
+  if (const OMPTargetTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeSimdDirective>(ED)) {
     return D->getInit();
   }
   assert(0 && "bad loop directive");
@@ -416,6 +456,38 @@ static const Expr *getFinalFromLoopDirective(const OMPExecutableDirective *ED) {
   }
   if (const OMPDistributeParallelForSimdDirective *D =
           dyn_cast<OMPDistributeParallelForSimdDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPTargetTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPTargetTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPTeamsDistributeDirective *D =
+          dyn_cast<OMPTeamsDistributeDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeSimdDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPTargetTeamsDistributeDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeDirective>(ED)) {
+    return D->getFinal();
+  }
+  if (const OMPTargetTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeSimdDirective>(ED)) {
     return D->getFinal();
   }
   assert(0 && "bad loop directive");
@@ -456,6 +528,38 @@ getNewIterVarFromLoopDirective(const OMPExecutableDirective *ED) {
           dyn_cast<OMPDistributeParallelForSimdDirective>(ED)) {
     return D->getNewIterVar();
   }
+  if (const OMPTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPTargetTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPTargetTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPTeamsDistributeDirective *D =
+          dyn_cast<OMPTeamsDistributeDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeSimdDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPTargetTeamsDistributeDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeDirective>(ED)) {
+    return D->getNewIterVar();
+  }
+  if (const OMPTargetTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeSimdDirective>(ED)) {
+    return D->getNewIterVar();
+  }
   assert(0 && "bad loop directive");
   return 0;
 }
@@ -494,6 +598,38 @@ getNewIterEndFromLoopDirective(const OMPExecutableDirective *ED) {
           dyn_cast<OMPDistributeParallelForSimdDirective>(ED)) {
     return D->getNewIterEnd();
   }
+  if (const OMPTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPTargetTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPTargetTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPTeamsDistributeDirective *D =
+          dyn_cast<OMPTeamsDistributeDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeSimdDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPTargetTeamsDistributeDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
+  if (const OMPTargetTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeSimdDirective>(ED)) {
+    return D->getNewIterEnd();
+  }
   assert(0 && "bad loop directive");
   return 0;
 }
@@ -508,6 +644,22 @@ getLowerBoundFromLoopDirective(const OMPExecutableDirective *ED) {
           dyn_cast<OMPDistributeParallelForSimdDirective>(ED)) {
     return D->getLowerBound();
   }
+  if (const OMPTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForDirective>(ED)) {
+    return D->getLowerBound();
+  }
+  if (const OMPTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getLowerBound();
+  }
+  if (const OMPTargetTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(ED)) {
+    return D->getLowerBound();
+  }
+  if (const OMPTargetTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getLowerBound();
+  }
   assert(0 && "bad loop directive");
   return 0;
 }
@@ -520,6 +672,22 @@ getUpperBoundFromLoopDirective(const OMPExecutableDirective *ED) {
   }
   if (const OMPDistributeParallelForSimdDirective *D =
           dyn_cast<OMPDistributeParallelForSimdDirective>(ED)) {
+    return D->getUpperBound();
+  }
+  if (const OMPTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForDirective>(ED)) {
+    return D->getUpperBound();
+  }
+  if (const OMPTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getUpperBound();
+  }
+  if (const OMPTargetTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(ED)) {
+    return D->getUpperBound();
+  }
+  if (const OMPTargetTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(ED)) {
     return D->getUpperBound();
   }
   assert(0 && "bad loop directive");
@@ -560,6 +728,38 @@ getCountersFromLoopDirective(const OMPExecutableDirective *ED) {
           dyn_cast<OMPDistributeParallelForSimdDirective>(ED)) {
     return D->getCounters();
   }
+  if (const OMPTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPTargetTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPTargetTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPTeamsDistributeDirective *D =
+          dyn_cast<OMPTeamsDistributeDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeSimdDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPTargetTeamsDistributeDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeDirective>(ED)) {
+    return D->getCounters();
+  }
+  if (const OMPTargetTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeSimdDirective>(ED)) {
+    return D->getCounters();
+  }
   assert(0 && "bad loop directive");
   return 0;
 }
@@ -598,8 +798,51 @@ getCollapsedNumberFromLoopDirective(const OMPExecutableDirective *ED) {
           dyn_cast<OMPDistributeParallelForSimdDirective>(ED)) {
     return D->getCollapsedNumber();
   }
+  if (const OMPTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPTargetTeamsDistributeParallelForDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPTargetTeamsDistributeParallelForSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPTeamsDistributeDirective *D =
+          dyn_cast<OMPTeamsDistributeDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTeamsDistributeSimdDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPTargetTeamsDistributeDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
+  if (const OMPTargetTeamsDistributeSimdDirective *D =
+          dyn_cast<OMPTargetTeamsDistributeSimdDirective>(ED)) {
+    return D->getCollapsedNumber();
+  }
   assert(0 && "bad loop directive");
   return 0;
+}
+
+static bool IsAllowedClause(OpenMPClauseKind CKind,
+                            ArrayRef<OpenMPDirectiveKind> DKinds) {
+  for (ArrayRef<OpenMPDirectiveKind>::const_iterator I = DKinds.begin(),
+                                                     E = DKinds.end();
+       I != E; ++I) {
+    if (isAllowedClauseForDirective(*I, CKind))
+      return true;
+  }
+  return false;
 }
 }
 
@@ -1167,10 +1410,9 @@ void CodeGenFunction::EmitOMPCancelBarrier(SourceLocation L, unsigned Flags,
   }
 }
 
-void
-CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
-                                              OpenMPDirectiveKind SKind,
-                                              const OMPExecutableDirective &S) {
+void CodeGenFunction::EmitOMPDirectiveWithParallel(
+    OpenMPDirectiveKind DKind, ArrayRef<OpenMPDirectiveKind> SKinds,
+    const OMPExecutableDirective &S) {
   // Generate shared args for captured stmt.
   CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
   llvm::Value *Arg = GenerateCapturedStmtArgument(*CS);
@@ -1185,14 +1427,14 @@ CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+    if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
       EmitInitOMPClause(*(*I), S);
 
   // CodeGen for clauses (task init).
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+    if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
       EmitAfterInitOMPClause(*(*I), S);
 
   // Generate microtask.
@@ -1260,7 +1502,7 @@ CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I && (!isAllowedClauseForDirective(SKind, (*I)->getClauseKind()) ||
+      if (*I && (!IsAllowedClause((*I)->getClauseKind(), SKinds) ||
                  (*I)->getClauseKind() == OMPC_firstprivate))
         CGF.EmitPreOMPClause(*(*I), S);
 
@@ -1269,11 +1511,13 @@ CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
       CGF.EmitStmt(CS->getCapturedStmt());
       break;
     case OMPD_parallel_sections:
-      CGF.EmitOMPSectionsDirective(DKind, SKind, S);
+      CGF.EmitOMPSectionsDirective(DKind, OMPD_sections, S);
       break;
     case OMPD_parallel_for:
+      CGF.EmitOMPDirectiveWithLoop(DKind, OMPD_for, S);
+      break;
     case OMPD_parallel_for_simd:
-      CGF.EmitOMPDirectiveWithLoop(DKind, SKind, S);
+      CGF.EmitOMPDirectiveWithLoop(DKind, OMPD_for_simd, S);
       break;
     default:
       break;
@@ -1284,14 +1528,14 @@ CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+      if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
         CGF.EmitPostOMPClause(*(*I), S);
 
     // CodeGen for clauses (closing steps).
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+      if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
         CGF.EmitCloseOMPClause(*(*I), S);
   }
 
@@ -1325,7 +1569,7 @@ CodeGenFunction::EmitOMPDirectiveWithParallel(OpenMPDirectiveKind DKind,
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+    if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
       EmitFinalOMPClause(*(*I), S);
 
   // Remove list of private globals from the stack.
@@ -1366,7 +1610,9 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
   // OMPD_distribute and OMPD_parallel_for_simd directives intentionally and
   // HasSimd is processed for OMPD_parallel_for_simd part.
   bool HasSimd = DKind == OMPD_parallel_for_simd || DKind == OMPD_for_simd ||
-                 DKind == OMPD_distribute_simd;
+                 DKind == OMPD_distribute_simd ||
+                 DKind == OMPD_teams_distribute_simd ||
+                 DKind == OMPD_target_teams_distribute_simd;
   CGPragmaOmpSimd SimdWrapper(&S);
   llvm::Function *BodyFunction = 0;
   bool SeparateLastIter = false;
@@ -1395,7 +1641,15 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
   bool IsDistributeLoop = DKind == OMPD_distribute ||
                           DKind == OMPD_distribute_simd ||
                           DKind == OMPD_distribute_parallel_for ||
-                          DKind == OMPD_distribute_parallel_for_simd;
+                          DKind == OMPD_distribute_parallel_for_simd ||
+                          DKind == OMPD_teams_distribute_parallel_for ||
+                          DKind == OMPD_teams_distribute_parallel_for_simd ||
+                          DKind == OMPD_target_teams_distribute_parallel_for ||
+                          DKind == OMPD_target_teams_distribute_parallel_for_simd ||
+                          DKind == OMPD_teams_distribute ||
+                          DKind == OMPD_teams_distribute_simd ||
+                          DKind == OMPD_target_teams_distribute ||
+                          DKind == OMPD_target_teams_distribute_simd;
   int Schedule = KMP_SCH_DEFAULT;
   if (!IsDistributeLoop) {
     bool Ordered = CGM.OpenMPSupport.getOrdered();
@@ -1425,8 +1679,13 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
     const Expr *ChunkSize;
     CGM.OpenMPSupport.getScheduleChunkSize(Schedule, ChunkSize);
     OpenMPDirectiveKind Kind = S.getDirectiveKind();
-    bool IsComplexParallelLoop = Kind == OMPD_distribute_parallel_for ||
-                                 Kind == OMPD_distribute_parallel_for_simd;
+    bool IsComplexParallelLoop =
+        Kind == OMPD_distribute_parallel_for ||
+        Kind == OMPD_distribute_parallel_for_simd ||
+        Kind == OMPD_teams_distribute_parallel_for ||
+        Kind == OMPD_teams_distribute_parallel_for_simd ||
+        Kind == OMPD_target_teams_distribute_parallel_for ||
+        Kind == OMPD_target_teams_distribute_parallel_for_simd;
     bool IsInnerLoopGen = IsComplexParallelLoop && DKind != Kind;
     bool IsStaticSchedule = Schedule == KMP_SCH_STATIC_CHUNKED ||
                             Schedule == KMP_SCH_STATIC ||
@@ -1700,9 +1959,13 @@ CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
             EmitStoreOfScalar(Builder.CreateLoad(PLB), EmitLValue(LowerBound));
             EmitStoreOfScalar(Builder.CreateLoad(PUB), EmitLValue(UpperBound));
             // Special codegen for distribute parallel for [simd] constructs
-            if (Kind == OMPD_distribute_parallel_for)
+            if (Kind == OMPD_distribute_parallel_for ||
+                Kind == OMPD_teams_distribute_parallel_for ||
+                Kind == OMPD_target_teams_distribute_parallel_for)
               EmitOMPDirectiveWithParallel(OMPD_parallel_for, OMPD_for, S);
-            else if (Kind == OMPD_distribute_parallel_for_simd)
+            else if (Kind == OMPD_distribute_parallel_for_simd ||
+                     Kind == OMPD_teams_distribute_parallel_for_simd ||
+                     Kind == OMPD_target_teams_distribute_parallel_for_simd)
               EmitOMPDirectiveWithParallel(OMPD_parallel_for_simd,
                                            OMPD_for_simd, S);
           }
@@ -1826,7 +2089,7 @@ CodeGenFunction::EmitOMPDistributeDirective(const OMPDistributeDirective &S) {
 /// Generate an instructions for directive with 'teams' region.
 void
 CodeGenFunction::EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
-                                           OpenMPDirectiveKind SKind,
+                                           ArrayRef<OpenMPDirectiveKind> SKinds,
                                            const OMPExecutableDirective &S) {
   // Generate shared args for captured stmt.
   CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
@@ -1843,7 +2106,7 @@ CodeGenFunction::EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+    if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
       EmitInitOMPClause(*(*I), S);
   llvm::Value *NumTeams = CGM.OpenMPSupport.getNumTeams();
   llvm::Value *ThreadLimit = CGM.OpenMPSupport.getThreadLimit();
@@ -1863,7 +2126,7 @@ CodeGenFunction::EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+    if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
       EmitAfterInitOMPClause(*(*I), S);
 
   // Generate microtask.
@@ -1938,7 +2201,7 @@ CodeGenFunction::EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+      if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
         CGF.EmitPreOMPClause(*(*I), S);
 
     switch (DKind) {
@@ -1946,6 +2209,67 @@ CodeGenFunction::EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
     case OMPD_teams:
       CGF.EmitStmt(CS->getCapturedStmt());
       break;
+    case OMPD_teams_distribute:
+    case OMPD_target_teams_distribute:
+      EmitOMPDirectiveWithLoop(OMPD_teams_distribute, OMPD_distribute, S);
+      break;
+    case OMPD_teams_distribute_simd:
+    case OMPD_target_teams_distribute_simd:
+      EmitOMPDirectiveWithLoop(OMPD_teams_distribute_simd, OMPD_distribute_simd,
+                               S);
+      break;
+    case OMPD_teams_distribute_parallel_for: {
+      const OMPTeamsDistributeParallelForDirective &D =
+          cast<OMPTeamsDistributeParallelForDirective>(S);
+      assert(D.getLowerBound() && "No lower bound");
+      assert(D.getUpperBound() && "No upper bound");
+      EmitAutoVarDecl(
+          *cast<VarDecl>(cast<DeclRefExpr>(D.getLowerBound())->getDecl()));
+      EmitAutoVarDecl(
+          *cast<VarDecl>(cast<DeclRefExpr>(D.getUpperBound())->getDecl()));
+      EmitOMPDirectiveWithLoop(OMPD_teams_distribute_parallel_for,
+                               OMPD_distribute, S);
+      break;
+    }
+    case OMPD_teams_distribute_parallel_for_simd: {
+      const OMPTeamsDistributeParallelForSimdDirective &D =
+          cast<OMPTeamsDistributeParallelForSimdDirective>(S);
+      assert(D.getLowerBound() && "No lower bound");
+      assert(D.getUpperBound() && "No upper bound");
+      EmitAutoVarDecl(
+          *cast<VarDecl>(cast<DeclRefExpr>(D.getLowerBound())->getDecl()));
+      EmitAutoVarDecl(
+          *cast<VarDecl>(cast<DeclRefExpr>(D.getUpperBound())->getDecl()));
+      EmitOMPDirectiveWithLoop(OMPD_teams_distribute_parallel_for_simd,
+                               OMPD_distribute, S);
+      break;
+    }
+    case OMPD_target_teams_distribute_parallel_for: {
+      const OMPTargetTeamsDistributeParallelForDirective &D =
+          cast<OMPTargetTeamsDistributeParallelForDirective>(S);
+      assert(D.getLowerBound() && "No lower bound");
+      assert(D.getUpperBound() && "No upper bound");
+      EmitAutoVarDecl(
+          *cast<VarDecl>(cast<DeclRefExpr>(D.getLowerBound())->getDecl()));
+      EmitAutoVarDecl(
+          *cast<VarDecl>(cast<DeclRefExpr>(D.getUpperBound())->getDecl()));
+      EmitOMPDirectiveWithLoop(OMPD_target_teams_distribute_parallel_for,
+                               OMPD_distribute, S);
+      break;
+    }
+    case OMPD_target_teams_distribute_parallel_for_simd: {
+      const OMPTargetTeamsDistributeParallelForSimdDirective &D =
+          cast<OMPTargetTeamsDistributeParallelForSimdDirective>(S);
+      assert(D.getLowerBound() && "No lower bound");
+      assert(D.getUpperBound() && "No upper bound");
+      EmitAutoVarDecl(
+          *cast<VarDecl>(cast<DeclRefExpr>(D.getLowerBound())->getDecl()));
+      EmitAutoVarDecl(
+          *cast<VarDecl>(cast<DeclRefExpr>(D.getUpperBound())->getDecl()));
+      EmitOMPDirectiveWithLoop(OMPD_target_teams_distribute_parallel_for_simd,
+                               OMPD_distribute, S);
+      break;
+    }
     default:
       break;
     }
@@ -1955,14 +2279,14 @@ CodeGenFunction::EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+      if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
         CGF.EmitPostOMPClause(*(*I), S);
 
     // CodeGen for clauses (closing steps).
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                          E = S.clauses().end();
          I != E; ++I)
-      if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+      if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
         CGF.EmitCloseOMPClause(*(*I), S);
   }
 
@@ -1987,7 +2311,7 @@ CodeGenFunction::EmitOMPDirectiveWithTeams(OpenMPDirectiveKind DKind,
   for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(),
                                        E = S.clauses().end();
        I != E; ++I)
-    if (*I && !isAllowedClauseForDirective(SKind, (*I)->getClauseKind()))
+    if (*I && !IsAllowedClause((*I)->getClauseKind(), SKinds))
       EmitFinalOMPClause(*(*I), S);
 
   // Remove list of private globals from the stack.
@@ -2036,18 +2360,6 @@ static void EmitUntiedTaskSwitch(CodeGenFunction &CGF, bool EmitBranch) {
       CGF.EmitBranch(NextBlock);
     CGF.EmitBlock(NextBlock);
   }
-}
-
-namespace {
-struct CallStackRestore : EHScopeStack::Cleanup {
-  llvm::Value *Stack;
-  CallStackRestore(llvm::Value *Stack) : Stack(Stack) {}
-  void Emit(CodeGenFunction &CGF, Flags flags) {
-    llvm::Value *V = CGF.Builder.CreateLoad(Stack);
-    llvm::Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::stackrestore);
-    CGF.Builder.CreateCall(F, V);
-  }
-};
 }
 
 static std::pair<llvm::Value *, unsigned>
@@ -2522,7 +2834,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
 
 /// Generate an instructions for '#pragma omp sections' directive.
 void
-CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind DKind,
+CodeGenFunction::EmitOMPSectionsDirective(OpenMPDirectiveKind,
                                           OpenMPDirectiveKind SKind,
                                           const OMPExecutableDirective &S) {
   // Init list of private globals in the stack.
@@ -3013,30 +3325,30 @@ void CodeGenFunction::EmitFinalOMPClause(const OMPClause &C,
   }
 }
 
-void CodeGenFunction::EmitInitOMPNowaitClause(const OMPNowaitClause &C,
-                                              const OMPExecutableDirective &S) {
+void CodeGenFunction::EmitInitOMPNowaitClause(const OMPNowaitClause &,
+                                              const OMPExecutableDirective &) {
   CGM.OpenMPSupport.setNoWait(true);
 }
 
 void
-CodeGenFunction::EmitInitOMPOrderedClause(const OMPOrderedClause &C,
-                                          const OMPExecutableDirective &S) {
+CodeGenFunction::EmitInitOMPOrderedClause(const OMPOrderedClause &,
+                                          const OMPExecutableDirective &) {
   CGM.OpenMPSupport.setOrdered(true);
 }
 
-void CodeGenFunction::EmitInitOMPUntiedClause(const OMPUntiedClause &C,
-                                              const OMPExecutableDirective &S) {
+void CodeGenFunction::EmitInitOMPUntiedClause(const OMPUntiedClause &,
+                                              const OMPExecutableDirective &) {
   CGM.OpenMPSupport.setUntied(true);
 }
 
 void
-CodeGenFunction::EmitInitOMPMergeableClause(const OMPMergeableClause &C,
-                                            const OMPExecutableDirective &S) {
+CodeGenFunction::EmitInitOMPMergeableClause(const OMPMergeableClause &,
+                                            const OMPExecutableDirective &) {
   CGM.OpenMPSupport.setMergeable(true);
 }
 
 void CodeGenFunction::EmitInitOMPFinalClause(const OMPFinalClause &C,
-                                             const OMPExecutableDirective &S) {
+                                             const OMPExecutableDirective &) {
   llvm::Value *Flags = CGM.OpenMPSupport.getTaskFlags();
   llvm::BasicBlock *ThenBlock = createBasicBlock("task.final.then");
   llvm::BasicBlock *EndBlock = createBasicBlock("task.final.end");
@@ -3051,7 +3363,7 @@ void CodeGenFunction::EmitInitOMPFinalClause(const OMPFinalClause &C,
 
 void
 CodeGenFunction::EmitInitOMPNumThreadsClause(const OMPNumThreadsClause &C,
-                                             const OMPExecutableDirective &S) {
+                                             const OMPExecutableDirective &) {
   // __kmpc_push_num_threads(&loc, global_tid, num_threads);
   // ident_t loc = {...};
   llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(C.getLocStart(), *this);
@@ -3065,7 +3377,7 @@ CodeGenFunction::EmitInitOMPNumThreadsClause(const OMPNumThreadsClause &C,
 
 void
 CodeGenFunction::EmitInitOMPNumTeamsClause(const OMPNumTeamsClause &C,
-                                           const OMPExecutableDirective &S) {
+                                           const OMPExecutableDirective &) {
   // num_teams = num_teams...;
   llvm::Value *NumTeams = EmitScalarExpr(C.getNumTeams(), true);
   CGM.OpenMPSupport.setNumTeams(NumTeams);
@@ -3073,7 +3385,7 @@ CodeGenFunction::EmitInitOMPNumTeamsClause(const OMPNumTeamsClause &C,
 
 void
 CodeGenFunction::EmitInitOMPThreadLimitClause(const OMPThreadLimitClause &C,
-                                              const OMPExecutableDirective &S) {
+                                              const OMPExecutableDirective &) {
   // thread_limit = thread_limit...;
   llvm::Value *ThreadLimit = EmitScalarExpr(C.getThreadLimit(), true);
   CGM.OpenMPSupport.setThreadLimit(ThreadLimit);
@@ -3081,7 +3393,7 @@ CodeGenFunction::EmitInitOMPThreadLimitClause(const OMPThreadLimitClause &C,
 
 void
 CodeGenFunction::EmitInitOMPProcBindClause(const OMPProcBindClause &C,
-                                           const OMPExecutableDirective &S) {
+                                           const OMPExecutableDirective &) {
   // __kmpc_push_proc_bind(&loc, global_tid, proc_bind);
   // ident_t loc = {...};
   llvm::Value *Loc = CGM.CreateIntelOpenMPRTLLoc(C.getLocStart(), *this);
@@ -3139,7 +3451,7 @@ CodeGenFunction::EmitAfterInitOMPIfClause(const OMPIfClause &C,
   }
 }
 
-void CodeGenFunction::EmitFinalOMPIfClause(const OMPIfClause &C,
+void CodeGenFunction::EmitFinalOMPIfClause(const OMPIfClause &,
                                            const OMPExecutableDirective &S) {
   if (isa<OMPTaskDirective>(&S)) {
     llvm::BasicBlock *ContBlock = createBasicBlock("omp.if.end");
@@ -3179,7 +3491,7 @@ void CodeGenFunction::EmitFinalOMPIfClause(const OMPIfClause &C,
 
 void
 CodeGenFunction::EmitPreOMPScheduleClause(const OMPScheduleClause &C,
-                                          const OMPExecutableDirective &S) {
+                                          const OMPExecutableDirective &) {
   int Schedule = KMP_SCH_DEFAULT;
   bool Ordered = CGM.OpenMPSupport.getOrdered();
   bool Merge = CGM.OpenMPSupport.getMergeable();
@@ -3218,7 +3530,7 @@ CodeGenFunction::EmitPreOMPScheduleClause(const OMPScheduleClause &C,
 
 void
 CodeGenFunction::EmitPreOMPDistScheduleClause(const OMPDistScheduleClause &C,
-                                              const OMPExecutableDirective &S) {
+                                              const OMPExecutableDirective &) {
   int Schedule = KMP_SCH_DEFAULT;
   const Expr *ChunkSize = C.getDistChunkSize();
 
@@ -3361,7 +3673,7 @@ CodeGenFunction::EmitCopyAssignment(ArrayRef<const Expr *>::iterator I,
 }
 
 void CodeGenFunction::EmitPreOMPCopyinClause(const OMPCopyinClause &C,
-                                             const OMPExecutableDirective &S) {
+                                             const OMPExecutableDirective &) {
   // copy_data(var1);
   // copy_data(var2);
   // ...
@@ -3399,7 +3711,7 @@ static bool isTrivialInitializer(const Expr *Init) {
 }
 
 void CodeGenFunction::EmitPreOMPPrivateClause(const OMPPrivateClause &C,
-                                              const OMPExecutableDirective &S) {
+                                              const OMPExecutableDirective &) {
   // Type1 tmp1;
   // anon.field1 = &tmp1;
   // Type2 tmp2;
@@ -3498,7 +3810,7 @@ void CodeGenFunction::EmitPreOMPPrivateClause(const OMPPrivateClause &C,
 
 void
 CodeGenFunction::EmitPreOMPFirstPrivateClause(const OMPFirstPrivateClause &C,
-                                              const OMPExecutableDirective &S) {
+                                              const OMPExecutableDirective &) {
   // Type1 tmp1(var1);
   // anon.field1 = &tmp1;
   // Type2 tmp2(var2);
@@ -3883,7 +4195,7 @@ CodeGenFunction::EmitPostOMPLastPrivateClause(const OMPLastPrivateClause &C,
 }
 
 void CodeGenFunction::EmitCloseOMPLastPrivateClause(
-    const OMPLastPrivateClause &C, const OMPExecutableDirective &S) {
+    const OMPLastPrivateClause &, const OMPExecutableDirective &) {
   // ~Type1(tmp1);
   // ~Type2(tmp2);
   // ...
@@ -3904,6 +4216,7 @@ void CodeGenFunction::EmitCloseOMPLastPrivateClause(
 void
 CodeGenFunction::EmitInitOMPReductionClause(const OMPReductionClause &C,
                                             const OMPExecutableDirective &S) {
+  (void)S;
   assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   // Type1 tmp1(var1);
   // anon.field1 = &tmp1;
@@ -3949,6 +4262,7 @@ CodeGenFunction::EmitInitOMPReductionClause(const OMPReductionClause &C,
 void
 CodeGenFunction::EmitPreOMPReductionClause(const OMPReductionClause &C,
                                            const OMPExecutableDirective &S) {
+  (void)S;
   assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   // Type1 tmp1(var1);
   // anon.field1 = &tmp1;
@@ -4225,6 +4539,7 @@ CodeGenFunction::EmitPreOMPReductionClause(const OMPReductionClause &C,
 void
 CodeGenFunction::EmitPostOMPReductionClause(const OMPReductionClause &C,
                                             const OMPExecutableDirective &S) {
+  (void)S;
   assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   CodeGenFunction &CGF = CGM.OpenMPSupport.getCGFForReductionFunction();
   llvm::Function *ReduceFunc = CGF.CurFn;
@@ -5062,6 +5377,7 @@ CodeGenFunction::EmitOMPTaskgroupDirective(const OMPTaskgroupDirective &S) {
 void
 CodeGenFunction::EmitCloseOMPReductionClause(const OMPReductionClause &C,
                                              const OMPExecutableDirective &S) {
+  (void)S;
   assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   llvm::BasicBlock *RedBB1;
   llvm::BasicBlock *RedBB2;
@@ -5126,8 +5442,9 @@ CodeGenFunction::EmitCloseOMPReductionClause(const OMPReductionClause &C,
 }
 
 void
-CodeGenFunction::EmitFinalOMPReductionClause(const OMPReductionClause &C,
+CodeGenFunction::EmitFinalOMPReductionClause(const OMPReductionClause &,
                                              const OMPExecutableDirective &S) {
+  (void)S;
   assert(!isa<OMPSimdDirective>(S)); // Not yet supported
   CodeGenFunction &CGF = CGM.OpenMPSupport.getCGFForReductionFunction();
   if (CGF.CurFn) {
@@ -5272,7 +5589,7 @@ CodeGenFunction::CGPragmaOmpSimd::emitClauseTail(CodeGenFunction *CGF,
 
 // Walker for '#pragma omp simd'
 bool CodeGenFunction::CGPragmaOmpSimd::walkLocalVariablesToEmit(
-    CodeGenFunction *CGF, CGSIMDForStmtInfo *Info) const {
+    CodeGenFunction *CGF, CGSIMDForStmtInfo *) const {
 
   // Init the OpenMP local vars stack.
   CGF->CGM.OpenMPSupport.startOpenMPRegion(true);
@@ -5291,8 +5608,6 @@ bool CodeGenFunction::CGPragmaOmpSimd::walkLocalVariablesToEmit(
         CGF->CreateMemTemp(QTy, CGF->CGM.getMangledName(VD) + ".counter.");
     CGF->CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
   }
-
-  RunCleanupsScope ExecutedScope(*CGF);
 
   // Here we push index parameter into openmp map.
   // It is useful for loop counters calculation.
@@ -5475,6 +5790,7 @@ CodeGenFunction::CGPragmaOmpSimd::emitLinearFinal(CodeGenFunction &CGF) const {
 
 /// Generate an instructions for '#pragma omp teams' directive.
 void CodeGenFunction::EmitOMPTeamsDirective(const OMPTeamsDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
   EmitOMPDirectiveWithTeams(OMPD_teams, OMPD_unknown, S);
 }
 
@@ -5527,6 +5843,42 @@ void CodeGenFunction::EmitOMPDistributeParallelForSimdDirective(
                            S);
 }
 
+// Generate the instructions for '#pragma omp teams distribute parallel for'
+// directive.
+void CodeGenFunction::EmitOMPTeamsDistributeParallelForDirective(
+    const OMPTeamsDistributeParallelForDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
+  EmitOMPDirectiveWithTeams(OMPD_teams_distribute_parallel_for,
+                            OMPD_distribute_parallel_for, S);
+}
+
+// Generate the instructions for '#pragma omp teams distribute parallel for simd'
+// directive.
+void CodeGenFunction::EmitOMPTeamsDistributeParallelForSimdDirective(
+    const OMPTeamsDistributeParallelForSimdDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
+  EmitOMPDirectiveWithTeams(OMPD_teams_distribute_parallel_for_simd,
+                            OMPD_distribute_parallel_for_simd, S);
+}
+
+// Generate the instructions for '#pragma omp target teams distribute parallel
+// for' directive.
+void CodeGenFunction::EmitOMPTargetTeamsDistributeParallelForDirective(
+    const OMPTargetTeamsDistributeParallelForDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
+  EmitOMPDirectiveWithTeams(OMPD_target_teams_distribute_parallel_for,
+                            OMPD_distribute_parallel_for, S);
+}
+
+// Generate the instructions for '#pragma omp target teams distribute parallel
+// for simd' directive.
+void CodeGenFunction::EmitOMPTargetTeamsDistributeParallelForSimdDirective(
+    const OMPTargetTeamsDistributeParallelForSimdDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
+  EmitOMPDirectiveWithTeams(OMPD_target_teams_distribute_parallel_for_simd,
+                            OMPD_distribute_parallel_for_simd, S);
+}
+
 // Generate the instructions for '#pragma omp target' directive.
 void CodeGenFunction::EmitOMPTargetDirective(const OMPTargetDirective &S) {
   CapturedStmt *CS = cast<CapturedStmt>(S.getAssociatedStmt());
@@ -5543,7 +5895,7 @@ CodeGenFunction::EmitOMPTargetDataDirective(const OMPTargetDataDirective &S) {
 
 // Generate the instructions for '#pragma omp target update' directive.
 void CodeGenFunction::EmitOMPTargetUpdateDirective(
-    const OMPTargetUpdateDirective &S) {
+    const OMPTargetUpdateDirective &) {
   // TODO Need to implement proper codegen for target oriented directives.
   ;
 }
@@ -5551,6 +5903,42 @@ void CodeGenFunction::EmitOMPTargetUpdateDirective(
 // Generate the instructions for '#pragma omp target teams' directive.
 void
 CodeGenFunction::EmitOMPTargetTeamsDirective(const OMPTargetTeamsDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
   EmitOMPDirectiveWithTeams(OMPD_target_teams, OMPD_target, S);
+}
+
+/// Generate an instructions for '#pragma omp teams distribute' directive.
+void CodeGenFunction::EmitOMPTeamsDistributeDirective(
+    const OMPTeamsDistributeDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
+  EmitOMPDirectiveWithTeams(OMPD_teams_distribute, OMPD_distribute, S);
+}
+
+/// Generate an instructions for '#pragma omp teams distribute simd' directive.
+void CodeGenFunction::EmitOMPTeamsDistributeSimdDirective(
+    const OMPTeamsDistributeSimdDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
+  EmitOMPDirectiveWithTeams(OMPD_teams_distribute_simd, OMPD_distribute_simd,
+                            S);
+}
+
+/// Generate an instructions for '#pragma omp target teams distribute'
+/// directive.
+void CodeGenFunction::EmitOMPTargetTeamsDistributeDirective(
+    const OMPTargetTeamsDistributeDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
+  OpenMPDirectiveKind Directives[] = { OMPD_target, OMPD_distribute };
+  EmitOMPDirectiveWithTeams(OMPD_target_teams_distribute, Directives,
+                            S);
+}
+
+/// Generate an instructions for '#pragma omp target teams distribute simd'
+/// directive.
+void CodeGenFunction::EmitOMPTargetTeamsDistributeSimdDirective(
+    const OMPTargetTeamsDistributeSimdDirective &S) {
+  RunCleanupsScope ExecutedScope(*this);
+  OpenMPDirectiveKind Directives[] = { OMPD_target, OMPD_distribute_simd };
+  EmitOMPDirectiveWithTeams(OMPD_target_teams_distribute_simd,
+                            Directives, S);
 }
 
