@@ -241,7 +241,7 @@ OpenMPClauseKind DSAStackTy::getDSA(StackTy::reverse_iterator Iter, VarDecl *D,
     //  File-scope or namespace-scope variables referenced in called routines
     //  in the region are shared unless they appear in a threadprivate
     //  directive.
-    if (!D->isFunctionOrMethodVarDecl())
+    if (!D->isFunctionOrMethodVarDecl() && D->getKind() != Decl::ParmVar)
       return OMPC_shared;
 
     // OpenMP [2.9.1.2, Data-sharing Attribute Rules for Variables Referenced
