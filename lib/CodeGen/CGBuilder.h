@@ -17,15 +17,18 @@ namespace CodeGen {
 
 class CodeGenFunction;
 
-/// IRBuilder inserter which forwards to CodeGenFunction::InsertHelper.
+/// \brief This is an IRBuilder insertion helper that forwards to
+/// CodeGenFunction::InsertHelper, which adds nesessary metadata to
+/// instructions.
 template <bool PreserveNames>
 class CGBuilderInserter
   : protected llvm::IRBuilderDefaultInserter<PreserveNames> {
 public:
-  CGBuilderInserter() : CGF(0) {}
+  CGBuilderInserter() : CGF(nullptr) {}
   explicit CGBuilderInserter(CodeGenFunction *CGF) : CGF(CGF) {}
 
 protected:
+  /// \brief This forwards to CodeGenFunction::InsertHelper.
   void InsertHelper(llvm::Instruction *I, const llvm::Twine &Name,
                     llvm::BasicBlock *BB,
                     llvm::BasicBlock::iterator InsertPt) const;
@@ -37,14 +40,14 @@ private:
 
 // Don't preserve names on values in an optimized build.
 #ifdef NDEBUG
-typedef CGBuilderInserter<false> CGBuilderInserterTy;
-typedef llvm::IRBuilder<false, llvm::ConstantFolder, CGBuilderInserterTy>
-  CGBuilderTy;
+#define PreserveNames false
 #else
-typedef CGBuilderInserter<true> CGBuilderInserterTy;
-typedef llvm::IRBuilder<true, llvm::ConstantFolder, CGBuilderInserterTy>
-  CGBuilderTy;
+#define PreserveNames true
 #endif
+typedef CGBuilderInserter<PreserveNames> CGBuilderInserterTy;
+typedef llvm::IRBuilder<PreserveNames, llvm::ConstantFolder,
+                        CGBuilderInserterTy> CGBuilderTy;
+#undef PreserveNames
 
 }  // end namespace CodeGen
 }  // end namespace clang

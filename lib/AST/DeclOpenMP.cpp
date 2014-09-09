@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/AST/ASTContext.h"
-#include "clang/AST/DeclBase.h"
 #include "clang/AST/Decl.h"
+#include "clang/AST/DeclBase.h"
 #include "clang/AST/DeclOpenMP.h"
 #include "clang/AST/Expr.h"
 
@@ -30,11 +30,8 @@ OMPThreadPrivateDecl *OMPThreadPrivateDecl::Create(ASTContext &C,
                                                    DeclContext *DC,
                                                    SourceLocation L,
                                                    ArrayRef<Expr *> VL) {
-  unsigned Size = sizeof(OMPThreadPrivateDecl) + (VL.size() * sizeof(Expr *));
-
-  void *Mem = C.Allocate(Size, llvm::alignOf<OMPThreadPrivateDecl>());
-  OMPThreadPrivateDecl *D =
-      new (Mem) OMPThreadPrivateDecl(OMPThreadPrivate, DC, L);
+  OMPThreadPrivateDecl *D = new (C, DC, VL.size() * sizeof(Expr *))
+      OMPThreadPrivateDecl(OMPThreadPrivate, DC, L);
   D->NumVars = VL.size();
   D->setVars(VL);
   return D;
@@ -43,11 +40,8 @@ OMPThreadPrivateDecl *OMPThreadPrivateDecl::Create(ASTContext &C,
 OMPThreadPrivateDecl *OMPThreadPrivateDecl::CreateDeserialized(ASTContext &C,
                                                                unsigned ID,
                                                                unsigned N) {
-  unsigned Size = sizeof(OMPThreadPrivateDecl) + (N * sizeof(Expr *));
-
-  void *Mem = AllocateDeserializedDecl(C, ID, Size);
-  OMPThreadPrivateDecl *D =
-      new (Mem) OMPThreadPrivateDecl(OMPThreadPrivate, 0, SourceLocation());
+  OMPThreadPrivateDecl *D = new (C, ID, N * sizeof(Expr *))
+      OMPThreadPrivateDecl(OMPThreadPrivate, 0, SourceLocation());
   D->NumVars = N;
   return D;
 }
@@ -117,9 +111,8 @@ OMPDeclareSimdDecl *OMPDeclareSimdDecl::Create(ASTContext &C, DeclContext *DC,
                                                ArrayRef<OMPClause *> CL) {
   unsigned NC = CL.size();
   unsigned Size = getTotalSize(NV, NC);
-  void *Mem = C.Allocate(Size, llvm::alignOf<OMPDeclareSimdDecl>());
-  OMPDeclareSimdDecl *D =
-      new (Mem) OMPDeclareSimdDecl(OMPDeclareSimd, DC, L, NV, NC);
+  OMPDeclareSimdDecl *D = new (C, DC, Size - sizeof(OMPDeclareSimdDecl))
+      OMPDeclareSimdDecl(OMPDeclareSimd, DC, L, NV, NC);
   D->FuncDecl = FuncDecl;
   D->setClauses(CL);
   return D;
@@ -130,9 +123,8 @@ OMPDeclareSimdDecl *OMPDeclareSimdDecl::CreateDeserialized(ASTContext &C,
                                                            unsigned NV,
                                                            unsigned NC) {
   unsigned Size = getTotalSize(NV, NC);
-  void *Mem = AllocateDeserializedDecl(C, ID, Size);
-  OMPDeclareSimdDecl *D =
-      new (Mem) OMPDeclareSimdDecl(OMPDeclareSimd, 0, SourceLocation(), NV, NC);
+  OMPDeclareSimdDecl *D = new (C, ID, Size - sizeof(OMPDeclareSimdDecl))
+      OMPDeclareSimdDecl(OMPDeclareSimd, 0, SourceLocation(), NV, NC);
   D->FuncDecl = 0;
   return D;
 }
@@ -159,9 +151,9 @@ OMPDeclareReductionDecl *OMPDeclareReductionDecl::Create(ASTContext &C,
   unsigned Size = getFirstElementOffset() +
                   N * sizeof(OMPDeclareReductionDecl::ReductionData);
 
-  void *Mem = C.Allocate(Size);
   OMPDeclareReductionDecl *D =
-      new (Mem) OMPDeclareReductionDecl(OMPDeclareReduction, DC, L, Name);
+      new (C, DC, Size - sizeof(OMPDeclareReductionDecl))
+          OMPDeclareReductionDecl(OMPDeclareReduction, DC, L, Name);
   D->NumTypes = N;
   return D;
 }
@@ -172,9 +164,10 @@ OMPDeclareReductionDecl::CreateDeserialized(ASTContext &C, unsigned ID,
   unsigned Size = getFirstElementOffset() +
                   N * sizeof(OMPDeclareReductionDecl::ReductionData);
 
-  void *Mem = AllocateDeserializedDecl(C, ID, Size);
-  OMPDeclareReductionDecl *D = new (Mem) OMPDeclareReductionDecl(
-      OMPDeclareReduction, 0, SourceLocation(), DeclarationName());
+  OMPDeclareReductionDecl *D =
+      new (C, ID, Size - sizeof(OMPDeclareReductionDecl))
+          OMPDeclareReductionDecl(OMPDeclareReduction, 0, SourceLocation(),
+                                  DeclarationName());
   D->NumTypes = N;
   return D;
 }
@@ -200,20 +193,15 @@ void OMPDeclareTargetDecl::anchor() {}
 
 OMPDeclareTargetDecl *
 OMPDeclareTargetDecl::Create(ASTContext &C, DeclContext *DC, SourceLocation L) {
-  void *Mem = C.Allocate(sizeof(OMPDeclareTargetDecl),
-                         llvm::alignOf<OMPDeclareTargetDecl>());
   OMPDeclareTargetDecl *D =
-      new (Mem) OMPDeclareTargetDecl(OMPDeclareTarget, DC, L);
+      new (C, DC) OMPDeclareTargetDecl(OMPDeclareTarget, DC, L);
   return D;
 }
 
 OMPDeclareTargetDecl *OMPDeclareTargetDecl::CreateDeserialized(ASTContext &C,
                                                                unsigned ID) {
   // Realign
-  unsigned Size = llvm::RoundUpToAlignment(
-      sizeof(OMPDeclareTargetDecl), llvm::alignOf<OMPDeclareTargetDecl>());
-  void *Mem = AllocateDeserializedDecl(C, ID, Size);
   OMPDeclareTargetDecl *D =
-      new (Mem) OMPDeclareTargetDecl(OMPDeclareTarget, 0, SourceLocation());
+      new (C, ID) OMPDeclareTargetDecl(OMPDeclareTarget, 0, SourceLocation());
   return D;
 }

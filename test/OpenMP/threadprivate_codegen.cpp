@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
   return s1.a;
 }
 // CHECK: }
-// CHECK: define internal void @_GLOBAL__I_a()
+// CHECK: define internal void @_GLOBAL__sub_I_threadprivate_codegen.cpp()
 // CHECK: call void @__cxx_global_var_init()
 // CHECK: call void @__cxx_global_var_init1()
 // CHECK: call void @__omp_threadprivate_{{[a-zA-Z0-9_]+}}gs()

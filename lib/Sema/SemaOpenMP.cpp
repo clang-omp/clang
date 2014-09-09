@@ -693,7 +693,7 @@ void Sema::EndOpenMPDSABlock(Stmt *CurDirective) {
                 InitSeq.Perform(*this, Entity, InitKind, MultiExprArg());
             if (Res.isInvalid())
               continue;
-            DefaultInits.push_back(ActOnFinishFullExpr(Res.take()).take());
+            DefaultInits.push_back(ActOnFinishFullExpr(Res.get()).get());
           } else {
             DefaultInits.push_back(0);
           }
@@ -741,7 +741,8 @@ ExprResult Sema::ActOnOpenMPIdExpression(Scope *CurScope,
   if (!Lookup.isSingleResult()) {
     VarDeclFilterCCC Validator(*this);
     if (TypoCorrection Corrected =
-            CorrectTypo(Id, LookupOrdinaryName, CurScope, 0, Validator)) {
+            CorrectTypo(Id, LookupOrdinaryName, CurScope, nullptr, Validator,
+                        CTK_ErrorRecovery)) {
       diagnoseTypo(Corrected,
                    PDiag(Lookup.empty()
                              ? diag::err_undeclared_var_use_suggest
@@ -1108,8 +1109,8 @@ Sema::OMPDeclareReductionFunctionScope::ActOnOMPDeclareReductionFunction(
   ParRHS->setScopeInfo(0, 1);
   ParmVarDecl *Params[] = {ParLHS, ParRHS};
   FD->setParams(Params);
-  FTL.setArg(0, ParLHS);
-  FTL.setArg(1, ParRHS);
+  FTL.setParam(0, ParLHS);
+  FTL.setParam(1, ParRHS);
   OmpIn =
       VarDecl::Create(S.Context, FD, Loc, Loc, &S.Context.Idents.get("omp_in"),
                       QTy, S.Context.getTrivialTypeSourceInfo(QTy), SC_Auto);
@@ -1132,20 +1133,20 @@ Sema::OMPDeclareReductionFunctionScope::ActOnOMPDeclareReductionFunction(
       S.BuildDeclRefExpr(ParLHS, ParLHS->getType(), VK_LValue, Loc);
   ExprResult RHS =
       S.BuildDeclRefExpr(ParRHS, ParRHS->getType(), VK_LValue, Loc);
-  LHS = S.DefaultLvalueConversion(LHS.take());
-  RHS = S.DefaultLvalueConversion(RHS.take());
-  LHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, LHS.take());
-  RHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, RHS.take());
-  LHS = S.ActOnFinishFullExpr(LHS.take());
-  RHS = S.ActOnFinishFullExpr(RHS.take());
-  S.AddInitializerToDecl(OmpOut, LHS.take(), true, false);
-  S.AddInitializerToDecl(OmpIn, RHS.take(), true, false);
+  LHS = S.DefaultLvalueConversion(LHS.get());
+  RHS = S.DefaultLvalueConversion(RHS.get());
+  LHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, LHS.get());
+  RHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, RHS.get());
+  LHS = S.ActOnFinishFullExpr(LHS.get());
+  RHS = S.ActOnFinishFullExpr(RHS.get());
+  S.AddInitializerToDecl(OmpOut, LHS.get(), true, false);
+  S.AddInitializerToDecl(OmpIn, RHS.get(), true, false);
   return FD;
 }
 
 void Sema::OMPDeclareReductionFunctionScope::setBody(Expr *E) {
   if (!E) {
-    FD->setBody(S.ActOnNullStmt(SourceLocation()).take());
+    FD->setBody(S.ActOnNullStmt(SourceLocation()).get());
     FD->setInvalidDecl();
     return;
   }
@@ -1156,29 +1157,29 @@ void Sema::OMPDeclareReductionFunctionScope::setBody(Expr *E) {
   ExprResult S3 = S.IgnoredValueConversions(E);
   ExprResult LHS =
       S.BuildDeclRefExpr(ParLHS, ParLHS->getType(), VK_LValue, E->getExprLoc());
-  LHS = S.DefaultLvalueConversion(LHS.take());
-  LHS = S.CreateBuiltinUnaryOp(E->getExprLoc(), UO_Deref, LHS.take());
+  LHS = S.DefaultLvalueConversion(LHS.get());
+  LHS = S.CreateBuiltinUnaryOp(E->getExprLoc(), UO_Deref, LHS.get());
   ExprResult RHS =
       S.BuildDeclRefExpr(OmpOut, OmpOut->getType(), VK_LValue, E->getExprLoc());
   ExprResult Res =
-      S.BuildBinOp(0, E->getExprLoc(), BO_Assign, LHS.take(), RHS.take());
-  ExprResult S4 = S.IgnoredValueConversions(Res.take());
+      S.BuildBinOp(0, E->getExprLoc(), BO_Assign, LHS.get(), RHS.get());
+  ExprResult S4 = S.IgnoredValueConversions(Res.get());
   if (S1.isInvalid() || S2.isInvalid() || S3.isInvalid() || S4.isInvalid()) {
-    FD->setBody(S.ActOnNullStmt(SourceLocation()).take());
+    FD->setBody(S.ActOnNullStmt(SourceLocation()).get());
     FD->setInvalidDecl();
   } else {
     CompoundScopeRAII CompoundScope(S);
-    Stmt *Stmts[] = {S1.take(), S2.take(), S3.take(), S4.take()};
+    Stmt *Stmts[] = {S1.get(), S2.get(), S3.get(), S4.get()};
     StmtResult Body =
         S.ActOnCompoundStmt(E->getExprLoc(), E->getExprLoc(), Stmts, false);
-    FD->setBody(Body.take());
+    FD->setBody(Body.get());
   }
 }
 
 Expr *Sema::OMPDeclareReductionFunctionScope::getCombiner() {
   ExprResult Res =
       S.BuildDeclRefExpr(FD, FD->getType(), VK_LValue, FD->getLocation());
-  return Res.take();
+  return Res.get();
 }
 
 FunctionDecl *Sema::OMPDeclareReductionInitFunctionScope::
@@ -1225,8 +1226,8 @@ FunctionDecl *Sema::OMPDeclareReductionInitFunctionScope::
   ParRHS->setScopeInfo(0, 1);
   ParmVarDecl *Params[] = {ParLHS, ParRHS};
   FD->setParams(Params);
-  FTL.setArg(0, ParLHS);
-  FTL.setArg(1, ParRHS);
+  FTL.setParam(0, ParLHS);
+  FTL.setParam(1, ParRHS);
   OmpOrig = VarDecl::Create(S.Context, FD, Loc, Loc,
                             &S.Context.Idents.get("omp_orig"), QTy,
                             S.Context.getTrivialTypeSourceInfo(QTy), SC_Auto);
@@ -1247,10 +1248,10 @@ FunctionDecl *Sema::OMPDeclareReductionInitFunctionScope::
   }
   ExprResult RHS =
       S.BuildDeclRefExpr(ParRHS, ParRHS->getType(), VK_LValue, Loc);
-  RHS = S.DefaultLvalueConversion(RHS.take());
-  RHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, RHS.take());
-  RHS = S.ActOnFinishFullExpr(RHS.take());
-  S.AddInitializerToDecl(OmpOrig, RHS.take(), true, false);
+  RHS = S.DefaultLvalueConversion(RHS.get());
+  RHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, RHS.get());
+  RHS = S.ActOnFinishFullExpr(RHS.get());
+  S.AddInitializerToDecl(OmpOrig, RHS.get(), true, false);
   return FD;
 }
 
@@ -1263,10 +1264,10 @@ void Sema::CreateDefaultDeclareReductionInitFunctionBody(FunctionDecl *FD,
     // Perform explicit initialization of POD types.
     ExprResult OmpPrivDRE =
         BuildDeclRefExpr(OmpPriv, OmpPriv->getType(), VK_LValue, Loc);
-    Expr *OmpPrivDREExpr = OmpPrivDRE.take();
+    Expr *OmpPrivDREExpr = OmpPrivDRE.get();
     ExprResult OmpPrivAddr =
         CreateBuiltinUnaryOp(Loc, UO_AddrOf, OmpPrivDREExpr);
-    OmpPrivAddr = PerformImplicitConversion(OmpPrivAddr.take(),
+    OmpPrivAddr = PerformImplicitConversion(OmpPrivAddr.get(),
                                             Context.VoidPtrTy, AA_Casting);
     ExprResult OmpPrivSizeOf;
     {
@@ -1282,35 +1283,34 @@ void Sema::CreateDefaultDeclareReductionInitFunctionBody(FunctionDecl *FD,
     Name.setIdentifier(PP.getIdentifierInfo("__builtin_memset"), Loc);
     ExprResult MemSetFn =
         ActOnIdExpression(TUScope, SS, TemplateKwLoc, Name, true, false);
-    Expr *Args[] = {OmpPrivAddr.take(), ActOnIntegerConstant(Loc, 0).take(),
-                    OmpPrivSizeOf.take()};
-    MemCall = ActOnCallExpr(0, MemSetFn.take(), Loc, Args, Loc);
-    MemCall = IgnoredValueConversions(MemCall.take());
+    Expr *Args[] = {OmpPrivAddr.get(), ActOnIntegerConstant(Loc, 0).get(),
+                    OmpPrivSizeOf.get()};
+    MemCall = ActOnCallExpr(0, MemSetFn.get(), Loc, Args, Loc);
+    MemCall = IgnoredValueConversions(MemCall.get());
   } else {
     ActOnUninitializedDecl(OmpPriv, false);
   }
   StmtResult S1 =
       ActOnDeclStmt(DeclGroupPtrTy::make(DeclGroupRef(OmpPriv)), Loc, Loc);
   ExprResult LHS = BuildDeclRefExpr(ParLHS, ParLHS->getType(), VK_LValue, Loc);
-  LHS = DefaultLvalueConversion(LHS.take());
-  LHS = CreateBuiltinUnaryOp(Loc, UO_Deref, LHS.take());
+  LHS = DefaultLvalueConversion(LHS.get());
+  LHS = CreateBuiltinUnaryOp(Loc, UO_Deref, LHS.get());
   ExprResult RHS =
       BuildDeclRefExpr(OmpPriv, OmpPriv->getType(), VK_LValue, Loc);
-  ExprResult Res = BuildBinOp(0, Loc, BO_Assign, LHS.take(), RHS.take());
-  ExprResult S2 =
-      IgnoredValueConversions(ActOnFinishFullExpr(Res.take()).take());
+  ExprResult Res = BuildBinOp(0, Loc, BO_Assign, LHS.get(), RHS.get());
+  ExprResult S2 = IgnoredValueConversions(ActOnFinishFullExpr(Res.get()).get());
   if (S1.isInvalid() || S2.isInvalid()) {
-    FD->setBody(ActOnNullStmt(Loc).take());
+    FD->setBody(ActOnNullStmt(Loc).get());
     FD->setInvalidDecl();
   } else {
     CompoundScopeRAII CompoundScope(*this);
     SmallVector<Stmt *, 4> Stmts;
-    Stmts.push_back(S1.take());
+    Stmts.push_back(S1.get());
     if (MemCall.isUsable())
-      Stmts.push_back(MemCall.take());
-    Stmts.push_back(S2.take());
+      Stmts.push_back(MemCall.get());
+    Stmts.push_back(S2.get());
     StmtResult Body = ActOnCompoundStmt(Loc, Loc, Stmts, false);
-    FD->setBody(Body.take());
+    FD->setBody(Body.get());
   }
 }
 
@@ -1343,33 +1343,33 @@ void Sema::OMPDeclareReductionInitFunctionScope::setInit(Expr *E) {
       S.ActOnDeclStmt(DeclGroupPtrTy::make(DeclGroupRef(OmpPriv)), Loc, Loc);
   ExprResult LHS =
       S.BuildDeclRefExpr(ParLHS, ParLHS->getType(), VK_LValue, Loc);
-  LHS = S.DefaultLvalueConversion(LHS.take());
-  LHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, LHS.take());
+  LHS = S.DefaultLvalueConversion(LHS.get());
+  LHS = S.CreateBuiltinUnaryOp(Loc, UO_Deref, LHS.get());
   ExprResult RHS =
       S.BuildDeclRefExpr(OmpPriv, OmpPriv->getType(), VK_LValue, Loc);
-  ExprResult Res = S.BuildBinOp(0, Loc, BO_Assign, LHS.take(), RHS.take());
-  Res = S.ActOnFinishFullExpr(Res.take());
-  ExprResult S3 = S.IgnoredValueConversions(Res.take());
+  ExprResult Res = S.BuildBinOp(0, Loc, BO_Assign, LHS.get(), RHS.get());
+  Res = S.ActOnFinishFullExpr(Res.get());
+  ExprResult S3 = S.IgnoredValueConversions(Res.get());
   if (S1.isInvalid() || S2.isInvalid() || S3.isInvalid()) {
-    FD->setBody(S.ActOnNullStmt(Loc).take());
+    FD->setBody(S.ActOnNullStmt(Loc).get());
     FD->setInvalidDecl();
   } else {
     CompoundScopeRAII CompoundScope(S);
     SmallVector<Stmt *, 4> Stmts;
-    Stmts.push_back(S1.take());
-    Stmts.push_back(S2.take());
+    Stmts.push_back(S1.get());
+    Stmts.push_back(S2.get());
     if (MemCall.isUsable())
-      Stmts.push_back(MemCall.take());
-    Stmts.push_back(S3.take());
+      Stmts.push_back(MemCall.get());
+    Stmts.push_back(S3.get());
     StmtResult Body = S.ActOnCompoundStmt(Loc, Loc, Stmts, false);
-    FD->setBody(Body.take());
+    FD->setBody(Body.get());
   }
 }
 
 Expr *Sema::OMPDeclareReductionInitFunctionScope::getInitializer() {
   ExprResult Res =
       S.BuildDeclRefExpr(FD, FD->getType(), VK_LValue, FD->getLocation());
-  return Res.take();
+  return Res.get();
 }
 
 bool Sema::IsOMPDeclareReductionTypeAllowed(SourceRange Range, QualType QTy,
@@ -2409,8 +2409,8 @@ StmtResult Sema::ActOnOpenMPParallelDirective(ArrayRef<OMPClause *> Clauses,
                                               SourceLocation EndLoc) {
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(
-      OMPParallelDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt));
+  return OMPParallelDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                      AStmt);
 }
 
 namespace {
@@ -2581,17 +2581,17 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
                                   Ends[I], NewEnd);
       if (!Res.isUsable())
         return false;
-      NewEnd = Res.take();
+      NewEnd = Res.get();
     }
     QualType IdxTy = NewEnd->getType();
     TypeSourceInfo *TI = Context.getTrivialTypeSourceInfo(IdxTy, StartLoc);
     VarDecl *Idx = VarDecl::Create(Context, Context.getTranslationUnitDecl(),
                                    StartLoc, StartLoc, 0, IdxTy, TI, SC_Static);
     Idx->setImplicit();
-    Idx->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+    Idx->addAttr(new (Context) UnusedAttr(SourceLocation(), Context, 0));
     Context.getTranslationUnitDecl()->addHiddenDecl(Idx);
     ExprResult IdxExprRes = BuildDeclRefExpr(Idx, IdxTy, VK_LValue, StartLoc);
-    NewVar = IdxExprRes.take();
+    NewVar = IdxExprRes.get();
 
     // Build new values for actual indexes.
 
@@ -2606,166 +2606,166 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
     int LoopIdStep = -1;
 
     Expr *NewDiv = Ends[LoopIdBegin];
-    Expr *IdxRVal = DefaultLvalueConversion(NewVar).take();
+    Expr *IdxRVal = DefaultLvalueConversion(NewVar).get();
     if (!IdxRVal)
       return false;
     ExprResult Res =
         BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Sub, NewEnd,
-                   ActOnIntegerConstant(SourceLocation(), 1).take());
+                   ActOnIntegerConstant(SourceLocation(), 1).get());
     if (!Res.isUsable())
       return false;
-    NewEnd = Res.take();
+    NewEnd = Res.get();
 
     Expr *NewIncr = IdxRVal;
     if (StmtCount != 1) {
       NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Rem, IdxRVal,
-                           Ends[LoopIdBegin]).take();
+                           Ends[LoopIdBegin]).get();
       if (!NewIncr)
         return false;
     }
 
     NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, NewIncr,
-                         Incrs[LoopIdBegin]).take();
+                         Incrs[LoopIdBegin]).get();
     if (!NewIncr)
       return false;
     NewFinal = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Assign,
-                          VarCnts[LoopIdBegin], Inits[LoopIdBegin]).take();
+                          VarCnts[LoopIdBegin], Inits[LoopIdBegin]).get();
     if (!NewFinal)
       return false;
-    NewFinal = IgnoredValueConversions(NewFinal).take();
+    NewFinal = IgnoredValueConversions(NewFinal).get();
     if (!NewFinal)
       return false;
     Expr *NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul,
-                                 Ends[LoopIdBegin], Incrs[LoopIdBegin]).take();
+                                 Ends[LoopIdBegin], Incrs[LoopIdBegin]).get();
     if (!NewFinal1)
       return false;
     NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc,
                            (OpKinds[LoopIdBegin] == BO_Add) ? BO_AddAssign
                                                             : BO_SubAssign,
-                           VarCnts[LoopIdBegin], NewFinal1).take();
+                           VarCnts[LoopIdBegin], NewFinal1).get();
     if (!NewFinal1)
       return false;
-    NewFinal1 = IgnoredValueConversions(NewFinal1).take();
+    NewFinal1 = IgnoredValueConversions(NewFinal1).get();
     if (!NewFinal1)
       return false;
     NewFinal =
-        CreateBuiltinBinOp(StartLoc, BO_Comma, NewFinal, NewFinal1).take();
+        CreateBuiltinBinOp(StartLoc, BO_Comma, NewFinal, NewFinal1).get();
     if (!NewFinal)
       return false;
     // Expr *NewStep = BuildBinOp(DSAStack->getCurScope(), StartLoc,
     //                  OpKinds[LoopIdBegin], Inits[LoopIdBegin],
-    // NewIncr).take();
+    // NewIncr).get();
     // if (!NewStep) return false;
     // NewVarCntExpr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Assign,
-    //                           VarCnts[LoopIdBegin], NewStep).take();
+    //                           VarCnts[LoopIdBegin], NewStep).get();
     NewVarCntExpr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Assign,
-                               VarCnts[LoopIdBegin], Inits[LoopIdBegin]).take();
+                               VarCnts[LoopIdBegin], Inits[LoopIdBegin]).get();
     if (!NewVarCntExpr)
       return false;
-    NewVarCntExpr = IgnoredValueConversions(NewVarCntExpr).take();
+    NewVarCntExpr = IgnoredValueConversions(NewVarCntExpr).get();
     if (!NewVarCntExpr)
       return false;
     Expr *NewVarCntExpr1 =
         BuildBinOp(DSAStack->getCurScope(), StartLoc,
                    (OpKinds[LoopIdBegin] == BO_Add) ? BO_AddAssign
                                                     : BO_SubAssign,
-                   VarCnts[LoopIdBegin], NewIncr).take();
+                   VarCnts[LoopIdBegin], NewIncr).get();
     if (!NewVarCntExpr1)
       return false;
-    NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).take();
+    NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).get();
     if (!NewVarCntExpr1)
       return false;
     NewVarCntExpr = CreateBuiltinBinOp(StartLoc, BO_Comma, NewVarCntExpr,
-                                       NewVarCntExpr1).take();
+                                       NewVarCntExpr1).get();
     if (!NewVarCntExpr)
       return false;
 
     for (int I = LoopIdBegin + LoopIdStep; I != LoopIdEnd; I += LoopIdStep) {
       NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Div, IdxRVal,
-                           NewDiv).take();
+                           NewDiv).get();
       if (!NewIncr)
         return false;
 
       if (I + LoopIdStep != LoopIdEnd) {
         NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Rem, NewIncr,
-                             Ends[I]).take();
+                             Ends[I]).get();
         if (!NewIncr)
           return false;
       }
 
       NewIncr = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, NewIncr,
-                           Incrs[I]).take();
+                           Incrs[I]).get();
       if (!NewIncr)
         return false;
       NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Assign,
-                             VarCnts[I], Inits[I]).take();
+                             VarCnts[I], Inits[I]).get();
       if (!NewFinal1)
         return false;
       NewFinal =
-          CreateBuiltinBinOp(StartLoc, BO_Comma, NewFinal, NewFinal1).take();
+          CreateBuiltinBinOp(StartLoc, BO_Comma, NewFinal, NewFinal1).get();
       if (!NewFinal)
         return false;
-      NewFinal1 = IgnoredValueConversions(NewFinal1).take();
+      NewFinal1 = IgnoredValueConversions(NewFinal1).get();
       if (!NewFinal1)
         return false;
       NewFinal1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, Ends[I],
-                             Incrs[I]).take();
+                             Incrs[I]).get();
       if (!NewFinal1)
         return false;
       NewFinal1 =
           BuildBinOp(DSAStack->getCurScope(), StartLoc,
                      (OpKinds[I] == BO_Add) ? BO_AddAssign : BO_SubAssign,
-                     VarCnts[I], NewFinal1).take();
+                     VarCnts[I], NewFinal1).get();
       if (!NewFinal1)
         return false;
-      NewFinal1 = IgnoredValueConversions(NewFinal1).take();
+      NewFinal1 = IgnoredValueConversions(NewFinal1).get();
       if (!NewFinal1)
         return false;
       NewFinal =
-          CreateBuiltinBinOp(StartLoc, BO_Comma, NewFinal, NewFinal1).take();
+          CreateBuiltinBinOp(StartLoc, BO_Comma, NewFinal, NewFinal1).get();
       if (!NewFinal)
         return false;
       //      NewStep = BuildBinOp(DSAStack->getCurScope(), StartLoc,
       // OpKinds[I],
-      //                           Inits[I], NewIncr).take();
+      //                           Inits[I], NewIncr).get();
       //      if (!NewStep) return false;
       //      Expr *NewVarCntExpr1 = BuildBinOp(DSAStack->getCurScope(),
       // StartLoc, BO_Assign,
-      //                                        VarCnts[I], NewStep).take();
+      //                                        VarCnts[I], NewStep).get();
       NewVarCntExpr1 = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Assign,
-                                  VarCnts[I], Inits[I]).take();
+                                  VarCnts[I], Inits[I]).get();
       if (!NewVarCntExpr1)
         return false;
-      NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).take();
+      NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).get();
       if (!NewVarCntExpr1)
         return false;
       NewVarCntExpr = CreateBuiltinBinOp(StartLoc, BO_Comma, NewVarCntExpr,
-                                         NewVarCntExpr1).take();
+                                         NewVarCntExpr1).get();
       if (!NewVarCntExpr)
         return false;
       NewVarCntExpr1 =
           BuildBinOp(DSAStack->getCurScope(), StartLoc,
                      (OpKinds[I] == BO_Add) ? BO_AddAssign : BO_SubAssign,
-                     VarCnts[I], NewIncr).take();
+                     VarCnts[I], NewIncr).get();
       if (!NewVarCntExpr1)
         return false;
-      NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).take();
+      NewVarCntExpr1 = IgnoredValueConversions(NewVarCntExpr1).get();
       if (!NewVarCntExpr1)
         return false;
       NewVarCntExpr = CreateBuiltinBinOp(StartLoc, BO_Comma, NewVarCntExpr,
-                                         NewVarCntExpr1).take();
+                                         NewVarCntExpr1).get();
       if (!NewVarCntExpr)
         return false;
       NewDiv = BuildBinOp(DSAStack->getCurScope(), StartLoc, BO_Mul, NewDiv,
-                          Ends[I]).take();
+                          Ends[I]).get();
       if (!NewDiv)
         return false;
     }
-    NewVarCntExpr = IgnoredValueConversions(NewVarCntExpr).take();
-    NewFinal = IgnoredValueConversions(NewFinal).take();
-    NewFinal = ActOnFinishFullExpr(NewFinal).take();
-    NewVarCntExpr = ActOnFinishFullExpr(NewVarCntExpr).take();
-    NewEnd = ActOnFinishFullExpr(NewEnd).take();
+    NewVarCntExpr = IgnoredValueConversions(NewVarCntExpr).get();
+    NewFinal = IgnoredValueConversions(NewFinal).get();
+    NewFinal = ActOnFinishFullExpr(NewFinal).get();
+    NewVarCntExpr = ActOnFinishFullExpr(NewVarCntExpr).get();
+    NewEnd = ActOnFinishFullExpr(NewEnd).get();
   }
   return true;
 }
@@ -2788,9 +2788,9 @@ StmtResult Sema::ActOnOpenMPForDirective(OpenMPDirectiveKind Kind,
   }
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPForDirective::Create(Context, StartLoc, EndLoc, Clauses,
-                                       AStmt, NewVar, NewEnd, NewVarCntExpr,
-                                       NewFinal, VarCnts));
+  return OMPForDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt,
+                                 NewVar, NewEnd, NewVarCntExpr, NewFinal,
+                                 VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPParallelForDirective(OpenMPDirectiveKind Kind,
@@ -2812,9 +2812,9 @@ StmtResult Sema::ActOnOpenMPParallelForDirective(OpenMPDirectiveKind Kind,
   }
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPParallelForDirective::Create(
-      Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
-      NewFinal, VarCnts));
+  return OMPParallelForDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                         AStmt, NewVar, NewEnd, NewVarCntExpr,
+                                         NewFinal, VarCnts);
 }
 
 CapturedStmt *Sema::AddSimdArgsIntoCapturedStmt(CapturedStmt *Cap,
@@ -2903,7 +2903,7 @@ Stmt *Sema::AddDistributedParallelArgsIntoCapturedStmt(CapturedStmt *Cap,
   }
   StmtResult CapturedBody = ActOnCapturedRegionEnd(Body);
 
-  return CapturedBody.take();
+  return CapturedBody.get();
 }
 
 StmtResult Sema::ActOnOpenMPSimdDirective(OpenMPDirectiveKind Kind,
@@ -2930,9 +2930,9 @@ StmtResult Sema::ActOnOpenMPSimdDirective(OpenMPDirectiveKind Kind,
   getCurFunction()->setHasBranchProtectedScope();
 
   // Rebuild the directive.
-  return Owned(OMPSimdDirective::Create(Context, StartLoc, EndLoc, Clauses,
-                                        CapturedBody, NewVar, NewEnd,
-                                        NewVarCntExpr, NewFinal, VarCnts));
+  return OMPSimdDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                  CapturedBody, NewVar, NewEnd, NewVarCntExpr,
+                                  NewFinal, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPForSimdDirective(OpenMPDirectiveKind Kind,
@@ -2960,9 +2960,9 @@ StmtResult Sema::ActOnOpenMPForSimdDirective(OpenMPDirectiveKind Kind,
   getCurFunction()->setHasBranchProtectedScope();
 
   // Rebuild the directive.
-  return Owned(OMPForSimdDirective::Create(Context, StartLoc, EndLoc, Clauses,
-                                           CapturedBody, NewVar, NewEnd,
-                                           NewVarCntExpr, NewFinal, VarCnts));
+  return OMPForSimdDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                     CapturedBody, NewVar, NewEnd,
+                                     NewVarCntExpr, NewFinal, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPParallelForSimdDirective(
@@ -2988,9 +2988,9 @@ StmtResult Sema::ActOnOpenMPParallelForSimdDirective(
   getCurFunction()->setHasBranchProtectedScope();
 
   // Rebuild the directive.
-  return Owned(OMPParallelForSimdDirective::Create(
-      Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
-      NewVarCntExpr, NewFinal, VarCnts));
+  return OMPParallelForSimdDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                             CapturedBody, NewVar, NewEnd,
+                                             NewVarCntExpr, NewFinal, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPDistributeSimdDirective(
@@ -3016,9 +3016,9 @@ StmtResult Sema::ActOnOpenMPDistributeSimdDirective(
   getCurFunction()->setHasBranchProtectedScope();
 
   // Rebuild the directive.
-  return Owned(OMPDistributeSimdDirective::Create(
-      Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
-      NewVarCntExpr, NewFinal, VarCnts));
+  return OMPDistributeSimdDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                            CapturedBody, NewVar, NewEnd,
+                                            NewVarCntExpr, NewFinal, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPDistributeParallelForDirective(
@@ -3047,9 +3047,9 @@ StmtResult Sema::ActOnOpenMPDistributeParallelForDirective(
         cast<CapturedStmt>(AStmt), NewVar, LowerBound, UpperBound);
   }
   // Rebuild the directive.
-  return Owned(OMPDistributeParallelForDirective::Create(
+  return OMPDistributeParallelForDirective::Create(
       Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
-      NewFinal, LowerBound, UpperBound, VarCnts));
+      NewFinal, LowerBound, UpperBound, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPDistributeParallelForSimdDirective(
@@ -3083,9 +3083,9 @@ StmtResult Sema::ActOnOpenMPDistributeParallelForSimdDirective(
       AddSimdArgsIntoCapturedStmt(cast<CapturedStmt>(AStmt), NewVar);
 
   // Rebuild the directive.
-  return Owned(OMPDistributeParallelForSimdDirective::Create(
+  return OMPDistributeParallelForSimdDirective::Create(
       Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
-      NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts));
+      NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForDirective(
@@ -3114,9 +3114,9 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForDirective(
         cast<CapturedStmt>(AStmt), NewVar, LowerBound, UpperBound);
   }
   // Rebuild the directive.
-  return Owned(OMPTeamsDistributeParallelForDirective::Create(
+  return OMPTeamsDistributeParallelForDirective::Create(
       Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
-      NewFinal, LowerBound, UpperBound, VarCnts));
+      NewFinal, LowerBound, UpperBound, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForSimdDirective(
@@ -3150,9 +3150,9 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForSimdDirective(
       AddSimdArgsIntoCapturedStmt(cast<CapturedStmt>(AStmt), NewVar);
 
   // Rebuild the directive.
-  return Owned(OMPTeamsDistributeParallelForSimdDirective::Create(
+  return OMPTeamsDistributeParallelForSimdDirective::Create(
       Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
-      NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts));
+      NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForDirective(
@@ -3181,9 +3181,9 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForDirective(
         cast<CapturedStmt>(AStmt), NewVar, LowerBound, UpperBound);
   }
   // Rebuild the directive.
-  return Owned(OMPTargetTeamsDistributeParallelForDirective::Create(
+  return OMPTargetTeamsDistributeParallelForDirective::Create(
       Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
-      NewFinal, LowerBound, UpperBound, VarCnts));
+      NewFinal, LowerBound, UpperBound, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForSimdDirective(
@@ -3217,9 +3217,9 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForSimdDirective(
       AddSimdArgsIntoCapturedStmt(cast<CapturedStmt>(AStmt), NewVar);
 
   // Rebuild the directive.
-  return Owned(OMPTargetTeamsDistributeParallelForSimdDirective::Create(
+  return OMPTargetTeamsDistributeParallelForSimdDirective::Create(
       Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
-      NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts));
+      NewVarCntExpr, NewFinal, LowerBound, UpperBound, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPSectionsDirective(OpenMPDirectiveKind Kind,
@@ -3253,8 +3253,8 @@ StmtResult Sema::ActOnOpenMPSectionsDirective(OpenMPDirectiveKind Kind,
 
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(
-      OMPSectionsDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt));
+  return OMPSectionsDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                      AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPParallelSectionsDirective(
@@ -3286,8 +3286,8 @@ StmtResult Sema::ActOnOpenMPParallelSectionsDirective(
 
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPParallelSectionsDirective::Create(Context, StartLoc, EndLoc,
-                                                    Clauses, AStmt));
+  return OMPParallelSectionsDirective::Create(Context, StartLoc, EndLoc,
+                                              Clauses, AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPSectionDirective(Stmt *AStmt,
@@ -3314,7 +3314,7 @@ StmtResult Sema::ActOnOpenMPSectionDirective(Stmt *AStmt,
 
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPSectionDirective::Create(Context, StartLoc, EndLoc, AStmt));
+  return OMPSectionDirective::Create(Context, StartLoc, EndLoc, AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPSingleDirective(ArrayRef<OMPClause *> Clauses,
@@ -3323,8 +3323,7 @@ StmtResult Sema::ActOnOpenMPSingleDirective(ArrayRef<OMPClause *> Clauses,
                                             SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(
-      OMPSingleDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt));
+  return OMPSingleDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPTaskDirective(ArrayRef<OMPClause *> Clauses,
@@ -3332,15 +3331,14 @@ StmtResult Sema::ActOnOpenMPTaskDirective(ArrayRef<OMPClause *> Clauses,
                                           SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(
-      OMPTaskDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt));
+  return OMPTaskDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPTaskyieldDirective(SourceLocation StartLoc,
                                                SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPTaskyieldDirective::Create(Context, StartLoc, EndLoc));
+  return OMPTaskyieldDirective::Create(Context, StartLoc, EndLoc);
 }
 
 StmtResult Sema::ActOnOpenMPMasterDirective(Stmt *AStmt,
@@ -3348,7 +3346,7 @@ StmtResult Sema::ActOnOpenMPMasterDirective(Stmt *AStmt,
                                             SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPMasterDirective::Create(Context, StartLoc, EndLoc, AStmt));
+  return OMPMasterDirective::Create(Context, StartLoc, EndLoc, AStmt);
 }
 
 StmtResult
@@ -3357,22 +3355,22 @@ Sema::ActOnOpenMPCriticalDirective(const DeclarationNameInfo &DirName,
                                    SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(
-      OMPCriticalDirective::Create(Context, DirName, StartLoc, EndLoc, AStmt));
+  return OMPCriticalDirective::Create(Context, DirName, StartLoc, EndLoc,
+                                      AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPBarrierDirective(SourceLocation StartLoc,
                                              SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPBarrierDirective::Create(Context, StartLoc, EndLoc));
+  return OMPBarrierDirective::Create(Context, StartLoc, EndLoc);
 }
 
 StmtResult Sema::ActOnOpenMPTaskwaitDirective(SourceLocation StartLoc,
                                               SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPTaskwaitDirective::Create(Context, StartLoc, EndLoc));
+  return OMPTaskwaitDirective::Create(Context, StartLoc, EndLoc);
 }
 
 StmtResult Sema::ActOnOpenMPTaskgroupDirective(Stmt *AStmt,
@@ -3380,7 +3378,7 @@ StmtResult Sema::ActOnOpenMPTaskgroupDirective(Stmt *AStmt,
                                                SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPTaskgroupDirective::Create(Context, StartLoc, EndLoc, AStmt));
+  return OMPTaskgroupDirective::Create(Context, StartLoc, EndLoc, AStmt);
 }
 
 namespace {
@@ -3546,7 +3544,7 @@ StmtResult Sema::ActOnOpenMPAtomicDirective(ArrayRef<OMPClause *> Clauses,
           BinOp->getOpcode() == BO_RemAssign));
     if (!WrongStmt && UnOp) {
       X = UnOp->getSubExpr();
-      OpExpr = ActOnIntegerConstant(BaseStmt->getLocStart(), 1).take();
+      OpExpr = ActOnIntegerConstant(BaseStmt->getLocStart(), 1).get();
       if (UnOp->isIncrementOp())
         Op = BO_Add;
       else
@@ -3672,7 +3670,7 @@ StmtResult Sema::ActOnOpenMPAtomicDirective(ArrayRef<OMPClause *> Clauses,
       if (UnaryOperator *XOp = dyn_cast_or_null<UnaryOperator>(RHS)) {
         X = XOp->getSubExpr();
         X->IgnoreParenCasts()->Profile(XID, Context, true);
-        OpExpr = ActOnIntegerConstant(X->getLocStart(), 1).take();
+        OpExpr = ActOnIntegerConstant(X->getLocStart(), 1).get();
         if (XOp->isIncrementOp())
           Op = BO_Add;
         else
@@ -3825,7 +3823,7 @@ StmtResult Sema::ActOnOpenMPAtomicDirective(ArrayRef<OMPClause *> Clauses,
            BinOp->getOpcode() != BO_Assign) ||
           BinOp->getOpcode() == BO_RemAssign));
     if (!WrongStmt && UnOp) {
-      OpExpr = ActOnIntegerConstant(BaseStmt->getLocStart(), 1).take();
+      OpExpr = ActOnIntegerConstant(BaseStmt->getLocStart(), 1).get();
       if (UnOp->isIncrementOp())
         Op = BO_Add;
       else
@@ -3916,23 +3914,22 @@ StmtResult Sema::ActOnOpenMPAtomicDirective(ArrayRef<OMPClause *> Clauses,
   }
   //  if (OpExpr && !X->getType()->isDependentType() &&
   //      !OpExpr->getType()->isDependentType()) {
-  //    ExprResult Res = Owned(OpExpr);
+  //    ExprResult Res = OpExpr;
   //    CastKind CK = PrepareScalarCast(Res, X->getType());
   //    if (CK != CK_NoOp)
-  //      OpExpr = ImpCastExprToType(Res.take(), X->getType(), CK).take();
+  //      OpExpr = ImpCastExprToType(Res.get(), X->getType(), CK).get();
   //  }
   //  if (V && !V->getType()->isDependentType()) {
-  //    ExprResult Res = Owned(X);
+  //    ExprResult Res = X;
   //    CastKind CK = PrepareScalarCast(Res, V->getType());
   //    if (CK != CK_NoOp)
-  //      X = ImpCastExprToType(Res.take(), V->getType(), CK).take();
+  //      X = ImpCastExprToType(Res.get(), V->getType(), CK).get();
   //  }
 
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPAtomicDirective::Create(Context, StartLoc, EndLoc, Clauses,
-                                          AStmt, V, X, OpExpr, Op, CaptureAfter,
-                                          Reversed));
+  return OMPAtomicDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt,
+                                    V, X, OpExpr, Op, CaptureAfter, Reversed);
 }
 
 StmtResult Sema::ActOnOpenMPFlushDirective(ArrayRef<OMPClause *> Clauses,
@@ -3940,7 +3937,7 @@ StmtResult Sema::ActOnOpenMPFlushDirective(ArrayRef<OMPClause *> Clauses,
                                            SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPFlushDirective::Create(Context, StartLoc, EndLoc, Clauses));
+  return OMPFlushDirective::Create(Context, StartLoc, EndLoc, Clauses);
 }
 
 StmtResult Sema::ActOnOpenMPOrderedDirective(Stmt *AStmt,
@@ -3948,7 +3945,7 @@ StmtResult Sema::ActOnOpenMPOrderedDirective(Stmt *AStmt,
                                              SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
 
-  return Owned(OMPOrderedDirective::Create(Context, StartLoc, EndLoc, AStmt));
+  return OMPOrderedDirective::Create(Context, StartLoc, EndLoc, AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPTeamsDirective(ArrayRef<OMPClause *> Clauses,
@@ -3956,8 +3953,7 @@ StmtResult Sema::ActOnOpenMPTeamsDirective(ArrayRef<OMPClause *> Clauses,
                                            SourceLocation EndLoc) {
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(
-      OMPTeamsDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt));
+  return OMPTeamsDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPTargetTeamsDirective(ArrayRef<OMPClause *> Clauses,
@@ -3966,8 +3962,8 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDirective(ArrayRef<OMPClause *> Clauses,
                                                  SourceLocation EndLoc) {
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPTargetTeamsDirective::Create(Context, StartLoc, EndLoc,
-                                               Clauses, AStmt));
+  return OMPTargetTeamsDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                         AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPDistributeDirective(ArrayRef<OMPClause *> Clauses,
@@ -3988,9 +3984,9 @@ StmtResult Sema::ActOnOpenMPDistributeDirective(ArrayRef<OMPClause *> Clauses,
   }
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPDistributeDirective::Create(
-      Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
-      NewFinal, VarCnts));
+  return OMPDistributeDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                        AStmt, NewVar, NewEnd, NewVarCntExpr,
+                                        NewFinal, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPCancelDirective(ArrayRef<OMPClause *> Clauses,
@@ -3998,8 +3994,8 @@ StmtResult Sema::ActOnOpenMPCancelDirective(ArrayRef<OMPClause *> Clauses,
                                             SourceLocation EndLoc,
                                             OpenMPDirectiveKind ConstructType) {
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPCancelDirective::Create(Context, StartLoc, EndLoc, Clauses,
-                                          ConstructType));
+  return OMPCancelDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                    ConstructType);
 }
 
 StmtResult
@@ -4007,8 +4003,8 @@ Sema::ActOnOpenMPCancellationPointDirective(SourceLocation StartLoc,
                                             SourceLocation EndLoc,
                                             OpenMPDirectiveKind ConstructType) {
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPCancellationPointDirective::Create(Context, StartLoc, EndLoc,
-                                                     ConstructType));
+  return OMPCancellationPointDirective::Create(Context, StartLoc, EndLoc,
+                                               ConstructType);
 }
 
 namespace {
@@ -4071,8 +4067,7 @@ StmtResult Sema::ActOnOpenMPTargetDirective(ArrayRef<OMPClause *> Clauses,
   }
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(
-      OMPTargetDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt));
+  return OMPTargetDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPTargetDataDirective(ArrayRef<OMPClause *> Clauses,
@@ -4080,23 +4075,23 @@ StmtResult Sema::ActOnOpenMPTargetDataDirective(ArrayRef<OMPClause *> Clauses,
                                                 SourceLocation StartLoc,
                                                 SourceLocation EndLoc) {
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPTargetDataDirective::Create(Context, StartLoc, EndLoc,
-                                              Clauses, AStmt));
+  return OMPTargetDataDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                        AStmt);
 }
 
 StmtResult Sema::ActOnOpenMPTargetUpdateDirective(ArrayRef<OMPClause *> Clauses,
                                                   SourceLocation StartLoc,
                                                   SourceLocation EndLoc) {
-  //FIXME Add checking that at least one 'from' or 'to' clause is specified
+  // FIXME Add checking that at least one 'from' or 'to' clause is specified
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(
-      OMPTargetUpdateDirective::Create(Context, StartLoc, EndLoc, Clauses));
+  return OMPTargetUpdateDirective::Create(Context, StartLoc, EndLoc, Clauses);
 }
 
-StmtResult Sema::ActOnOpenMPTeamsDistributeDirective(
-    ArrayRef<OMPClause *> Clauses, Stmt *AStmt,
-    SourceLocation StartLoc, SourceLocation EndLoc) {
+StmtResult
+Sema::ActOnOpenMPTeamsDistributeDirective(ArrayRef<OMPClause *> Clauses,
+                                          Stmt *AStmt, SourceLocation StartLoc,
+                                          SourceLocation EndLoc) {
   // Prepare the output arguments for routine CollapseOpenMPLoop
   Expr *NewEnd = 0;
   Expr *NewVar = 0;
@@ -4112,9 +4107,9 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeDirective(
   }
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPTeamsDistributeDirective::Create(
-      Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
-      NewFinal, VarCnts));
+  return OMPTeamsDistributeDirective::Create(Context, StartLoc, EndLoc, Clauses,
+                                             AStmt, NewVar, NewEnd,
+                                             NewVarCntExpr, NewFinal, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPTeamsDistributeSimdDirective(
@@ -4140,9 +4135,9 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeSimdDirective(
   getCurFunction()->setHasBranchProtectedScope();
 
   // Rebuild the directive.
-  return Owned(OMPTeamsDistributeSimdDirective::Create(
+  return OMPTeamsDistributeSimdDirective::Create(
       Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
-      NewVarCntExpr, NewFinal, VarCnts));
+      NewVarCntExpr, NewFinal, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPTargetTeamsDistributeDirective(
@@ -4163,9 +4158,9 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDistributeDirective(
   }
 
   getCurFunction()->setHasBranchProtectedScope();
-  return Owned(OMPTargetTeamsDistributeDirective::Create(
+  return OMPTargetTeamsDistributeDirective::Create(
       Context, StartLoc, EndLoc, Clauses, AStmt, NewVar, NewEnd, NewVarCntExpr,
-      NewFinal, VarCnts));
+      NewFinal, VarCnts);
 }
 
 StmtResult Sema::ActOnOpenMPTargetTeamsDistributeSimdDirective(
@@ -4191,9 +4186,9 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDistributeSimdDirective(
   getCurFunction()->setHasBranchProtectedScope();
 
   // Rebuild the directive.
-  return Owned(OMPTargetTeamsDistributeSimdDirective::Create(
+  return OMPTargetTeamsDistributeSimdDirective::Create(
       Context, StartLoc, EndLoc, Clauses, CapturedBody, NewVar, NewEnd,
-      NewVarCntExpr, NewFinal, VarCnts));
+      NewVarCntExpr, NewFinal, VarCnts);
 }
 
 OMPClause *Sema::ActOnOpenMPSingleExprClause(OpenMPClauseKind Kind, Expr *Expr,
@@ -4244,7 +4239,7 @@ OMPClause *Sema::ActOnOpenMPIfClause(Expr *Condition, SourceLocation StartLoc,
     if (Val.isInvalid())
       return 0;
 
-    ValExpr = Val.take();
+    ValExpr = Val.get();
   }
 
   return new (Context) OMPIfClause(ValExpr, StartLoc, EndLoc);
@@ -4261,7 +4256,7 @@ OMPClause *Sema::ActOnOpenMPFinalClause(Expr *Condition,
     if (Val.isInvalid())
       return 0;
 
-    ValExpr = Val.take();
+    ValExpr = Val.get();
   }
 
   return new (Context) OMPFinalClause(ValExpr, StartLoc, EndLoc);
@@ -4332,12 +4327,12 @@ OMPClause *Sema::ActOnOpenMPNumThreadsClause(Expr *NumThreads,
           << NumThreads->getSourceRange();
       return 0;
     }
-    Value = DefaultLvalueConversion(Value.take());
+    Value = DefaultLvalueConversion(Value.get());
     if (Value.isInvalid())
       return 0;
     Value = PerformImplicitConversion(
-        Value.take(), Context.getIntTypeForBitwidth(32, true), AA_Converting);
-    ValExpr = Value.take();
+        Value.get(), Context.getIntTypeForBitwidth(32, true), AA_Converting);
+    ValExpr = Value.get();
   }
 
   return new (Context) OMPNumThreadsClause(ValExpr, StartLoc, EndLoc);
@@ -4407,12 +4402,12 @@ OMPClause *Sema::ActOnOpenMPDeviceClause(Expr *Device, SourceLocation StartLoc,
           << ValExpr->getSourceRange();
       return 0;
     }
-    Value = DefaultLvalueConversion(Value.take());
+    Value = DefaultLvalueConversion(Value.get());
     if (Value.isInvalid())
       return 0;
     Value = PerformImplicitConversion(
-        Value.take(), Context.getIntTypeForBitwidth(32, true), AA_Converting);
-    ValExpr = Value.take();
+        Value.get(), Context.getIntTypeForBitwidth(32, true), AA_Converting);
+    ValExpr = Value.get();
   }
 
   return new (Context) OMPDeviceClause(ValExpr, StartLoc, EndLoc);
@@ -4557,14 +4552,14 @@ OMPClause *Sema::ActOnOpenMPNumTeamsClause(Expr *E, SourceLocation StartLoc,
           << ValExpr->getSourceRange();
       return 0;
     }
-    Value = DefaultLvalueConversion(Value.take());
+    Value = DefaultLvalueConversion(Value.get());
     if (Value.isInvalid())
       return 0;
     Value = PerformImplicitConversion(
-        Value.take(), Context.getIntTypeForBitwidth(32, true), AA_Converting);
+        Value.get(), Context.getIntTypeForBitwidth(32, true), AA_Converting);
     if (Value.isInvalid())
       return 0;
-    ValExpr = Value.take();
+    ValExpr = Value.get();
   }
 
   return new (Context) OMPNumTeamsClause(ValExpr, StartLoc, EndLoc);
@@ -4634,14 +4629,14 @@ OMPClause *Sema::ActOnOpenMPThreadLimitClause(Expr *E, SourceLocation StartLoc,
           << ValExpr->getSourceRange();
       return 0;
     }
-    Value = DefaultLvalueConversion(Value.take());
+    Value = DefaultLvalueConversion(Value.get());
     if (Value.isInvalid())
       return 0;
     Value = PerformImplicitConversion(
-        Value.take(), Context.getIntTypeForBitwidth(32, true), AA_Converting);
+        Value.get(), Context.getIntTypeForBitwidth(32, true), AA_Converting);
     if (Value.isInvalid())
       return 0;
-    ValExpr = Value.take();
+    ValExpr = Value.get();
   }
 
   return new (Context) OMPThreadLimitClause(ValExpr, StartLoc, EndLoc);
@@ -4928,7 +4923,7 @@ OMPClause *Sema::ActOnOpenMPScheduleClause(OpenMPScheduleClauseKind Kind,
       break;
     }
   }
-  Expr *ValExpr = Value.take();
+  Expr *ValExpr = Value.get();
 
   return new (Context)
       OMPScheduleClause(Kind, KindLoc, ValExpr, StartLoc, EndLoc);
@@ -5009,7 +5004,7 @@ OMPClause *Sema::ActOnOpenMPDistScheduleClause(
   } else {
     Value = ExprEmpty();
   }
-  Expr *ValExpr = Value.take();
+  Expr *ValExpr = Value.get();
 
   return new (Context)
       OMPDistScheduleClause(Kind, KindLoc, ValExpr, StartLoc, EndLoc);
@@ -5388,14 +5383,14 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
         Context, Context.getTranslationUnitDecl(), SourceLocation(),
         SourceLocation(), Id, Type, TI, SC_Static);
     PseudoVar->setImplicit();
-    PseudoVar->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+    PseudoVar->addAttr(new (Context) UnusedAttr(SourceLocation(), Context, 0));
     InitializedEntity Entity = InitializedEntity::InitializeVariable(PseudoVar);
     InitializationKind InitKind = InitializationKind::CreateDefault(ELoc);
     InitializationSequence InitSeq(*this, Entity, InitKind, MultiExprArg());
     ExprResult Res = InitSeq.Perform(*this, Entity, InitKind, MultiExprArg());
     if (Res.isInvalid())
       continue;
-    DefaultInits.push_back(ActOnFinishFullExpr(Res.take()).take());
+    DefaultInits.push_back(ActOnFinishFullExpr(Res.get()).get());
     DSAStack->addDSA(VD, DE, OMPC_private);
     Vars.push_back(DE);
   }
@@ -5625,14 +5620,15 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
           Context, Context.getTranslationUnitDecl(), SourceLocation(),
           SourceLocation(), Id, Type, TI, SC_Static);
       PseudoVar->setImplicit();
-      PseudoVar->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      PseudoVar->addAttr(new (Context)
+                             UnusedAttr(SourceLocation(), Context, 0));
       Context.getTranslationUnitDecl()->addHiddenDecl(PseudoVar);
       PseudoDE = cast<DeclRefExpr>(
-          BuildDeclRefExpr(PseudoVar, Type, VK_LValue, ELoc).take());
+          BuildDeclRefExpr(PseudoVar, Type, VK_LValue, ELoc).get());
       InitializedEntity Entity =
           InitializedEntity::InitializeVariable(PseudoVar);
       InitializationKind InitKind = InitializationKind::CreateCopy(ELoc, ELoc);
-      Expr *Arg = DefaultLvalueConversion(PseudoDE).take();
+      Expr *Arg = DefaultLvalueConversion(PseudoDE).get();
       if (!Arg)
         continue;
       InitializationSequence InitSeq(*this, Entity, InitKind,
@@ -5642,7 +5638,7 @@ OMPClause *Sema::ActOnOpenMPFirstPrivateClause(ArrayRef<Expr *> VarList,
       if (Res.isInvalid())
         continue;
       PseudoVars.push_back(PseudoDE);
-      Inits.push_back(ActOnFinishFullExpr(Res.take()).take());
+      Inits.push_back(ActOnFinishFullExpr(Res.get()).get());
     } else {
       PseudoVars.push_back(0);
       Inits.push_back(0);
@@ -5839,29 +5835,30 @@ OMPClause *Sema::ActOnOpenMPLastPrivateClause(ArrayRef<Expr *> VarList,
         Context, Context.getTranslationUnitDecl(), SourceLocation(),
         SourceLocation(), Id, Type, TI, SC_Static);
     PseudoVar1->setImplicit();
-    PseudoVar1->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+    PseudoVar1->addAttr(new (Context) UnusedAttr(SourceLocation(), Context, 0));
     Context.getTranslationUnitDecl()->addHiddenDecl(PseudoVar1);
     DeclRefExpr *PseudoDE1 = cast<DeclRefExpr>(
-        BuildDeclRefExpr(PseudoVar1, Type, VK_LValue, ELoc).take());
+        BuildDeclRefExpr(PseudoVar1, Type, VK_LValue, ELoc).get());
     if ((RD && !RD->isTriviallyCopyable()) || IsArray) {
       VarDecl *PseudoVar2 = VarDecl::Create(
           Context, Context.getTranslationUnitDecl(), SourceLocation(),
           SourceLocation(), Id, Type, TI, SC_Static);
       PseudoVar2->setImplicit();
-      PseudoVar2->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      PseudoVar2->addAttr(new (Context)
+                              UnusedAttr(SourceLocation(), Context, 0));
       Context.getTranslationUnitDecl()->addHiddenDecl(PseudoVar2);
       DeclRefExpr *PseudoDE2 = cast<DeclRefExpr>(
-          BuildDeclRefExpr(PseudoVar2, Type, VK_LValue, ELoc).take());
-      Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).take();
+          BuildDeclRefExpr(PseudoVar2, Type, VK_LValue, ELoc).get());
+      Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).get();
       if (!PseudoDE2RVal)
         continue;
       ExprResult Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign,
-                                  PseudoDE1, PseudoDE2RVal).take();
+                                  PseudoDE1, PseudoDE2RVal).get();
       if (Res.isInvalid())
         continue;
       PseudoVars2.push_back(PseudoDE2);
-      Assignments.push_back(ActOnFinishFullExpr(IgnoredValueConversions(
-                                                    Res.take()).take()).take());
+      Assignments.push_back(
+          ActOnFinishFullExpr(IgnoredValueConversions(Res.get()).get()).get());
     } else {
       PseudoVars2.push_back(0);
       Assignments.push_back(0);
@@ -6034,29 +6031,30 @@ OMPClause *Sema::ActOnOpenMPCopyinClause(ArrayRef<Expr *> VarList,
         Context, Context.getTranslationUnitDecl(), SourceLocation(),
         SourceLocation(), Id, Type, TI, SC_Static);
     PseudoVar1->setImplicit();
-    PseudoVar1->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+    PseudoVar1->addAttr(new (Context) UnusedAttr(SourceLocation(), Context, 0));
     Context.getTranslationUnitDecl()->addHiddenDecl(PseudoVar1);
     DeclRefExpr *PseudoDE1 = cast<DeclRefExpr>(
-        BuildDeclRefExpr(PseudoVar1, Type, VK_LValue, ELoc).take());
+        BuildDeclRefExpr(PseudoVar1, Type, VK_LValue, ELoc).get());
     if ((RD && !RD->isTriviallyCopyable()) || IsArray) {
       VarDecl *PseudoVar2 = VarDecl::Create(
           Context, Context.getTranslationUnitDecl(), SourceLocation(),
           SourceLocation(), Id, Type, TI, SC_Static);
       PseudoVar2->setImplicit();
-      PseudoVar2->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      PseudoVar2->addAttr(new (Context)
+                              UnusedAttr(SourceLocation(), Context, 0));
       Context.getTranslationUnitDecl()->addHiddenDecl(PseudoVar2);
       DeclRefExpr *PseudoDE2 = cast<DeclRefExpr>(
-          BuildDeclRefExpr(PseudoVar2, Type, VK_LValue, ELoc).take());
-      Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).take();
+          BuildDeclRefExpr(PseudoVar2, Type, VK_LValue, ELoc).get());
+      Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).get();
       if (!PseudoDE2RVal)
         continue;
       ExprResult Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign,
-                                  PseudoDE1, PseudoDE2RVal).take();
+                                  PseudoDE1, PseudoDE2RVal).get();
       if (Res.isInvalid())
         continue;
       PseudoVars2.push_back(PseudoDE2);
-      Assignments.push_back(ActOnFinishFullExpr(IgnoredValueConversions(
-                                                    Res.take()).take()).take());
+      Assignments.push_back(
+          ActOnFinishFullExpr(IgnoredValueConversions(Res.get()).get()).get());
     } else {
       PseudoVars2.push_back(0);
       Assignments.push_back(0);
@@ -6189,29 +6187,29 @@ OMPClause *Sema::ActOnOpenMPCopyPrivateClause(ArrayRef<Expr *> VarList,
         Context, Context.getTranslationUnitDecl(), SourceLocation(),
         SourceLocation(), Id, Type, TI, SC_Static);
     PseudoVar1->setImplicit();
-    PseudoVar1->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+    PseudoVar1->addAttr(new (Context) UnusedAttr(SourceLocation(), Context, 0));
     Context.getTranslationUnitDecl()->addHiddenDecl(PseudoVar1);
     DeclRefExpr *PseudoDE1 = cast<DeclRefExpr>(
-        BuildDeclRefExpr(PseudoVar1, Type, VK_LValue, ELoc).take());
+        BuildDeclRefExpr(PseudoVar1, Type, VK_LValue, ELoc).get());
     VarDecl *PseudoVar2 = VarDecl::Create(
         Context, Context.getTranslationUnitDecl(), SourceLocation(),
         SourceLocation(), Id, Type, TI, SC_Static);
     PseudoVar2->setImplicit();
-    PseudoVar2->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+    PseudoVar2->addAttr(new (Context) UnusedAttr(SourceLocation(), Context, 0));
     Context.getTranslationUnitDecl()->addHiddenDecl(PseudoVar2);
     DeclRefExpr *PseudoDE2 = cast<DeclRefExpr>(
-        BuildDeclRefExpr(PseudoVar2, Type, VK_LValue, ELoc).take());
-    Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).take();
+        BuildDeclRefExpr(PseudoVar2, Type, VK_LValue, ELoc).get());
+    Expr *PseudoDE2RVal = DefaultLvalueConversion(PseudoDE2).get();
     if (!PseudoDE2RVal)
       continue;
     ExprResult Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign,
-                                PseudoDE1, PseudoDE2RVal).take();
+                                PseudoDE1, PseudoDE2RVal).get();
     if (Res.isInvalid())
       continue;
     PseudoVars1.push_back(PseudoDE1);
     PseudoVars2.push_back(PseudoDE2);
     Assignments.push_back(
-        ActOnFinishFullExpr(IgnoredValueConversions(Res.take()).take()).take());
+        ActOnFinishFullExpr(IgnoredValueConversions(Res.get()).get()).get());
     DSAStack->addDSA(VD, DE, OMPC_copyprivate);
     Vars.push_back(DE);
   }
@@ -6597,24 +6595,26 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
           Context, Context.getTranslationUnitDecl(), SourceLocation(),
           SourceLocation(), Id1, PtrQTy, TI, SC_Static);
       Parameter1->setImplicit();
-      Parameter1->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      Parameter1->addAttr(new (Context)
+                              UnusedAttr(SourceLocation(), Context, 0));
       IdentifierInfo *Id2 = &Context.Idents.get(".ptr2.");
       VarDecl *Parameter2 = VarDecl::Create(
           Context, Context.getTranslationUnitDecl(), SourceLocation(),
           SourceLocation(), Id2, PtrQTy, TI, SC_Static);
       Parameter2->setImplicit();
-      Parameter2->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      Parameter2->addAttr(new (Context)
+                              UnusedAttr(SourceLocation(), Context, 0));
       Context.getTranslationUnitDecl()->addHiddenDecl(Parameter1);
       Context.getTranslationUnitDecl()->addHiddenDecl(Parameter2);
       ExprResult PtrDE1 =
           BuildDeclRefExpr(Parameter1, PtrQTy, VK_LValue, SourceLocation());
       ExprResult PtrDE2 =
           BuildDeclRefExpr(Parameter2, PtrQTy, VK_LValue, SourceLocation());
-      Expr *PtrDE1Expr = PtrDE1.take();
-      Expr *PtrDE2Expr = PtrDE2.take();
+      Expr *PtrDE1Expr = PtrDE1.get();
+      Expr *PtrDE2Expr = PtrDE2.get();
       ExprResult DE1 = DefaultLvalueConversion(PtrDE1Expr);
       ExprResult DE2 = DefaultLvalueConversion(PtrDE2Expr);
-      Expr *Args[] = {DE1.take(), DE2.take()};
+      Expr *Args[] = {DE1.get(), DE2.get()};
       ExprResult Res =
           ActOnCallExpr(DSAStack->getCurScope(), DRRD->CombinerFunction, ELoc,
                         Args, SourceLocation());
@@ -6623,7 +6623,7 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
 
       DefaultInits.push_back(DRRD->InitFunction);
       Vars.push_back(DE);
-      OpExprs.push_back(Res.take());
+      OpExprs.push_back(Res.get());
       HelperParams1.push_back(PtrDE1Expr);
       HelperParams2.push_back(PtrDE2Expr);
     } else {
@@ -6646,30 +6646,32 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
           Context, Context.getTranslationUnitDecl(), SourceLocation(),
           SourceLocation(), Id1, PtrQTy, TI, SC_Static);
       Parameter1->setImplicit();
-      Parameter1->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      Parameter1->addAttr(new (Context)
+                              UnusedAttr(SourceLocation(), Context, 0));
       IdentifierInfo *Id2 = &Context.Idents.get(".ptr2.");
       VarDecl *Parameter2 = VarDecl::Create(
           Context, Context.getTranslationUnitDecl(), SourceLocation(),
           SourceLocation(), Id2, PtrQTy, TI, SC_Static);
       Parameter2->setImplicit();
-      Parameter2->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+      Parameter2->addAttr(new (Context)
+                              UnusedAttr(SourceLocation(), Context, 0));
       Context.getTranslationUnitDecl()->addHiddenDecl(Parameter1);
       Context.getTranslationUnitDecl()->addHiddenDecl(Parameter2);
       ExprResult PtrDE1 =
           BuildDeclRefExpr(Parameter1, PtrQTy, VK_LValue, SourceLocation());
       ExprResult PtrDE2 =
           BuildDeclRefExpr(Parameter2, PtrQTy, VK_LValue, SourceLocation());
-      Expr *PtrDE1Expr = PtrDE1.take();
-      Expr *PtrDE2Expr = PtrDE2.take();
+      Expr *PtrDE1Expr = PtrDE1.get();
+      Expr *PtrDE2Expr = PtrDE2.get();
       ExprResult DE1 = DefaultLvalueConversion(PtrDE1Expr);
       ExprResult DE2 = DefaultLvalueConversion(PtrDE2Expr);
-      DE1 = CreateBuiltinUnaryOp(ELoc, UO_Deref, DE1.take());
-      DE2 = CreateBuiltinUnaryOp(ELoc, UO_Deref, DE2.take());
+      DE1 = CreateBuiltinUnaryOp(ELoc, UO_Deref, DE1.get());
+      DE2 = CreateBuiltinUnaryOp(ELoc, UO_Deref, DE2.get());
       if (NewOp == BO_SubAssign) {
         NewOp = BO_AddAssign;
       }
       ExprResult Res = BuildBinOp(DSAStack->getCurScope(), ELoc, NewOp,
-                                  DE1.take(), DE2.take());
+                                  DE1.get(), DE2.get());
       if (Res.isInvalid())
         continue;
       CXXRecordDecl *RD = Type->getAsCXXRecordDecl();
@@ -6712,19 +6714,18 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
         }
       }
       if (NewOp == BO_LAnd || NewOp == BO_LOr) {
-        Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DE1.take(),
-                         Res.take());
+        Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DE1.get(),
+                         Res.get());
       } else if (NewOp == BO_LT || NewOp == BO_GT) {
-        Res =
-            ActOnConditionalOp(ELoc, ELoc, Res.take(), DE1.take(), DE2.take());
+        Res = ActOnConditionalOp(ELoc, ELoc, Res.get(), DE1.get(), DE2.get());
         if (Res.isInvalid())
           continue;
-        Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DE1.take(),
-                         Res.take());
+        Res = BuildBinOp(DSAStack->getCurScope(), ELoc, BO_Assign, DE1.get(),
+                         Res.get());
       }
       if (Res.isInvalid())
         continue;
-      Res = IgnoredValueConversions(Res.take());
+      Res = IgnoredValueConversions(Res.get());
 
       Type = Type.getUnqualifiedType();
       if (RD) {
@@ -6734,7 +6735,8 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
             Context, Context.getTranslationUnitDecl(), SourceLocation(),
             SourceLocation(), Id, Type, TI1, SC_Static);
         PseudoVar->setImplicit();
-        PseudoVar->addAttr(new (Context) UnusedAttr(SourceLocation(), Context));
+        PseudoVar->addAttr(new (Context)
+                               UnusedAttr(SourceLocation(), Context, 0));
         InitializedEntity Entity =
             InitializedEntity::InitializeVariable(PseudoVar);
         InitializationKind InitKind = InitializationKind::CreateDefault(ELoc);
@@ -6743,12 +6745,12 @@ OMPClause *Sema::ActOnOpenMPReductionClause(ArrayRef<Expr *> VarList,
             InitSeq.Perform(*this, Entity, InitKind, MultiExprArg());
         if (CPRes.isInvalid())
           continue;
-        DefaultInits.push_back(ActOnFinishFullExpr(CPRes.take()).take());
+        DefaultInits.push_back(ActOnFinishFullExpr(CPRes.get()).get());
       } else {
         DefaultInits.push_back(0);
       }
       Vars.push_back(DE);
-      OpExprs.push_back(ActOnFinishFullExpr(Res.take()).take());
+      OpExprs.push_back(ActOnFinishFullExpr(Res.get()).get());
       HelperParams1.push_back(PtrDE1Expr);
       HelperParams2.push_back(PtrDE2Expr);
     }
@@ -6802,20 +6804,19 @@ public:
         return Result;
       }
       Idx = SemaRef.CreateBuiltinBinOp(
-          E->getExprLoc(), BO_Sub, Idx.take(),
-          SemaRef.ActOnIntegerConstant(SourceLocation(), 1).take());
+          E->getExprLoc(), BO_Sub, Idx.get(),
+          SemaRef.ActOnIntegerConstant(SourceLocation(), 1).get());
       if (Idx.isInvalid()) {
         End = 0;
         return Result;
       }
-      End = SemaRef.CreateBuiltinArraySubscriptExpr(End, E->getExprLoc(),
-                                                    Idx.take(),
-                                                    E->getExprLoc()).take();
+      End = SemaRef.CreateBuiltinArraySubscriptExpr(
+                        End, E->getExprLoc(), Idx.get(), E->getExprLoc()).get();
       CIE->setIndexExpr(CIE->getLowerBound());
     } else if (End != Base) {
       End = SemaRef.CreateBuiltinArraySubscriptExpr(End, E->getExprLoc(),
                                                     E->getIdx(),
-                                                    E->getExprLoc()).take();
+                                                    E->getExprLoc()).get();
     } else {
       End = E;
     }
@@ -6837,17 +6838,17 @@ public:
             SemaRef, Sema::Unevaluated, Sema::ReuseLambdaContextDecl);
 
         Size = SemaRef.CreateUnaryExprOrTypeTraitExpr(Begin, SourceLocation(),
-                                                      UETT_SizeOf).take();
+                                                      UETT_SizeOf).get();
       }
       ExprResult AddrBegin =
           SemaRef.CreateBuiltinUnaryOp(Begin->getExprLoc(), UO_AddrOf, Begin);
       if (AddrBegin.isInvalid())
         return std::make_pair<Expr *, Expr *>(0, 0);
       AddrBegin =
-          SemaRef.ImpCastExprToType(AddrBegin.take(), CharPtrTy, CK_BitCast);
+          SemaRef.ImpCastExprToType(AddrBegin.get(), CharPtrTy, CK_BitCast);
       if (AddrBegin.isInvalid())
         return std::make_pair<Expr *, Expr *>(0, 0);
-      Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.take()).take();
+      Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.get()).get();
       return std::make_pair(AB, Size);
     }
 
@@ -6856,16 +6857,16 @@ public:
     if (AddrEnd.isInvalid())
       return std::make_pair<Expr *, Expr *>(0, 0);
     AddrEnd = SemaRef.CreateBuiltinBinOp(
-        End->getExprLoc(), BO_Add, AddrEnd.take(),
-        SemaRef.ActOnIntegerConstant(SourceLocation(), 1).take());
+        End->getExprLoc(), BO_Add, AddrEnd.get(),
+        SemaRef.ActOnIntegerConstant(SourceLocation(), 1).get());
     if (AddrEnd.isInvalid())
       return std::make_pair<Expr *, Expr *>(0, 0);
     ExprResult AddrBegin =
         SemaRef.CreateBuiltinUnaryOp(Begin->getExprLoc(), UO_AddrOf, Begin);
     if (AddrBegin.isInvalid())
       return std::make_pair<Expr *, Expr *>(0, 0);
-    Expr *AE = SemaRef.DefaultLvalueConversion(AddrEnd.take()).take();
-    Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.take()).take();
+    Expr *AE = SemaRef.DefaultLvalueConversion(AddrEnd.get()).get();
+    Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.get()).get();
     return std::make_pair(AB, AE);
   }
 };
@@ -6955,17 +6956,17 @@ private:
             SemaRef, Sema::Unevaluated, Sema::ReuseLambdaContextDecl);
 
         Size = SemaRef.CreateUnaryExprOrTypeTraitExpr(Begin, SourceLocation(),
-                                                      UETT_SizeOf).take();
+                                                      UETT_SizeOf).get();
       }
       ExprResult AddrBegin =
           SemaRef.CreateBuiltinUnaryOp(Begin->getExprLoc(), UO_AddrOf, Begin);
       if (AddrBegin.isInvalid())
         return std::make_pair<Expr *, Expr *>(0, 0);
       AddrBegin =
-          SemaRef.ImpCastExprToType(AddrBegin.take(), CharPtrTy, CK_BitCast);
+          SemaRef.ImpCastExprToType(AddrBegin.get(), CharPtrTy, CK_BitCast);
       if (AddrBegin.isInvalid())
         return std::make_pair<Expr *, Expr *>(0, 0);
-      Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.take()).take();
+      Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.get()).get();
       return std::make_pair(AB, Size);
     }
 
@@ -6974,16 +6975,16 @@ private:
     if (AddrEnd.isInvalid())
       return std::make_pair<Expr *, Expr *>(0, 0);
     AddrEnd = SemaRef.CreateBuiltinBinOp(
-        End->getExprLoc(), BO_Add, AddrEnd.take(),
-        SemaRef.ActOnIntegerConstant(SourceLocation(), 1).take());
+        End->getExprLoc(), BO_Add, AddrEnd.get(),
+        SemaRef.ActOnIntegerConstant(SourceLocation(), 1).get());
     if (AddrEnd.isInvalid())
       return std::make_pair<Expr *, Expr *>(0, 0);
     ExprResult AddrBegin =
         SemaRef.CreateBuiltinUnaryOp(Begin->getExprLoc(), UO_AddrOf, Begin);
     if (AddrBegin.isInvalid())
       return std::make_pair<Expr *, Expr *>(0, 0);
-    Expr *AE = SemaRef.DefaultLvalueConversion(AddrEnd.take()).take();
-    Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.take()).take();
+    Expr *AE = SemaRef.DefaultLvalueConversion(AddrEnd.get()).get();
+    Expr *AB = SemaRef.DefaultLvalueConversion(AddrBegin.get()).get();
     return std::make_pair(AB, AE);
   }
 
@@ -7008,29 +7009,29 @@ public:
     WholeBegin =
         SemaRef.CreateBuiltinArraySubscriptExpr(
                     WholeBegin, E->getExprLoc(),
-                    SemaRef.ActOnIntegerConstant(SourceLocation(), 0).take(),
-                    E->getExprLoc()).take();
+                    SemaRef.ActOnIntegerConstant(SourceLocation(), 0).get(),
+                    E->getExprLoc()).get();
     QualType QTy = Base->getType();
     Expr *Idx = 0;
     if (const ArrayType *AT = QTy->getAsArrayTypeUnsafe()) {
       if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(AT)) {
         Idx = SemaRef.ActOnIntegerConstant(
                           SourceLocation(),
-                          (CAT->getSize() - 1).getLimitedValue()).take();
+                          (CAT->getSize() - 1).getLimitedValue()).get();
       } else if (const VariableArrayType *VAT =
                      dyn_cast<VariableArrayType>(AT)) {
         Idx = VAT->getSizeExpr();
-        Idx = SemaRef.CreateBuiltinBinOp(
-                          E->getExprLoc(), BO_Sub, Idx,
-                          SemaRef.ActOnIntegerConstant(SourceLocation(), 1)
-                              .take()).take();
+        Idx = SemaRef.CreateBuiltinBinOp(E->getExprLoc(), BO_Sub, Idx,
+                                         SemaRef.ActOnIntegerConstant(
+                                                     SourceLocation(), 1).get())
+                  .get();
       } else if (const DependentSizedArrayType *DSAT =
                      dyn_cast<DependentSizedArrayType>(AT)) {
         Idx = DSAT->getSizeExpr();
-        Idx = SemaRef.CreateBuiltinBinOp(
-                          E->getExprLoc(), BO_Sub, Idx,
-                          SemaRef.ActOnIntegerConstant(SourceLocation(), 1)
-                              .take()).take();
+        Idx = SemaRef.CreateBuiltinBinOp(E->getExprLoc(), BO_Sub, Idx,
+                                         SemaRef.ActOnIntegerConstant(
+                                                     SourceLocation(), 1).get())
+                  .get();
       }
     }
     Expr *LastIdx = 0;
@@ -7038,7 +7039,7 @@ public:
       IsCEAN = true;
       LastIdx = SemaRef.CreateBuiltinBinOp(E->getExprLoc(), BO_Add,
                                            CIE->getLowerBound(),
-                                           CIE->getLength()).take();
+                                           CIE->getLength()).get();
       if (LastIdx == 0) {
         CopyBegin = CopyEnd = 0;
         WholeBegin = WholeEnd = 0;
@@ -7047,19 +7048,19 @@ public:
       LastIdx = SemaRef.CreateBuiltinBinOp(
                             E->getExprLoc(), BO_Sub, LastIdx,
                             SemaRef.ActOnIntegerConstant(SourceLocation(), 1)
-                                .take()).take();
+                                .get()).get();
       CopyBegin = SemaRef.CreateBuiltinArraySubscriptExpr(
                               CopyBegin, E->getExprLoc(), CIE->getLowerBound(),
-                              E->getExprLoc()).take();
+                              E->getExprLoc()).get();
     } else {
       LastIdx = E->getIdx();
       CopyBegin = SemaRef.CreateBuiltinArraySubscriptExpr(
                               CopyBegin, E->getExprLoc(), LastIdx,
-                              E->getExprLoc()).take();
+                              E->getExprLoc()).get();
     }
-    CopyEnd = SemaRef.CreateBuiltinArraySubscriptExpr(CopyEnd, E->getExprLoc(),
-                                                      LastIdx,
-                                                      E->getExprLoc()).take();
+    CopyEnd =
+        SemaRef.CreateBuiltinArraySubscriptExpr(CopyEnd, E->getExprLoc(),
+                                                LastIdx, E->getExprLoc()).get();
     if (Idx == 0) {
       Idx = LastIdx;
     }
@@ -7070,7 +7071,7 @@ public:
     }
     WholeEnd =
         SemaRef.CreateBuiltinArraySubscriptExpr(WholeEnd, E->getExprLoc(), Idx,
-                                                E->getExprLoc()).take();
+                                                E->getExprLoc()).get();
     return Result;
   }
   bool VisitStmt(Stmt *S) { return true; }
@@ -7887,9 +7888,9 @@ public:
       IsCompatibleWithTest = (IsLessOp && UO->isIncrementOp()) ||
                              (!IsLessOp && UO->isDecrementOp());
       if (!IsCompatibleWithTest && IsLessOp)
-        StepValue = Actions.ActOnIntegerConstant(SourceLocation(), -1).take();
+        StepValue = Actions.ActOnIntegerConstant(SourceLocation(), -1).get();
       else
-        StepValue = Actions.ActOnIntegerConstant(SourceLocation(), 1).take();
+        StepValue = Actions.ActOnIntegerConstant(SourceLocation(), 1).get();
     }
     return StepValue != 0;
   }
@@ -7924,9 +7925,9 @@ public:
         IsCompatibleWithTest = (IsLessOp && E->getOperator() == OO_PlusPlus) ||
                                (!IsLessOp && E->getOperator() == OO_MinusMinus);
         if (!IsCompatibleWithTest && IsLessOp)
-          StepValue = Actions.ActOnIntegerConstant(SourceLocation(), -1).take();
+          StepValue = Actions.ActOnIntegerConstant(SourceLocation(), -1).get();
         else
-          StepValue = Actions.ActOnIntegerConstant(SourceLocation(), 1).take();
+          StepValue = Actions.ActOnIntegerConstant(SourceLocation(), 1).get();
       }
       return StepValue != 0;
     case OO_PlusEqual:
@@ -7974,7 +7975,7 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
   Stmt *Body = For->getBody();
   if (!Body) {
     Diag(S->getLocStart(), diag::err_omp_directive_nonblock)
-        << getOpenMPDirectiveName(Kind) << Body;
+        << getOpenMPDirectiveName(Kind);
     return true;
   }
 
@@ -8179,7 +8180,7 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
           << Var << TestChecker.isLessOp();
       HasErrors = true;
     } else {
-      Step = CreateBuiltinUnaryOp(Step->getExprLoc(), UO_Minus, Step).take();
+      Step = CreateBuiltinUnaryOp(Step->getExprLoc(), UO_Minus, Step).get();
     }
   }
   if (HasErrors)
@@ -8264,7 +8265,7 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
     ExprResult ER = BuildQualifiedTemplateIdExpr(SS, InitLoc, DNID, &Args);
     Expr *CallArgs[2] = {TestChecker.isLessOp() ? InitValue : CheckValue,
                          TestChecker.isLessOp() ? CheckValue : InitValue};
-    Diff = ActOnCallExpr(DSAStack->getCurScope(), ER.take(), InitLoc, CallArgs,
+    Diff = ActOnCallExpr(DSAStack->getCurScope(), ER.get(), InitLoc, CallArgs,
                          InitLoc);
     if (Diff.isInvalid()) {
       Diag(Var->getLocation(), diag::err_omp_type_not_rai);
@@ -8276,16 +8277,16 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
                       TestChecker.isLessOp() ? InitValue : CheckValue);
   }
   if (Diff.isUsable() && TestChecker.isStrictOp()) {
-    Diff = BuildBinOp(DSAStack->getCurScope(), InitLoc, BO_Sub, Diff.take(),
-                      ActOnIntegerConstant(SourceLocation(), 1).take());
+    Diff = BuildBinOp(DSAStack->getCurScope(), InitLoc, BO_Sub, Diff.get(),
+                      ActOnIntegerConstant(SourceLocation(), 1).get());
   }
   if (Diff.isUsable()) {
     Diff =
-        BuildBinOp(DSAStack->getCurScope(), InitLoc, BO_Add, Diff.take(), Step);
+        BuildBinOp(DSAStack->getCurScope(), InitLoc, BO_Add, Diff.get(), Step);
   }
   if (Diff.isUsable()) {
     Diff =
-        BuildBinOp(DSAStack->getCurScope(), InitLoc, BO_Div, Diff.take(), Step);
+        BuildBinOp(DSAStack->getCurScope(), InitLoc, BO_Div, Diff.get(), Step);
   }
   bool Signed = Type->hasSignedIntegerRepresentation();
   uint64_t TypeSize = Context.getTypeSize(Type);
@@ -8296,11 +8297,11 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
   QualType DiffType = Context.getIntTypeForBitwidth(TypeSize, Signed);
   TypeSourceInfo *TSI = Context.getTrivialTypeSourceInfo(DiffType);
   NewEnd = BuildCStyleCastExpr(SourceLocation(), TSI, SourceLocation(),
-                               Diff.take()).take();
+                               Diff.get()).get();
   NewIncr =
-      BuildCStyleCastExpr(SourceLocation(), TSI, SourceLocation(), Step).take();
+      BuildCStyleCastExpr(SourceLocation(), TSI, SourceLocation(), Step).get();
   InitVal =
-      PerformImplicitConversion(InitValue, Type, AA_Initializing, true).take();
+      PerformImplicitConversion(InitValue, Type, AA_Initializing, true).get();
   // NamedDecl *ND = Var;
   VarCnt =
       DeclRefExpr::Create(Context, NestedNameSpecifierLoc(), SourceLocation(),
@@ -8308,7 +8309,7 @@ bool Sema::isNotOpenMPCanonicalLoopForm(Stmt *S, OpenMPDirectiveKind Kind,
   // if (!isDeclInScope(ND, CurContext, DSAStack->getCurScope())) {
   //  DeclContext *SavedCurContext = CurContext;
   //  CurContext = Var->getDeclContext();
-  //  VarCnt = BuildDeclRefExpr(Var, Type, VK_LValue, InitLoc).take();
+  //  VarCnt = BuildDeclRefExpr(Var, Type, VK_LValue, InitLoc).get();
   //  CurContext = SavedCurContext;
   //}
   OpKind = TestChecker.isLessOp() ? BO_Add : BO_Sub;
@@ -8365,8 +8366,8 @@ ExprResult Sema::ActOnCEANIndexExpr(Scope *S, Expr *Base, Expr *LowerBound,
                   Length->containsUnexpandedParameterPack()));
 
   if (ArgsDep)
-    return Owned(new (Context) CEANIndexExpr(Base, LowerBound, ColonLoc, Length,
-                                             Context.IntTy));
+    return new (Context)
+        CEANIndexExpr(Base, LowerBound, ColonLoc, Length, Context.IntTy);
 
   SourceLocation SLoc;
   if (LowerBound)
@@ -8389,7 +8390,7 @@ ExprResult Sema::ActOnCEANIndexExpr(Scope *S, Expr *Base, Expr *LowerBound,
   }
 
   if (!LowerBound)
-    LowerBound = ActOnIntegerConstant(ColonLoc, 0).take();
+    LowerBound = ActOnIntegerConstant(ColonLoc, 0).get();
   else {
     CEANExprChecker Checker;
     if (Checker.Visit(LowerBound)) {
@@ -8416,11 +8417,11 @@ ExprResult Sema::ActOnCEANIndexExpr(Scope *S, Expr *Base, Expr *LowerBound,
     if (const ConstantArrayType *ConstArrType =
             dyn_cast<ConstantArrayType>(ArrType))
       Length = ActOnIntegerConstant(
-                   ColonLoc, ConstArrType->getSize().getZExtValue()).take();
+                   ColonLoc, ConstArrType->getSize().getZExtValue()).get();
     else if (const VariableArrayType *VarArrType =
                  dyn_cast<VariableArrayType>(ArrType))
       Length = VarArrType->getSizeExpr();
-    Length = CreateBuiltinBinOp(ColonLoc, BO_Sub, Length, LowerBound).take();
+    Length = CreateBuiltinBinOp(ColonLoc, BO_Sub, Length, LowerBound).get();
     if (!Length)
       return ExprError();
   } else {
@@ -8448,6 +8449,6 @@ ExprResult Sema::ActOnCEANIndexExpr(Scope *S, Expr *Base, Expr *LowerBound,
   QualType ResType = UsualArithmeticConversions(LowerBoundRes, LengthRes);
   LowerBoundRes = PerformImplicitConversion(LowerBound, ResType, AA_Converting);
   LengthRes = PerformImplicitConversion(Length, ResType, AA_Converting);
-  return Owned(new (Context) CEANIndexExpr(Base, LowerBoundRes.take(), ColonLoc,
-                                           LengthRes.take(), ResType));
+  return new (Context) CEANIndexExpr(Base, LowerBoundRes.get(), ColonLoc,
+                                     LengthRes.get(), ResType);
 }

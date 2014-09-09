@@ -115,8 +115,6 @@ def CXXNewExpr : DStmt<Expr>;
 def CXXDeleteExpr : DStmt<Expr>;
 def CXXPseudoDestructorExpr : DStmt<Expr>;
 def TypeTraitExpr : DStmt<Expr>;
-def UnaryTypeTraitExpr : DStmt<Expr>;
-def BinaryTypeTraitExpr : DStmt<Expr>;
 def ArrayTypeTraitExpr : DStmt<Expr>;
 def ExpressionTraitExpr : DStmt<Expr>;
 def DependentScopeDeclRefExpr : DStmt<Expr>;
@@ -172,6 +170,7 @@ def CXXUuidofExpr : DStmt<Expr>;
 def SEHTryStmt : Stmt;
 def SEHExceptStmt : Stmt;
 def SEHFinallyStmt : Stmt;
+def SEHLeaveStmt : Stmt;
 def MSDependentExistsStmt : Stmt;
 
 // OpenCL Extensions.

@@ -17,6 +17,8 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/Debug.h"
 
+#define DEBUG_TYPE "elemental-codegen"
+
 using namespace clang;
 using namespace CodeGen;
 typedef CodeGenModule::CilkElementalGroup CilkElementalGroup;
@@ -35,7 +37,7 @@ static llvm::MDNode *MakeVecLengthMetadata(CodeGenModule &CGM, StringRef Name,
 static bool CheckElementalArguments(CodeGenModule &CGM, const FunctionDecl *FD,
                                     llvm::Function *Fn, bool &HasThis) {
   // Check the return type.
-  QualType RetTy = FD->getResultType();
+  QualType RetTy = FD->getReturnType();
   if (RetTy->isAggregateType()) {
     CGM.Error(FD->getLocation(), "the return type for this elemental "
                                  "function is not supported yet");
@@ -210,7 +212,7 @@ void CodeGenModule::EmitVectorVariantsMetadata(const CGFunctionInfo &FnInfo,
     // These rules missed the reference types and we use their pointer types.
     //
     if (G.VecLengthFor.empty()) {
-      QualType FnRetTy = FD->getResultType();
+      QualType FnRetTy = FD->getReturnType();
       QualType CharacteristicType;
       if (!FnRetTy->isVoidType())
         CharacteristicType = FnRetTy;

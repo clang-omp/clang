@@ -176,7 +176,7 @@ void ASTStmtReader::VisitAttributedStmt(AttributedStmt *S) {
   (void)NumAttrs;
   assert(NumAttrs == S->NumAttrs);
   assert(NumAttrs == Attrs.size());
-  std::copy(Attrs.begin(), Attrs.end(), S->Attrs);
+  std::copy(Attrs.begin(), Attrs.end(), S->getAttrArrayPtr());
   S->SubStmt = Reader.ReadSubStmt();
   S->AttrLoc = ReadSourceLocation(Record, Idx);
 }
@@ -202,7 +202,7 @@ void ASTStmtReader::VisitSwitchStmt(SwitchStmt *S) {
   if (Record[Idx++])
     S->setAllEnumCasesCovered();
 
-  SwitchCase *PrevSC = 0;
+  SwitchCase *PrevSC = nullptr;
   for (unsigned N = Record.size(); Idx != N; ++Idx) {
     SwitchCase *SC = Reader.getSwitchCaseWithID(Record[Idx]);
     if (PrevSC)
@@ -399,13 +399,11 @@ void ASTStmtReader::VisitCapturedStmt(CapturedStmt *S) {
   S->getCapturedDecl()->setBody(S->getCapturedStmt());
 
   // Captures
-  for (CapturedStmt::capture_iterator I = S->capture_begin(),
-                                      E = S->capture_end();
-       I != E; ++I) {
-    I->VarAndKind.setPointer(ReadDeclAs<VarDecl>(Record, Idx));
-    I->VarAndKind
+  for (auto &I : S->captures()) {
+    I.VarAndKind.setPointer(ReadDeclAs<VarDecl>(Record, Idx));
+    I.VarAndKind
         .setInt(static_cast<CapturedStmt::VariableCaptureKind>(Record[Idx++]));
-    I->Loc = ReadSourceLocation(Record, Idx);
+    I.Loc = ReadSourceLocation(Record, Idx);
   }
 }
 
@@ -728,7 +726,7 @@ void ASTStmtReader::VisitInitListExpr(InitListExpr *E) {
   E->setLBraceLoc(ReadSourceLocation(Record, Idx));
   E->setRBraceLoc(ReadSourceLocation(Record, Idx));
   bool isArrayFiller = Record[Idx++];
-  Expr *filler = 0;
+  Expr *filler = nullptr;
   if (isArrayFiller) {
     filler = Reader.ReadSubExpr();
     E->ArrayFillerOrUnionFieldInit = filler;
@@ -1208,6 +1206,7 @@ void ASTStmtReader::VisitCXXConstructExpr(CXXConstructExpr *E) {
   E->setElidable(Record[Idx++]);
   E->setHadMultipleCandidates(Record[Idx++]);
   E->setListInitialization(Record[Idx++]);
+  E->setStdInitListInitialization(Record[Idx++]);
   E->setRequiresZeroInitialization(Record[Idx++]);
   E->setConstructionKind((CXXConstructExpr::ConstructionKind)Record[Idx++]);
   E->ParenOrBraceRange = ReadSourceRange(Record, Idx);
@@ -1494,33 +1493,15 @@ void ASTStmtReader::VisitUnresolvedLookupExpr(UnresolvedLookupExpr *E) {
   E->NamingClass = ReadDeclAs<CXXRecordDecl>(Record, Idx);
 }
 
-void ASTStmtReader::VisitUnaryTypeTraitExpr(UnaryTypeTraitExpr *E) {
-  VisitExpr(E);
-  E->UTT = (UnaryTypeTrait)Record[Idx++];
-  E->Value = (bool)Record[Idx++];
-  SourceRange Range = ReadSourceRange(Record, Idx);
-  E->Loc = Range.getBegin();
-  E->RParen = Range.getEnd();
-  E->QueriedType = GetTypeSourceInfo(Record, Idx);
-}
-
-void ASTStmtReader::VisitBinaryTypeTraitExpr(BinaryTypeTraitExpr *E) {
-  VisitExpr(E);
-  E->BTT = (BinaryTypeTrait)Record[Idx++];
-  E->Value = (bool)Record[Idx++];
-  SourceRange Range = ReadSourceRange(Record, Idx);
-  E->Loc = Range.getBegin();
-  E->RParen = Range.getEnd();
-  E->LhsType = GetTypeSourceInfo(Record, Idx);
-  E->RhsType = GetTypeSourceInfo(Record, Idx);
-}
-
 void ASTStmtReader::VisitTypeTraitExpr(TypeTraitExpr *E) {
   VisitExpr(E);
   E->TypeTraitExprBits.NumArgs = Record[Idx++];
   E->TypeTraitExprBits.Kind = Record[Idx++];
   E->TypeTraitExprBits.Value = Record[Idx++];
-  
+  SourceRange Range = ReadSourceRange(Record, Idx);
+  E->Loc = Range.getBegin();
+  E->RParenLoc = Range.getEnd();
+
   TypeSourceInfo **Args = E->getTypeSourceInfos();
   for (unsigned I = 0, N = E->getNumArgs(); I != N; ++I)
     Args[I] = GetTypeSourceInfo(Record, Idx);
@@ -1602,8 +1583,10 @@ void ASTStmtReader::VisitFunctionParmPackExpr(FunctionParmPackExpr *E) {
 
 void ASTStmtReader::VisitMaterializeTemporaryExpr(MaterializeTemporaryExpr *E) {
   VisitExpr(E);
-  E->Temporary = Reader.ReadSubExpr();
-  E->ExtendingDecl = ReadDeclAs<ValueDecl>(Record, Idx);
+  E->State = Reader.ReadSubExpr();
+  auto VD = ReadDeclAs<ValueDecl>(Record, Idx);
+  unsigned ManglingNumber = Record[Idx++];
+  E->setExtendingDecl(VD, ManglingNumber);
 }
 
 void ASTStmtReader::VisitOpaqueValueExpr(OpaqueValueExpr *E) {
@@ -1635,6 +1618,11 @@ void ASTStmtReader::VisitCXXUuidofExpr(CXXUuidofExpr *E) {
   
   // __uuidof(expr)
   E->setExprOperand(Reader.ReadSubExpr());
+}
+
+void ASTStmtReader::VisitSEHLeaveStmt(SEHLeaveStmt *S) {
+  VisitStmt(S);
+  S->setLeaveLoc(ReadSourceLocation(Record, Idx));
 }
 
 void ASTStmtReader::VisitSEHExceptStmt(SEHExceptStmt *S) {
@@ -1722,6 +1710,9 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_firstprivate:
     C = OMPFirstPrivateClause::CreateEmpty(Context, Record[Idx++]);
     break;
+  case OMPC_lastprivate:
+    C = OMPLastPrivateClause::CreateEmpty(Context, Record[Idx++]);
+    break;
   case OMPC_shared:
     C = OMPSharedClause::CreateEmpty(Context, Record[Idx++]);
     break;
@@ -1730,9 +1721,6 @@ OMPClause *OMPClauseReader::readClause() {
     break;
   case OMPC_copyprivate:
     C = OMPCopyPrivateClause::CreateEmpty(Context, Record[Idx++]);
-    break;
-  case OMPC_lastprivate:
-    C = OMPLastPrivateClause::CreateEmpty(Context, Record[Idx++]);
     break;
   case OMPC_reduction:
     C = OMPReductionClause::CreateEmpty(Context, Record[Idx++]);
@@ -2747,7 +2735,7 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     case llvm::BitstreamEntry::SubBlock: // Handled for us already.
     case llvm::BitstreamEntry::Error:
       Error("malformed block record in AST file");
-      return 0;
+      return nullptr;
     case llvm::BitstreamEntry::EndBlock:
       goto Done;
     case llvm::BitstreamEntry::Record:
@@ -2755,8 +2743,7 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       break;
     }
 
-
-    Stmt *S = 0;
+    Stmt *S = nullptr;
     Idx = 0;
     Record.clear();
     bool Finished = false;
@@ -2774,7 +2761,7 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       break;
 
     case STMT_NULL_PTR:
-      S = 0;
+      S = nullptr;
       break;
 
     case STMT_NULL:
@@ -2969,7 +2956,7 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
 
       S = MemberExpr::Create(Context, Base, IsArrow, QualifierLoc,
                              TemplateKWLoc, MemberD, FoundDecl, MemberNameInfo,
-                             HasTemplateKWAndArgsInfo ? &ArgInfo : 0,
+                             HasTemplateKWAndArgsInfo ? &ArgInfo : nullptr,
                              T, VK, OK);
       ReadDeclarationNameLoc(F, cast<MemberExpr>(S)->MemberDNLoc,
                              MemberD->getDeclName(), Record, Idx);
@@ -3137,6 +3124,9 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     case EXPR_OBJC_BOOL_LITERAL:
       S = new (Context) ObjCBoolLiteralExpr(Empty);
       break;
+    case STMT_SEH_LEAVE:
+      S = new (Context) SEHLeaveStmt(Empty);
+      break;
     case STMT_SEH_EXCEPT:
       S = new (Context) SEHExceptStmt(Empty);
       break;
@@ -3163,8 +3153,9 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       S = new (Context) MSDependentExistsStmt(SourceLocation(), true,
                                               NestedNameSpecifierLoc(),
                                               DeclarationNameInfo(),
-                                              0);
+                                              nullptr);
       break;
+
     case STMT_OMP_PARALLEL_DIRECTIVE:
       S = OMPParallelDirective::CreateEmpty(
           Context, Record[ASTStmtReader::NumStmtFields], Empty);
@@ -3350,11 +3341,11 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     case EXPR_CXX_MEMBER_CALL:
       S = new (Context) CXXMemberCallExpr(Context, Empty);
       break;
-        
+
     case EXPR_CXX_CONSTRUCT:
       S = new (Context) CXXConstructExpr(Empty);
       break;
-      
+
     case EXPR_CXX_TEMPORARY_OBJECT:
       S = new (Context) CXXTemporaryObjectExpr(Empty);
       break;
@@ -3423,7 +3414,8 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       bool HasOtherExprStored = Record[ASTStmtReader::NumExprFields];
       if (HasOtherExprStored) {
         Expr *SubExpr = ReadSubExpr();
-        S = CXXDefaultArgExpr::Create(Context, SourceLocation(), 0, SubExpr);
+        S = CXXDefaultArgExpr::Create(Context, SourceLocation(), nullptr,
+                                      SubExpr);
       } else
         S = new (Context) CXXDefaultArgExpr(Empty);
       break;
@@ -3488,14 +3480,6 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
                   /*NumTemplateArgs=*/Record[ASTStmtReader::NumExprFields]
                                    ? Record[ASTStmtReader::NumExprFields + 1] 
                                    : 0);
-      break;
-      
-    case EXPR_CXX_UNARY_TYPE_TRAIT:
-      S = new (Context) UnaryTypeTraitExpr(Empty);
-      break;
-
-    case EXPR_BINARY_TYPE_TRAIT:
-      S = new (Context) BinaryTypeTraitExpr(Empty);
       break;
 
     case EXPR_TYPE_TRAIT:
@@ -3587,7 +3571,7 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     StmtStack.push_back(S);
   }
 Done:
-  assert(StmtStack.size() > PrevNumStmts && "Read too many sub stmts!");
+  assert(StmtStack.size() > PrevNumStmts && "Read too many sub-stmts!");
   assert(StmtStack.size() == PrevNumStmts + 1 && "Extra expressions on stack!");
   return StmtStack.pop_back_val();
 }

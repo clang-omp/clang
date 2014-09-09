@@ -341,7 +341,7 @@ Parser::ParseOpenMPDeclarativeDirective(AccessSpecifier AS) {
     }
     Actions.ActOnOpenMPDeclareTargetDirectiveError();
     Diag(Tok, diag::err_expected_end_declare_target);
-    Diag(DTLoc, diag::note_matching) << "#pragma omp declare target";
+    Diag(DTLoc, diag::note_matching) << "'#pragma omp declare target'";
     return DeclGroupPtrTy();
   }
   case OMPD_declare_simd: {
@@ -735,7 +735,7 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
       // Parse ')'.
       if (Tok.isNot(tok::r_paren)) {
         Diag(Tok, diag::err_expected_rparen);
-        Diag(LOpen, diag::note_matching) << "(";
+        Diag(LOpen, diag::note_matching) << "'('";
       }
     }
     StandAloneAllowed = true;
@@ -830,13 +830,13 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
         CreateDirective = false;
       } else {
         Actions.MarkOpenMPClauses(Clauses);
-        AssociatedStmt = Actions.ActOnCapturedRegionEnd(AssociatedStmt.take());
+        AssociatedStmt = Actions.ActOnCapturedRegionEnd(AssociatedStmt.get());
         CreateDirective = AssociatedStmt.isUsable();
       }
     }
     if (CreateDirective) {
       Directive = Actions.ActOnOpenMPExecutableDirective(
-          DKind, DirName, Clauses, AssociatedStmt.take(), Loc, EndLoc,
+          DKind, DirName, Clauses, AssociatedStmt.get(), Loc, EndLoc,
           ConstructType);
     }
 
@@ -990,7 +990,7 @@ bool Parser::ParseOpenMPSimpleVarList(OpenMPDirectiveKind Kind,
       ExprResult Res =
           Actions.ActOnOpenMPIdExpression(getCurScope(), SS, NameInfo);
       if (Res.isUsable())
-        VarList.push_back(Res.take());
+        VarList.push_back(Res.get());
     }
     // Consume ','.
     if (Tok.is(tok::comma)) {
@@ -1122,7 +1122,7 @@ Decl *Parser::ParseOpenMPDeclareReduction(
     SourceRange Range;
     TypeResult TR = ParseTypeName(&Range, Declarator::PrototypeContext);
     if (TR.isUsable()) {
-      QualType QTy = Sema::GetTypeFromParser(TR.take());
+      QualType QTy = Sema::GetTypeFromParser(TR.get());
       if (!QTy.isNull() && Actions.IsOMPDeclareReductionTypeAllowed(
                                Range, QTy, Types, TyRanges)) {
         Types.push_back(QTy);
@@ -1197,7 +1197,7 @@ Decl *Parser::ParseOpenMPDeclareReduction(
       break;
     }
     IsCorrect = IsCorrect && !ER.isInvalid();
-    Scope.setBody(ER.take());
+    Scope.setBody(ER.get());
     Combiners.push_back(Scope.getCombiner());
     if (I + 1 != E) {
       TPA.Revert();
@@ -1253,7 +1253,7 @@ Decl *Parser::ParseOpenMPDeclareReduction(
         break;
       }
       IsCorrect = IsCorrect && !ER.isInvalid();
-      Scope.setInit(ER.take());
+      Scope.setInit(ER.get());
       Inits.push_back(Scope.getInitializer());
       if (I + 1 != E) {
         TPA.Revert();
@@ -1469,7 +1469,7 @@ OMPClause *Parser::ParseOpenMPSingleExprClause(OpenMPClauseKind Kind) {
 
   if (LParen && Tok.isNot(tok::r_paren)) {
     Diag(Tok, diag::err_expected_rparen);
-    Diag(LOpen, diag::note_matching) << "(";
+    Diag(LOpen, diag::note_matching) << "'('";
     while (!SkipUntil(tok::r_paren, tok::comma, tok::annot_pragma_openmp_end,
                       StopBeforeMatch))
       ;
@@ -1480,7 +1480,7 @@ OMPClause *Parser::ParseOpenMPSingleExprClause(OpenMPClauseKind Kind) {
   if (Val.isInvalid())
     return 0;
 
-  return Actions.ActOnOpenMPSingleExprClause(Kind, Val.take(), Loc,
+  return Actions.ActOnOpenMPSingleExprClause(Kind, Val.get(), Loc,
                                              Tok.getLocation());
 }
 
@@ -1518,7 +1518,7 @@ OMPClause *Parser::ParseOpenMPSingleExprWithTypeClause(OpenMPClauseKind Kind) {
   }
   if (LParen && Tok.isNot(tok::r_paren)) {
     Diag(Tok, diag::err_expected_rparen);
-    Diag(LOpen, diag::note_matching) << "(";
+    Diag(LOpen, diag::note_matching) << "'('";
     while (!SkipUntil(tok::r_paren, tok::comma, tok::annot_pragma_openmp_end,
                       StopBeforeMatch))
       ;
@@ -1527,7 +1527,7 @@ OMPClause *Parser::ParseOpenMPSingleExprWithTypeClause(OpenMPClauseKind Kind) {
     ConsumeAnyToken();
 
   return Actions.ActOnOpenMPSingleExprWithTypeClause(
-      Kind, Type, TypeLoc, Val.take(), Loc, Tok.getLocation());
+      Kind, Type, TypeLoc, Val.get(), Loc, Tok.getLocation());
 }
 
 /// \brief Parsing of simple OpenMP clauses like 'default' or 'proc_bind'.
@@ -1560,7 +1560,7 @@ OMPClause *Parser::ParseOpenMPSimpleClause(OpenMPClauseKind Kind) {
 
   if (LParen && Tok.isNot(tok::r_paren)) {
     Diag(Tok, diag::err_expected_rparen);
-    Diag(LOpen, diag::note_matching) << "(";
+    Diag(LOpen, diag::note_matching) << "'('";
     while (!SkipUntil(tok::r_paren, tok::comma, tok::annot_pragma_openmp_end,
                       StopBeforeMatch))
       ;
@@ -1757,7 +1757,7 @@ OMPClause *Parser::ParseOpenMPVarListClause(OpenMPClauseKind Kind) {
                                   Kind == OMPC_from || Kind == OMPC_to);
     ExprResult VarExpr = ParseAssignmentExpression();
     if (VarExpr.isUsable()) {
-      Vars.push_back(VarExpr.take());
+      Vars.push_back(VarExpr.get());
     } else {
       while (!SkipUntil(tok::comma, tok::r_paren, tok::annot_pragma_openmp_end,
                         StopBeforeMatch))
@@ -1786,7 +1786,7 @@ OMPClause *Parser::ParseOpenMPVarListClause(OpenMPClauseKind Kind) {
       TailLoc = Tok.getLocation();
       ExprResult Tail = ParseAssignmentExpression();
       if (Tail.isUsable()) {
-        TailExpr = Tail.take();
+        TailExpr = Tail.get();
       } else {
         while (!SkipUntil(tok::r_paren, tok::annot_pragma_openmp_end,
                           StopBeforeMatch))
@@ -1797,7 +1797,7 @@ OMPClause *Parser::ParseOpenMPVarListClause(OpenMPClauseKind Kind) {
 
   if (LParen && Tok.isNot(tok::r_paren)) {
     Diag(Tok, diag::err_expected_rparen);
-    Diag(LOpen, diag::note_matching) << "(";
+    Diag(LOpen, diag::note_matching) << "'('";
     while (!SkipUntil(tok::r_paren, tok::comma, tok::annot_pragma_openmp_end,
                       StopBeforeMatch))
       ;
@@ -1899,7 +1899,7 @@ bool Parser::ParseOpenMPDeclarativeVarListClause(
       TailLoc = Tok.getLocation();
       ExprResult Tail = ParseAssignmentExpression();
       if (Tail.isUsable()) {
-        TailExpr = Tail.take();
+        TailExpr = Tail.get();
       } else {
         SkipUntil(tok::r_paren, tok::annot_pragma_openmp_end, StopBeforeMatch);
       }

@@ -30,7 +30,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/TypeBuilder.h"
-#include "llvm/Support/CallSite.h"
+#include "llvm/IR/CallSite.h"
 using namespace clang;
 using namespace CodeGen;
 
@@ -2731,7 +2731,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
   llvm::Value *DependenceAddresses = 0;
   unsigned ArraySize = 0;
   if (!CGM.OpenMPSupport.getUntied()) {
-    llvm::tie(DependenceAddresses, ArraySize) =
+    std::tie(DependenceAddresses, ArraySize) =
         ProcessDependAddresses(*this, S);
   }
   // CodeGen for "omp task {Associated statement}".
@@ -3352,7 +3352,7 @@ void CodeGenFunction::EmitInitOMPFinalClause(const OMPFinalClause &C,
   llvm::Value *Flags = CGM.OpenMPSupport.getTaskFlags();
   llvm::BasicBlock *ThenBlock = createBasicBlock("task.final.then");
   llvm::BasicBlock *EndBlock = createBasicBlock("task.final.end");
-  EmitBranchOnBoolExpr(C.getCondition(), ThenBlock, EndBlock);
+  EmitBranchOnBoolExpr(C.getCondition(), ThenBlock, EndBlock, 0);
   EmitBlock(ThenBlock);
   llvm::Value *Val =
       Builder.CreateOr(Builder.CreateLoad(Flags, ".flags."), OMP_TASK_FINAL);
@@ -3430,7 +3430,7 @@ CodeGenFunction::EmitAfterInitOMPIfClause(const OMPIfClause &C,
   if (isa<OMPTaskDirective>(&S)) {
     llvm::BasicBlock *ThenBlock = createBasicBlock("omp.if.then");
     llvm::BasicBlock *ElseBlock = createBasicBlock("omp.if.else");
-    EmitBranchOnBoolExpr(C.getCondition(), ThenBlock, ElseBlock);
+    EmitBranchOnBoolExpr(C.getCondition(), ThenBlock, ElseBlock, 0);
     EmitBlock(ThenBlock);
     CGM.OpenMPSupport.setIfDest(ElseBlock);
   } else {
@@ -3438,7 +3438,7 @@ CodeGenFunction::EmitAfterInitOMPIfClause(const OMPIfClause &C,
     llvm::BasicBlock *ThenBlock = createBasicBlock("omp.if.then");
     llvm::BasicBlock *ElseBlock = createBasicBlock("omp.if.else");
     llvm::BasicBlock *ContBlock = createBasicBlock("omp.if.end");
-    EmitBranchOnBoolExpr(C.getCondition(), ThenBlock, ElseBlock);
+    EmitBranchOnBoolExpr(C.getCondition(), ThenBlock, ElseBlock, 0);
     EmitBlock(ElseBlock);
     {
       RunCleanupsScope ElseScope(*this);
@@ -4229,11 +4229,13 @@ CodeGenFunction::EmitInitOMPReductionClause(const OMPReductionClause &C,
   llvm::Function *ReductionFunc = CGF.CurFn;
   if (!ReductionFunc) {
     FunctionArgList Args;
-    ImplicitParamDecl Arg1(0, SourceLocation(), 0, getContext().VoidPtrTy);
-    ImplicitParamDecl Arg2(0, SourceLocation(), 0, getContext().VoidPtrTy);
+    ImplicitParamDecl Arg1(getContext(), 0, SourceLocation(), 0,
+                           getContext().VoidPtrTy);
+    ImplicitParamDecl Arg2(getContext(), 0, SourceLocation(), 0,
+                           getContext().VoidPtrTy);
     Args.push_back(&Arg1);
     Args.push_back(&Arg2);
-    const CGFunctionInfo &FI = CGF.getTypes().arrangeFunctionDeclaration(
+    const CGFunctionInfo &FI = CGF.getTypes().arrangeFreeFunctionDeclaration(
         getContext().VoidTy, Args, FunctionType::ExtInfo(), false);
     llvm::FunctionType *FTy = CGF.getTypes().GetFunctionType(FI);
     llvm::Function *Fn = llvm::Function::Create(
@@ -4853,7 +4855,7 @@ void CodeGenFunction::EmitOMPCancelDirective(const OMPCancelDirective &S) {
     const OMPIfClause *Clause = cast<OMPIfClause>(S.clauses().front());
     llvm::BasicBlock *ThenBB = createBasicBlock("omp.cancel.then");
     llvm::BasicBlock *ElseBB = createBasicBlock("omp.cancel.else");
-    EmitBranchOnBoolExpr(Clause->getCondition(), ThenBB, ElseBB);
+    EmitBranchOnBoolExpr(Clause->getCondition(), ThenBB, ElseBB, 0);
     EmitBlock(ElseBB);
     EmitCancellationPoint(*this, S.getLocStart(), RealArgs, ExitBB, ContBB);
     EmitBlock(ThenBB);
@@ -5198,12 +5200,15 @@ void CodeGenFunction::EmitOMPSingleDirective(const OMPSingleDirective &S) {
         CodeGenFunction CGF(CGM, true);
         CGF.CurFn = 0;
         FunctionArgList Args;
-        ImplicitParamDecl Arg1(0, SourceLocation(), 0, getContext().VoidPtrTy);
-        ImplicitParamDecl Arg2(0, SourceLocation(), 0, getContext().VoidPtrTy);
+        ImplicitParamDecl Arg1(getContext(), 0, SourceLocation(), 0,
+                               getContext().VoidPtrTy);
+        ImplicitParamDecl Arg2(getContext(), 0, SourceLocation(), 0,
+                               getContext().VoidPtrTy);
         Args.push_back(&Arg1);
         Args.push_back(&Arg2);
-        const CGFunctionInfo &FI = CGF.getTypes().arrangeFunctionDeclaration(
-            getContext().VoidTy, Args, FunctionType::ExtInfo(), false);
+        const CGFunctionInfo &FI =
+            CGF.getTypes().arrangeFreeFunctionDeclaration(
+                getContext().VoidTy, Args, FunctionType::ExtInfo(), false);
         llvm::FunctionType *FTy = CGF.getTypes().GetFunctionType(FI);
         llvm::Function *Fn = llvm::Function::Create(
             FTy, llvm::GlobalValue::InternalLinkage,

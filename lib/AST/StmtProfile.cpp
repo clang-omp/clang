@@ -79,9 +79,8 @@ void StmtProfiler::VisitStmt(const Stmt *S) {
 
 void StmtProfiler::VisitDeclStmt(const DeclStmt *S) {
   VisitStmt(S);
-  for (DeclStmt::const_decl_iterator D = S->decl_begin(), DEnd = S->decl_end();
-       D != DEnd; ++D)
-    VisitDecl(*D);
+  for (const auto *D : S->decls())
+    VisitDecl(D);
 }
 
 void StmtProfiler::VisitNullStmt(const NullStmt *S) {
@@ -212,6 +211,10 @@ void StmtProfiler::VisitSEHFinallyStmt(const SEHFinallyStmt *S) {
 }
 
 void StmtProfiler::VisitSEHExceptStmt(const SEHExceptStmt *S) {
+  VisitStmt(S);
+}
+
+void StmtProfiler::VisitSEHLeaveStmt(const SEHLeaveStmt *S) {
   VisitStmt(S);
 }
 
@@ -688,7 +691,7 @@ void StmtProfiler::VisitGenericSelectionExpr(const GenericSelectionExpr *S) {
   for (unsigned i = 0; i != S->getNumAssocs(); ++i) {
     QualType T = S->getAssocType(i);
     if (T.isNull())
-      ID.AddPointer(0);
+      ID.AddPointer(nullptr);
     else
       VisitType(T);
     VisitExpr(S->getAssocExpr(i));
@@ -744,11 +747,11 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
 
   case OO_Star:
     if (S->getNumArgs() == 1) {
-      UnaryOp = UO_Minus;
+      UnaryOp = UO_Deref;
       return Stmt::UnaryOperatorClass;
     }
     
-    BinaryOp = BO_Sub;
+    BinaryOp = BO_Mul;
     return Stmt::BinaryOperatorClass;
 
   case OO_Slash:
@@ -893,7 +896,7 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
   
   llvm_unreachable("Invalid overloaded operator expression");
 }
-                               
+
 
 void StmtProfiler::VisitCXXOperatorCallExpr(const CXXOperatorCallExpr *S) {
   if (S->isTypeDependent()) {
@@ -902,7 +905,7 @@ void StmtProfiler::VisitCXXOperatorCallExpr(const CXXOperatorCallExpr *S) {
     UnaryOperatorKind UnaryOp = UO_Extension;
     BinaryOperatorKind BinaryOp = BO_Comma;
     Stmt::StmtClass SC = DecodeOperatorCall(S, UnaryOp, BinaryOp);
-    
+
     ID.AddInteger(SC);
     for (unsigned I = 0, N = S->getNumArgs(); I != N; ++I)
       Visit(S->getArg(I));
@@ -913,10 +916,10 @@ void StmtProfiler::VisitCXXOperatorCallExpr(const CXXOperatorCallExpr *S) {
       ID.AddInteger(BinaryOp);
     else
       assert(SC == Stmt::ArraySubscriptExprClass);
-                    
+
     return;
   }
-  
+
   VisitCallExpr(S);
   ID.AddInteger(S->getOperator());
 }
@@ -1082,10 +1085,10 @@ StmtProfiler::VisitCXXPseudoDestructorExpr(const CXXPseudoDestructorExpr *S) {
   VisitExpr(S);
   ID.AddBoolean(S->isArrow());
   VisitNestedNameSpecifier(S->getQualifier());
-  ID.AddBoolean(S->getScopeTypeInfo() != 0);
+  ID.AddBoolean(S->getScopeTypeInfo() != nullptr);
   if (S->getScopeTypeInfo())
     VisitType(S->getScopeTypeInfo()->getType());
-  ID.AddBoolean(S->getDestroyedTypeInfo() != 0);
+  ID.AddBoolean(S->getDestroyedTypeInfo() != nullptr);
   if (S->getDestroyedTypeInfo())
     VisitType(S->getDestroyedType());
   else
@@ -1105,19 +1108,6 @@ void StmtProfiler::VisitOverloadExpr(const OverloadExpr *S) {
 void
 StmtProfiler::VisitUnresolvedLookupExpr(const UnresolvedLookupExpr *S) {
   VisitOverloadExpr(S);
-}
-
-void StmtProfiler::VisitUnaryTypeTraitExpr(const UnaryTypeTraitExpr *S) {
-  VisitExpr(S);
-  ID.AddInteger(S->getTrait());
-  VisitType(S->getQueriedType());
-}
-
-void StmtProfiler::VisitBinaryTypeTraitExpr(const BinaryTypeTraitExpr *S) {
-  VisitExpr(S);
-  ID.AddInteger(S->getTrait());
-  VisitType(S->getLhsType());
-  VisitType(S->getRhsType());
 }
 
 void StmtProfiler::VisitTypeTraitExpr(const TypeTraitExpr *S) {
@@ -1359,7 +1349,7 @@ void StmtProfiler::VisitDecl(const Decl *D) {
     }
   }
 
-  ID.AddPointer(D? D->getCanonicalDecl() : 0);
+  ID.AddPointer(D? D->getCanonicalDecl() : nullptr);
 }
 
 void StmtProfiler::VisitType(QualType T) {
@@ -1427,9 +1417,8 @@ void StmtProfiler::VisitTemplateArgument(const TemplateArgument &Arg) {
     break;
 
   case TemplateArgument::Pack:
-    const TemplateArgument *Pack = Arg.pack_begin();
-    for (unsigned i = 0, e = Arg.pack_size(); i != e; ++i)
-      VisitTemplateArgument(Pack[i]);
+    for (const auto &P : Arg.pack_elements())
+      VisitTemplateArgument(P);
     break;
   }
 }
