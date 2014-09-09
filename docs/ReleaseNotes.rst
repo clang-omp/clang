@@ -1,18 +1,12 @@
-=====================================
-Clang 3.5 (In-Progress) Release Notes
-=====================================
+=======================
+Clang 3.5 Release Notes
+=======================
 
 .. contents::
    :local:
    :depth: 2
 
 Written by the `LLVM Team <http://llvm.org/>`_
-
-.. warning::
-
-   These are in-progress notes for the upcoming Clang 3.5 release. You may
-   prefer the `Clang 3.4 Release Notes
-   <http://llvm.org/releases/3.4/tools/clang/docs/ReleaseNotes.html>`_.
 
 Introduction
 ============
@@ -233,11 +227,6 @@ directive just prior to the desired loop. The directive allows vectorization and
 interleaving to be enabled or disabled. Vector width as well as interleave count
 can be manually specified.  See :ref:`langext-pragma-loop` for details.
 
-C Language Changes in Clang
----------------------------
-
-...
-
 C++ Language Changes in Clang
 -----------------------------
 
@@ -246,9 +235,6 @@ C++ Language Changes in Clang
   issue a warning by default if it sees null checks being performed on
   references, and `-fsanitize=null` can be used to detect null references
   being formed at runtime.
-
-.. |has_feature macro| replace:: ``__has_feature`` macro
-.. _has_feature macro: LanguageExtensions.html#has-feature-and-has-extension
 
 C++17 Feature Support
 ^^^^^^^^^^^^^^^^^^^^^
@@ -268,16 +254,6 @@ Additionally, trigraphs are not recognized by default in this mode.
 Note that these features may be changed or removed in future Clang releases
 without notice.
 
-In addition, ``[[deprecated]]`` is now accepted as a synonym for Clang's
-existing ``deprecated`` attribute.
-
-Use ``-std=c++1y`` to enable C++1y mode.
-
-OpenCL C Language Changes in Clang
-----------------------------------
-
-...
-
 OpenMP C/C++ Language Changes in Clang
 --------------------------------------
 
@@ -294,11 +270,6 @@ this section should help get you past the largest hurdles of upgrading.
 
 - Clang uses `std::unique_ptr<T>` in many places where it used to use
   raw `T *` pointers.
-
-libclang
---------
-
-...
 
 Static Analyzer
 ---------------
@@ -322,37 +293,6 @@ instead of `report-XXXXXX.html`, scan-build/clang analyzer generate
 (id = i++ for several issues found in the same function/method).
 
 List the function/method name in the index page of scan-build.
-
-...
-
-Clang Format
-------------
-
-Clang now includes a new tool ``clang-format`` which can be used to
-automatically format C, C++ and Objective-C source code. ``clang-format``
-automatically chooses linebreaks and indentation and can be easily integrated
-into editors, IDEs and version control systems. It supports several pre-defined
-styles as well as precise style control using a multitude of formatting
-options. ``clang-format`` itself is just a thin wrapper around a library which
-can also be used directly from code refactoring and code translation tools.
-More information can be found on `Clang Format's
-site <http://clang.llvm.org/docs/ClangFormat.html>`_.
-
-Windows Support
----------------
-
-- `clang-cl <UsersManual.html#clang-cl>`_ provides a new driver mode that is
-  designed for compatibility with Visual Studio's compiler, cl.exe. This driver
-  mode makes Clang accept the same kind of command-line options as cl.exe. The
-  installer will attempt to expose clang-cl in any Visual Studio installations
-  on the system as a Platform Toolset, e.g. "LLVM-vs2012". clang-cl targets the
-  Microsoft ABI by default. Please note that this driver mode and compatibility
-  with the MS ABI is highly experimental.
-
-Python Binding Changes
-----------------------
-
-The following methods have been added:
 
 Significant Known Problems
 ==========================
