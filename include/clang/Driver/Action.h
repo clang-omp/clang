@@ -41,6 +41,7 @@ public:
   enum ActionClass {
     InputClass = 0,
     BindArchClass,
+    BindTargetClass,
     PreprocessJobClass,
     PrecompileJobClass,
     AnalyzeJobClass,
@@ -69,20 +70,26 @@ private:
 
   unsigned OwnsInputs : 1;
 
+  /// Is this action referring to the main host or an OpenMP offloading device
+  const char* OffloadingDevice;
+
 protected:
   Action(ActionClass _Kind, types::ID _Type)
-    : Kind(_Kind), Type(_Type), OwnsInputs(true)  {}
+    : Kind(_Kind), Type(_Type), OwnsInputs(true), OffloadingDevice(0)  {}
   Action(ActionClass _Kind, Action *Input, types::ID _Type)
-    : Kind(_Kind), Type(_Type), Inputs(&Input, &Input + 1), OwnsInputs(true) {}
+    : Kind(_Kind), Type(_Type), Inputs(&Input, &Input + 1), OwnsInputs(true), OffloadingDevice(0) {}
   Action(ActionClass _Kind, const ActionList &_Inputs, types::ID _Type)
-    : Kind(_Kind), Type(_Type), Inputs(_Inputs), OwnsInputs(true) {}
+    : Kind(_Kind), Type(_Type), Inputs(_Inputs), OwnsInputs(true), OffloadingDevice(0) {}
 public:
   virtual ~Action();
 
   const char *getClassName() const { return Action::getClassName(getKind()); }
 
-  bool getOwnsInputs() { return OwnsInputs; }
+  bool getOwnsInputs() const { return OwnsInputs; }
   void setOwnsInputs(bool Value) { OwnsInputs = Value; }
+
+  const char *getOffloadingDevice() const { return OffloadingDevice; }
+  void setOffloadingDevice(const char *Value) { OffloadingDevice = Value; }
 
   ActionClass getKind() const { return Kind; }
   types::ID getType() const { return Type; }
@@ -125,6 +132,22 @@ public:
 
   static bool classof(const Action *A) {
     return A->getKind() == BindArchClass;
+  }
+};
+
+class BindTargetAction : public Action {
+  virtual void anchor();
+  /// The architecture to bind, or 0 if the default architecture
+  /// should be bound.
+  const char *TargetName;
+
+public:
+  BindTargetAction(Action *Input, const char *_TargetName);
+
+  const char *getTargetName() const { return TargetName; }
+
+  static bool classof(const Action *A) {
+    return A->getKind() == BindTargetClass;
   }
 };
 

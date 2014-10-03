@@ -91,6 +91,16 @@ public:
   /// \brief Options for parsing comments.
   CommentOptions CommentOpts;
   
+  /// \brief ID passed to the frontend that identifies the module.
+  /// The same ID must be passed for all targets for a given compilation
+  /// unit.
+  std::string OMPModuleUniqueID;
+
+  /// \brief Triples of the OpenMP targets that the host code
+  /// codegen should take into account in order to generate
+  /// accurate offloading translation tables
+  std::vector<llvm::Triple> OMPTargetTriples;
+
   LangOptions();
 
   // Define accessors/mutators for language options of enumeration type.

@@ -101,7 +101,8 @@ protected:
   public:
     GCCInstallationDetector() : IsValid(false) {}
     void init(const Driver &D, const llvm::Triple &TargetTriple,
-                            const llvm::opt::ArgList &Args);
+                            const llvm::opt::ArgList &Args,
+                            bool isOpenMPTarget);
 
     /// \brief Check whether we detected a valid GCC install.
     bool isValid() const { return IsValid; }
@@ -144,6 +145,7 @@ protected:
                                 const llvm::opt::ArgList &Args,
                                 const std::string &LibDir,
                                 StringRef CandidateTriple,
+                                bool isOpenMPTarget,
                                 bool NeedsBiarchSuffix = false);
   };
 
@@ -151,7 +153,8 @@ protected:
 
 public:
   Generic_GCC(const Driver &D, const llvm::Triple &Triple,
-              const llvm::opt::ArgList &Args);
+              const llvm::opt::ArgList &Args,
+              bool IsOpenMPTargetToolchain = false);
   ~Generic_GCC();
 
   void printVerboseInfo(raw_ostream &OS) const override;
@@ -161,6 +164,12 @@ public:
   bool isPIEDefault() const override;
   bool isPICDefaultForced() const override;
   bool IsIntegratedAssemblerDefault() const override;
+
+  virtual llvm::opt::DerivedArgList *
+  TranslateArgs(const llvm::opt::DerivedArgList &Args,
+                const char *BoundArch,
+                bool isOpenMPTarget,
+                bool &isSuccess) const;
 
 protected:
   Tool *getTool(Action::ActionClass AC) const override;
@@ -251,7 +260,9 @@ public:
 
   llvm::opt::DerivedArgList *
   TranslateArgs(const llvm::opt::DerivedArgList &Args,
-                const char *BoundArch) const override;
+                const char *BoundArch,
+                bool isOpenMPTarget,
+                bool &isSuccess) const override;
 
   bool IsBlocksDefault() const override {
     // Always allow blocks on Apple; users interested in versioning are
@@ -434,7 +445,9 @@ public:
 
   llvm::opt::DerivedArgList *
   TranslateArgs(const llvm::opt::DerivedArgList &Args,
-                const char *BoundArch) const override;
+                const char *BoundArch,
+                bool isOpenMPTarget,
+                bool &isSuccess) const override;
 
   ObjCRuntime getDefaultObjCRuntime(bool isNonFragile) const override;
   bool hasBlocksRuntime() const override;
@@ -499,8 +512,9 @@ class LLVM_LIBRARY_VISIBILITY Generic_ELF : public Generic_GCC {
   virtual void anchor();
 public:
   Generic_ELF(const Driver &D, const llvm::Triple &Triple,
-              const llvm::opt::ArgList &Args)
-      : Generic_GCC(D, Triple, Args) {}
+              const llvm::opt::ArgList &Args,
+              bool IsOpenMPTargetToolchain = false)
+      : Generic_GCC(D, Triple, Args, IsOpenMPTargetToolchain) {}
 
   void addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
                              llvm::opt::ArgStringList &CC1Args) const override;
@@ -657,7 +671,7 @@ protected:
 class LLVM_LIBRARY_VISIBILITY Linux : public Generic_ELF {
 public:
   Linux(const Driver &D, const llvm::Triple &Triple,
-        const llvm::opt::ArgList &Args);
+        const llvm::opt::ArgList &Args, bool IsOpenMPTargetToolchain = false);
 
   bool HasNativeLLVMSupport() const override;
 
@@ -709,7 +723,8 @@ public:
 
   StringRef GetGCCLibAndIncVersion() const { return GCCLibAndIncVersion.Text; }
 
-  static std::string GetGnuDir(const std::string &InstalledDir);
+  static std::string GetGnuDir(const std::string &InstalledDir,
+                               const llvm::opt::ArgList &Args);
 
   static StringRef GetTargetCPU(const llvm::opt::ArgList &Args);
 };
@@ -773,6 +788,37 @@ public:
                        llvm::opt::ArgStringList &CC1Args) const override;
   void AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
                            llvm::opt::ArgStringList &CmdArgs) const override;
+};
+
+class LLVM_LIBRARY_VISIBILITY NVPTX_TC : public ToolChain {
+public:
+  NVPTX_TC(const Driver &D, const llvm::Triple &Triple,
+          const llvm::opt::ArgList &Args,
+          bool IsOpenMPTargetToolchain = false);
+protected:
+  virtual Tool *buildAssembler() const;
+  virtual Tool *buildLinker() const;
+public:
+  virtual bool isPICDefault() const;
+  virtual bool isPIEDefault() const;
+  virtual bool isPICDefaultForced() const;
+  virtual bool SupportsProfiling() const;
+  virtual bool hasBlocksRuntime() const;
+//  virtual void AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
+//                            llvm::opt::ArgStringList &CC1Args) const;
+//  virtual void addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,
+//                                     llvm::opt::ArgStringList &CC1Args) const;
+//  virtual void AddClangCXXStdlibIncludeArgs(const llvm::opt::ArgList &DriverArgs,
+//                               llvm::opt::ArgStringList &CC1Args) const;
+//  virtual void AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
+//                                   llvm::opt::ArgStringList &CmdArgs) const;
+
+  virtual llvm::opt::DerivedArgList *
+  TranslateArgs(const llvm::opt::DerivedArgList &Args,
+                const char *BoundArch,
+                bool isOpenMPTarget,
+                bool &isSuccess) const;
+
 };
 
 } // end namespace toolchains

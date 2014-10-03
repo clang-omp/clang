@@ -24,6 +24,7 @@ const char *Action::getClassName(ActionClass AC) {
   switch (AC) {
   case InputClass: return "input";
   case BindArchClass: return "bind-arch";
+  case BindTargetClass: return "bind-target";
   case PreprocessJobClass: return "preprocessor";
   case PrecompileJobClass: return "precompiler";
   case AnalyzeJobClass: return "analyzer";
@@ -52,6 +53,11 @@ BindArchAction::BindArchAction(Action *Input, const char *_ArchName)
   : Action(BindArchClass, Input, Input->getType()), ArchName(_ArchName) {
 }
 
+void BindTargetAction::anchor() {}
+
+BindTargetAction::BindTargetAction(Action *Input, const char *_TargetName)
+  : Action(BindTargetClass, Input, Input->getType()), TargetName(_TargetName) {
+}
 void JobAction::anchor() {}
 
 JobAction::JobAction(ActionClass Kind, Action *Input, types::ID Type)
@@ -144,3 +150,4 @@ void VerifyPCHJobAction::anchor() {}
 VerifyPCHJobAction::VerifyPCHJobAction(Action *Input, types::ID Type)
     : VerifyJobAction(VerifyPCHJobClass, Input, Type) {
 }
+

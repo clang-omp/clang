@@ -53,7 +53,8 @@ class Compilation {
 
   /// Cache of translated arguments for a particular tool chain and bound
   /// architecture.
-  llvm::DenseMap<std::pair<const ToolChain *, const char *>,
+  typedef std::pair<const ToolChain*,int> ToolChainWithTargetInfo;
+  llvm::DenseMap<std::pair<ToolChainWithTargetInfo, const char*>,
                  llvm::opt::DerivedArgList *> TCArgs;
 
   /// Temporary files which should be removed on exit.
@@ -111,8 +112,12 @@ public:
   /// tool chain \p TC (or the default tool chain, if TC is not specified).
   ///
   /// \param BoundArch - The bound architecture name, or 0.
+  /// \param isOpenMPTarget - True if this tool chain refer to an OpenMP target
+  /// \param isSuccess - set to true if the arguments were successfully obtained
   const llvm::opt::DerivedArgList &getArgsForToolChain(const ToolChain *TC,
-                                                       const char *BoundArch);
+                                                       const char *BoundArch,
+                                                       bool isOpenMPTarget,
+                                                       bool &isSuccess);
 
   /// addTempFile - Add a file to remove on exit, and returns its
   /// argument.

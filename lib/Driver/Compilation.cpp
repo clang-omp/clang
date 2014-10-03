@@ -33,7 +33,7 @@ Compilation::~Compilation() {
   delete Args;
 
   // Free any derived arg lists.
-  for (llvm::DenseMap<std::pair<const ToolChain*, const char*>,
+  for (llvm::DenseMap<std::pair<ToolChainWithTargetInfo, const char*>,
                       DerivedArgList*>::iterator it = TCArgs.begin(),
          ie = TCArgs.end(); it != ie; ++it)
     if (it->second != TranslatedArgs)
@@ -53,16 +53,34 @@ Compilation::~Compilation() {
 }
 
 const DerivedArgList &Compilation::getArgsForToolChain(const ToolChain *TC,
-                                                       const char *BoundArch) {
+                                                       const char *BoundArch,
+                                                       bool isOpenMPTarget,
+                                                       bool &isSuccess){
   if (!TC)
     TC = &DefaultToolChain;
 
-  DerivedArgList *&Entry = TCArgs[std::make_pair(TC, BoundArch)];
-  if (!Entry) {
-    Entry = TC->TranslateArgs(*TranslatedArgs, BoundArch);
-    if (!Entry)
-      Entry = TranslatedArgs;
+  // Try to locate the args in the toolchain map
+  llvm::DenseMap<std::pair<ToolChainWithTargetInfo, const char*>,
+                   llvm::opt::DerivedArgList *>::iterator it = TCArgs
+      .find(std::make_pair(std::make_pair(TC,(int)isOpenMPTarget),BoundArch));
+
+  // We have already tried to translate these args
+  if (it != TCArgs.end() ){
+    // if null, we already failed to translate
+    isSuccess = (it->second);
+    return *(it->second);
   }
+
+  // This is the first attempt to translate these arguments
+  DerivedArgList *&Entry =TCArgs[
+       std::make_pair(std::make_pair(TC,(int)isOpenMPTarget),BoundArch)];
+
+  Entry = TC->TranslateArgs(*TranslatedArgs, BoundArch, isOpenMPTarget,
+                                                                    isSuccess);
+  // If we didn't get derived arguments but the translation is signaled as
+  // Successful, we should used the untranslated arguments
+  if (!Entry && isSuccess)
+    Entry = TranslatedArgs;
 
   return *Entry;
 }

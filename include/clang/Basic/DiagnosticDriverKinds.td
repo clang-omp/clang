@@ -119,6 +119,16 @@ def err_drv_emit_llvm_link : Error<
 def err_drv_optimization_remark_pattern : Error<
   "%0 in '%1'">;
 def err_drv_no_neon_modifier : Error<"[no]neon is not accepted as modifier, please use [no]simd instead">;
+def err_drv_unknown_toolchain : Error<
+  "cannot recognize the type of the toolchain">;
+def err_drv_invalid_omp_target : Error<
+  "OpenMP target is invalid: '%0'">;
+def err_drv_omp_module_id_required : Error<
+  "A module ID is required to enable OpenMP target code generation. Use '-omp-module-id=ID'.">;
+def err_drv_omp_target_translation_not_available : Error<
+  "OpenMP target '%0' arguments translation is not supported.">;
+def err_drv_omp_target_toolchain_not_available : Error<
+  "Toolchain for target '%0' is not supporting OpenMP offloading.">;
 
 def warn_O4_is_O3 : Warning<"-O4 is equivalent to -O3">, InGroup<Deprecated>;
 def warn_drv_optimization_value : Warning<"optimization level '%0' is not supported; using '%1%2' instead">,

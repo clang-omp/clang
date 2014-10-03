@@ -577,8 +577,15 @@ def cl_std_EQ : Joined<["-"], "cl-std=">,
 def fcuda_is_device : Flag<["-"], "fcuda-is-device">,
   HelpText<"Generate code for CUDA device">;
 
-} // let Flags = [CC1Option]
+//===----------------------------------------------------------------------===//
+// OpenMP Options
+//===----------------------------------------------------------------------===//
 
+def omp_target_mode : Flag<["-"], "omp-target-mode">,
+  HelpText<"Generate code for an OpenMP target">;
+def omp_module_id_EQ : Joined<["-"], "omp-module-id=">,
+  HelpText<"Identifier the uniquely identify the module in the program">;
+} // let Flags = [CC1Option]
 
 //===----------------------------------------------------------------------===//
 // cc1as-only Options

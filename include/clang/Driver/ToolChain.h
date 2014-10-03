@@ -12,6 +12,8 @@
 
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Multilib.h"
+#include "clang/Driver/DriverDiagnostic.h"
+#include "clang/Driver/Driver.h"
 #include "clang/Driver/Types.h"
 #include "clang/Driver/Util.h"
 #include "llvm/ADT/SmallVector.h"
@@ -76,11 +78,16 @@ private:
 
   mutable std::unique_ptr<SanitizerArgs> SanitizerArguments;
 
+  /// This is set to true when the toolchain is created if it refers to an
+  /// OpenMP target toolchain
+  bool IsOpenMPTargetToolchain;
+
 protected:
   MultilibSet Multilibs;
 
   ToolChain(const Driver &D, const llvm::Triple &T,
-            const llvm::opt::ArgList &Args);
+            const llvm::opt::ArgList &Args,
+            bool IsOpenMPTargetToolchain = false);
 
   virtual Tool *buildAssembler() const;
   virtual Tool *buildLinker() const;
@@ -110,6 +117,7 @@ public:
 
   const Driver &getDriver() const;
   const llvm::Triple &getTriple() const { return Triple; }
+  bool isOpenMPTargetToolchain() const { return IsOpenMPTargetToolchain; }
 
   llvm::Triple::ArchType getArch() const { return Triple.getArch(); }
   StringRef getArchName() const { return Triple.getArchName(); }
@@ -141,9 +149,25 @@ public:
   /// specific translations are needed.
   ///
   /// \param BoundArch - The bound architecture name, or 0.
+  /// \param isOpenMPTarget - True if this toolchain is an OpenMP target.
+  /// \param isSuccess - set to True if the arguments were successfully
+  /// translated.
   virtual llvm::opt::DerivedArgList *
   TranslateArgs(const llvm::opt::DerivedArgList &Args,
-                const char *BoundArch) const {
+                const char *BoundArch,
+                bool isOpenMPTarget,
+                bool &isSuccess) const {
+
+    if (isOpenMPTarget){
+      isSuccess = false;
+
+      D.Diag(diag::err_drv_omp_target_translation_not_available)
+          << BoundArch;
+
+      return nullptr;
+    }
+
+    isSuccess = true;
     return nullptr;
   }
 
@@ -323,6 +347,7 @@ public:
   virtual bool
   AddFastMathRuntimeIfAvailable(const llvm::opt::ArgList &Args,
                                 llvm::opt::ArgStringList &CmdArgs) const;
+
 };
 
 } // end namespace driver

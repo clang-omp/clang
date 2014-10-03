@@ -128,6 +128,7 @@ LANGOPT(OpenCLVersion     , 32, 0, "OpenCL version")
 LANGOPT(NativeHalfType    , 1, 0, "Native half type support")
 LANGOPT(CUDA              , 1, 0, "CUDA")
 LANGOPT(OpenMP            , 1, 0, "OpenMP support")
+LANGOPT(OpenMPTargetMode  , 1, 0, "OpenMP codegen for target only")
 
 LANGOPT(AssumeSaneOperatorNew , 1, 1, "implicit __attribute__((malloc)) for C++'s new operators")
 LANGOPT(SizedDeallocation , 1, 0, "enable sized deallocation functions")

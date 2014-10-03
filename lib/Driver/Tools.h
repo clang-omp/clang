@@ -221,7 +221,8 @@ namespace mips {
                         const llvm::Triple &Triple, StringRef &CPUName,
                         StringRef &ABIName);
   bool hasMipsAbiArg(const llvm::opt::ArgList &Args, const char *Value);
-  bool isNaN2008(const llvm::opt::ArgList &Args, const llvm::Triple &Triple);
+  bool isNaN2008(const llvm::opt::ArgList &Args, const llvm::Triple &Triple,
+                 bool isOpenMPTarget);
   bool isFPXXDefault(const llvm::Triple &Triple, StringRef CPUName,
                      StringRef ABIName);
 }
@@ -646,6 +647,36 @@ namespace XCore {
   };
 } // end namespace XCore.
 
+namespace NVPTX {
+  // For NVPTX, we do not need to instantiate tools for PreProcess, PreCompile and Compile.
+  // We simply use "clang -cc1" for those actions.
+  class LLVM_LIBRARY_VISIBILITY Assemble : public Tool {
+  public:
+    Assemble(const ToolChain &TC) : Tool("NVPTX::Assemble",
+      "ptxas", TC) {}
+
+    virtual bool hasIntegratedCPP() const { return false; }
+    virtual void ConstructJob(Compilation &C, const JobAction &JA,
+                              const InputInfo &Output,
+                              const InputInfoList &Inputs,
+                              const llvm::opt::ArgList &TCArgs,
+                              const char *LinkingOutput) const;
+  };
+
+  class LLVM_LIBRARY_VISIBILITY Link : public Tool {
+  public:
+    Link(const ToolChain &TC) : Tool("NVPTX::Link",
+      "nvlink", TC) {}
+
+    virtual bool hasIntegratedCPP() const { return false; }
+    virtual bool isLinkJob() const { return true; }
+    virtual void ConstructJob(Compilation &C, const JobAction &JA,
+                              const InputInfo &Output,
+                              const InputInfoList &Inputs,
+                              const llvm::opt::ArgList &TCArgs,
+                              const char *LinkingOutput) const;
+  };
+} // end namespace NVPTX.
 
 } // end namespace toolchains
 } // end namespace driver

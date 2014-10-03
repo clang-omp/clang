@@ -178,6 +178,7 @@ private:
   /// created targeting that triple. The driver owns all the ToolChain objects
   /// stored in it, and will clean them up when torn down.
   mutable llvm::StringMap<ToolChain *> ToolChains;
+  mutable llvm::StringMap<ToolChain *> OpenMPTargetToolChains;
 
 private:
   /// TranslateInputArgs - Create a new derived argument list from the input
@@ -391,9 +392,10 @@ private:
   /// \brief Retrieves a ToolChain for a particular target triple.
   ///
   /// Will cache ToolChains for the life of the driver object, and create them
-  /// on-demand.
+  /// on-demand. If TripleString is provided, the triple is obtained exclusively from it
   const ToolChain &getToolChain(const llvm::opt::ArgList &Args,
-                                StringRef DarwinArchName = "") const;
+                                StringRef DarwinArchName = "",
+                                const char *OpenMPTripleString = nullptr) const;
 
   /// @}
 

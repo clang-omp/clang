@@ -91,6 +91,7 @@ namespace {
       if (Diags.hasErrorOccurred())
         return true;
 
+
       // Make sure to emit all elements of a Decl.
       for (DeclGroupRef::iterator I = DG.begin(), E = DG.end(); I != E; ++I)
         Builder->EmitTopLevelDecl(*I);

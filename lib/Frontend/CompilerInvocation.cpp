@@ -1540,6 +1540,28 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   //      .Default(false);
   //}
   Opts.OpenMP = Args.hasArg(OPT_fopenmp);
+  Opts.OpenMPTargetMode = Args.hasArg(OPT_omp_target_mode);
+
+  // Get the OpenMP target triples if any
+  if ( Arg *A = Args.getLastArg(options::OPT_omptargets_EQ) ){
+
+    for (unsigned i=0; i < A->getNumValues(); ++i){
+      llvm::Triple TT(A->getValue(i));
+
+      if (TT.getArch() == llvm::Triple::UnknownArch)
+        Diags.Report(clang::diag::err_drv_invalid_omp_target) << A->getValue(i);
+      else
+        Opts.OMPTargetTriples.push_back(TT);
+    }
+  }
+
+  // Make sure that we have a module ID if we need to generate code for a target
+  if (Opts.OpenMP && (Opts.OpenMPTargetMode || Opts.OMPTargetTriples.size())){
+    if ( Arg *A = Args.getLastArg(options::OPT_omp_module_id_EQ) )
+      Opts.OMPModuleUniqueID = A->getValue();
+    else
+      Diags.Report(clang::diag::err_drv_omp_module_id_required);
+  }
 
   // Record whether the __DEPRECATED define was requested.
   Opts.Deprecated = Args.hasFlag(OPT_fdeprecated_macro,

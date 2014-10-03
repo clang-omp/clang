@@ -27,8 +27,8 @@ using namespace clang;
 using namespace llvm::opt;
 
 ToolChain::ToolChain(const Driver &D, const llvm::Triple &T,
-                     const ArgList &A)
-  : D(D), Triple(T), Args(A) {
+                     const ArgList &A, bool IsOpenMPTargetToolchain)
+  : D(D), Triple(T), Args(A), IsOpenMPTargetToolchain(IsOpenMPTargetToolchain) {
 }
 
 ToolChain::~ToolChain() {
@@ -113,6 +113,7 @@ Tool *ToolChain::getTool(Action::ActionClass AC) const {
 
   case Action::InputClass:
   case Action::BindArchClass:
+  case Action::BindTargetClass:
   case Action::LipoJobClass:
   case Action::DsymutilJobClass:
   case Action::VerifyDebugInfoJobClass:

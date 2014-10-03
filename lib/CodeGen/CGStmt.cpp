@@ -2590,3 +2590,36 @@ void CodeGenFunction::InitOpenMPFunction(llvm::Value *Context,
     CXXThisValue = EmitLoadOfLValue(ThisLValue, FD->getLocStart()).getScalarVal();
   }
 }
+
+void CodeGenFunction::InitOpenMPTargetFunction(const CapturedStmt &S) {
+  CapturedStmtInfo =
+      new CGOpenMPCapturedStmtInfo(0, S, CGM, S.getCapturedRegionKind());
+
+  const RecordDecl *RD = S.getCapturedRecordDecl();
+
+  llvm::Function::arg_iterator Arg = this->CurFn->arg_begin();
+  RecordDecl::field_iterator CurField = RD->field_begin();
+  CapturedStmt::const_capture_iterator C = S.capture_begin();
+  for (CapturedStmt::capture_init_iterator I = S.capture_init_begin(),
+                                           E = S.capture_init_end();
+       I != E; ++I, ++C, ++CurField, ++Arg) {
+
+    QualType QTy = (*CurField)->getType();
+    if (QTy->isVariablyModifiedType()) {
+      EmitVariablyModifiedType(QTy);
+    }
+    if (C->capturesVariable()) {
+      const VarDecl *VD = C->getCapturedVar();
+      CapturedStmtInfo->addCachedVar(VD, Arg);
+    }
+  }
+
+  // If 'this' is captured, load it into CXXThisValue.
+  if (CapturedStmtInfo->isCXXThisExprCaptured()) {
+    FieldDecl *FD = CapturedStmtInfo->getThisFieldDecl();
+    LValue LV = MakeNaturalAlignAddrLValue(CapturedStmtInfo->getContextValue(),
+                                           getContext().getTagDeclType(RD));
+    LValue ThisLValue = EmitLValueForField(LV, FD);
+    CXXThisValue = EmitLoadOfLValue(ThisLValue, FD->getLocStart()).getScalarVal();
+  }
+}

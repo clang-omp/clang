@@ -16,6 +16,7 @@
 #include "CGCall.h"
 #include "CGDebugInfo.h"
 #include "CGObjCRuntime.h"
+#include "CGOpenMPRuntime.h"
 #include "CGRecordLayout.h"
 #include "CodeGenModule.h"
 #include "TargetInfo.h"
@@ -1839,7 +1840,7 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
     // CodeGen for threadprivate variables.
     if (getLangOpts().OpenMP) {
       if (llvm::Value *Val =
-               CGM.CreateOpenMPThreadPrivateCached(VD, E->getExprLoc(), *this))
+               CGM.getOpenMPRuntime().CreateOpenMPThreadPrivateCached(VD, E->getExprLoc(), *this))
         return MakeAddrLValue(Val, T, Alignment);
       // CodeGen for OpenMP private variables - works only in CapturedStmt.
       else if (llvm::Value *Val = CGM.OpenMPSupport.getOpenMPPrivateVar(VD))

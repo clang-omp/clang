@@ -950,10 +950,6 @@ void OMPClausePrinter::VisitOMPAlignedClause(OMPAlignedClause *Node) {
 void OMPClause::printPretty(raw_ostream &OS, PrinterHelper *Helper,
                             const PrintingPolicy &Policy,
                             unsigned Indentation) const {
-  if (this == 0) {
-    OS << "<NULL>";
-    return;
-  }
 
   OMPClausePrinter P(OS, Policy);
   P.Visit(const_cast<OMPClause *>(this));
