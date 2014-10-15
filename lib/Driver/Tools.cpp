@@ -32,7 +32,6 @@
 #include "llvm/Support/Compression.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Format.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
@@ -2576,32 +2575,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if ( JA.getOffloadingDevice() )
       CmdArgs.push_back("-omp-target-mode");
 
-    // create a ID that uniquely identifies the module based on the input file
-
-    const Action *Act = &JA;
-
-    while ( Act->getKind() != Action::InputClass ){
-      assert( Act->size() == 1 &&
-          "Creating frontend job for more than one file??" );
-      Act = *Act->begin();
-    }
-
-    llvm::sys::fs::UniqueID ModuleID;
-    std::error_code err = llvm::sys::fs::getUniqueID(
-        Twine(cast<InputAction>(Act)->getInputArg().getValue()), ModuleID);
-
-    // The input files existence is tested before, so we assume they must have
-    // a status at this point.
-    if( err )
-      llvm_unreachable("Unable to create unique ID to input file "
-          "- invalid input file status??");
-
-    std::string S;
-    llvm::raw_string_ostream OS(S);
-    OS << "-omp-module-id=" << llvm::format("%llx",ModuleID.getFile())
-        << "_" << llvm::format("%llx",ModuleID.getDevice());
-    OS.flush();
-    CmdArgs.push_back(Args.MakeArgString(S));
+    // the frontend components needs to know the path of the original source
+    // file given that the target functions use that to generate a unique name
+    CmdArgs.push_back("-omp-main-file-path");
+    CmdArgs.push_back(Args.MakeArgString(Inputs[0].getBaseInput()));
   }
 
   // Add the "effective" target triple.

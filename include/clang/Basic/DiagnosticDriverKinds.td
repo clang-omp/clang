@@ -123,8 +123,10 @@ def err_drv_unknown_toolchain : Error<
   "cannot recognize the type of the toolchain">;
 def err_drv_invalid_omp_target : Error<
   "OpenMP target is invalid: '%0'">;
+def err_drv_omp_target_requires_main_file_path : Error<
+  "Main-file path is required to generate code for OpenMP target regions. Use -omp-main-file-path 'path'.">;
 def err_drv_omp_module_id_required : Error<
-  "A module ID is required to enable OpenMP target code generation. Use '-omp-module-id=ID'.">;
+  "Unable to generate module ID from input file '%0' for OpenMP target code generation. Make sure the file exists in the file system.">;
 def err_drv_omp_target_translation_not_available : Error<
   "OpenMP target '%0' arguments translation is not supported.">;
 def err_drv_omp_target_toolchain_not_available : Error<

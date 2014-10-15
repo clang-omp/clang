@@ -583,8 +583,8 @@ def fcuda_is_device : Flag<["-"], "fcuda-is-device">,
 
 def omp_target_mode : Flag<["-"], "omp-target-mode">,
   HelpText<"Generate code for an OpenMP target">;
-def omp_module_id_EQ : Joined<["-"], "omp-module-id=">,
-  HelpText<"Identifier the uniquely identify the module in the program">;
+def omp_main_file_path : Separate<["-"], "omp-main-file-path">,
+  HelpText<"Path to the original source file that requires OpenMP code generation">;
 } // let Flags = [CC1Option]
 
 //===----------------------------------------------------------------------===//

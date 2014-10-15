@@ -25,12 +25,12 @@
 // RUN:   | FileCheck -check-prefix=CHK-COMMANDS %s
 //
 // Host front-end command
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-module-id=[[ID:[0-9a-f]+_[0-9a-f]+]]"
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-main-file-path"
 // Target1 commands
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-module-id=[[ID]]" "-triple" "nvptx64-nvidia-cuda" "-E"
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "nvptx64-nvidia-cuda" "-E"
 // CHK-COMMANDS: "-target-cpu" "sm_20"
 // CHK-COMMANDS: "-o" "[[T1PP:.+]].i"
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-module-id=[[ID]]" "-triple" "nvptx64-nvidia-cuda" "-S"
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "nvptx64-nvidia-cuda" "-S"
 // CHK-COMMANDS: "-target-cpu" "sm_20"
 // CHK-COMMANDS: "-o" "[[T1ASM:.+]].s" "-x" "cpp-output" "[[T1PP]].i"
 // CHK-COMMANDS: ptxas" "-o" "[[T1OBJ:.+]].o" "-c" "-arch" "sm_20" "[[T1ASM]].s"
@@ -38,10 +38,10 @@
 // CHK-COMMANDS: nvlink" "-o" "[[T1LIB:.+]].so" "-arch" "sm_20" "[[T1CBIN]].cubin"
 
 // Target2 command
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-module-id=[[ID]]" "-triple" "powerpc64-ibm-linux-gnu" "-E"
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "powerpc64-ibm-linux-gnu" "-E"
 // CHK-COMMANDS: "-target-cpu" "ppc64"
 // CHK-COMMANDS: "-o" "[[T2PP:.+]].i"
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-module-id=[[ID]]" "-triple" "powerpc64-ibm-linux-gnu" "-S"
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "powerpc64-ibm-linux-gnu" "-S"
 // CHK-COMMANDS: "-target-cpu" "ppc64"
 // CHK-COMMANDS: "-o" "[[T2ASM:.+]].s" "-x" "cpp-output" "[[T2PP]].i"
 // CHK-COMMANDS: as" "-a64" "-mppc64" "-many" "-o" "[[T2OBJ:.+]].o" "[[T2ASM]].s"
@@ -50,17 +50,24 @@
 // Final linking command
 // CHK-COMMANDS: ld" {{.*}} "-o" "a.out"  {{.*}}  "[[HOSTOBJ:.+]].o" "-liomp5" "-lomptarget" {{.*}} "-T" "[[LKSCRIPT:.+]].lk"
 
-/// Check frontend require module ID
+/// Check frontend require main file name
 // RUN:   not %clang_cc1 "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-triple" "powerpc64-ibm-linux-gnu" %s 2>&1 \
-// RUN:   | FileCheck -check-prefix=CHK-MODULEID %s
+// RUN:   | FileCheck -check-prefix=CHK-MAINFILE %s
 // RUN:   not %clang_cc1 "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-triple" "nvptx64-nvidia-cuda" %s 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHK-MAINFILE %s
+// CHK-MAINFILE: error: Main-file path is required to generate code for OpenMP target regions. Use -omp-main-file-path 'path'.
+
+/// Check frontend module ID error
+// RUN:   not %clang_cc1 "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-triple" "powerpc64-ibm-linux-gnu" "-omp-main-file-path" "abcd.efgh" %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHK-MODULEID %s
-// CHK-MODULEID: error: A module ID is required to enable OpenMP target code generation. Use '-omp-module-id=ID'.
+// RUN:   not %clang_cc1 "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-triple" "nvptx64-nvidia-cuda" %s "-omp-main-file-path" "abcd.efgh" 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHK-MODULEID %s
+// CHK-MODULEID: error: Unable to generate module ID from input file 'abcd.efgh' for OpenMP target code generation. Make sure the file exists in the file system.
 
 /// Check the subtarget detection
 // RUN:   %clang -### -fopenmp -target powerpc64-linux -omptargets=nvptx64sm_35-nvidia-cuda %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHK-SUBTARGET %s
-// CHK-SUBTARGET: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=nvptx64sm_35-nvidia-cuda" "-omp-target-mode" "-omp-module-id=[[ID:[0-9a-f]+_[0-9a-f]+]]" "-triple" "nvptx64sm_35-nvidia-cuda" "-E"
+// CHK-SUBTARGET: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=nvptx64sm_35-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "nvptx64sm_35-nvidia-cuda" "-E"
 // CHK-SUBTARGET: "-target-cpu" "sm_35"
 // CHK-SUBTARGET: "-o" "[[T1PP:.+]].i"
 

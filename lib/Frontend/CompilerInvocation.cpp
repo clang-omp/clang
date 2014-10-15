@@ -31,6 +31,7 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
@@ -1557,10 +1558,25 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
 
   // Make sure that we have a module ID if we need to generate code for a target
   if (Opts.OpenMP && (Opts.OpenMPTargetMode || Opts.OMPTargetTriples.size())){
-    if ( Arg *A = Args.getLastArg(options::OPT_omp_module_id_EQ) )
-      Opts.OMPModuleUniqueID = A->getValue();
+
+    // Obtain the main file path that is being used to generate target code
+    if ( Arg *A = Args.getLastArg(options::OPT_omp_main_file_path) ){
+      llvm::sys::fs::UniqueID ModuleID;
+      std::error_code err = llvm::sys::fs::getUniqueID(Twine(A->getValue()),
+                                                       ModuleID);
+      if ( err )
+        Diags.Report(clang::diag::err_drv_omp_module_id_required)
+          << A->getValue();
+      else {
+        Opts.OMPModuleUniqueID.clear();
+        llvm::raw_string_ostream OS(Opts.OMPModuleUniqueID);
+        OS << llvm::format("%llx",ModuleID.getFile())
+            << "_" << llvm::format("%llx",ModuleID.getDevice());
+        OS.flush();
+      }
+    }
     else
-      Diags.Report(clang::diag::err_drv_omp_module_id_required);
+      Diags.Report(clang::diag::err_drv_omp_target_requires_main_file_path);
   }
 
   // Record whether the __DEPRECATED define was requested.
