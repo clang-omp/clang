@@ -273,26 +273,41 @@ static void AddOpenMPLinkerScript(const ToolChain &TC, Compilation &C,
     return;
   }
 
-  // Add commands to embed target binaries
+  // Add commands to embed target binaries. We ensure that each section and
+  // image s 16-byte aligned. This is not mandatory, but increases the
+  // likelihood of data to be aligned with a cache block in several main host
+  // machines.
   lksf << "TARGET(binary)\n";
   for (unsigned i=0; i<Targets.size(); ++i)
     lksf << "INPUT(" << Targets[i].second << ")\n";
 
   lksf << "SECTIONS\n";
   lksf << "{\n";
-  lksf << "  .openmptgt : {\n";
+  lksf << "  .openmptgt ALIGN(0x10) : {\n";
 
   for (unsigned i=0; i<Targets.size(); ++i){
     std::string tgt_name(Targets[i].first);
     std::replace(tgt_name.begin(),tgt_name.end(),'-','_');
+    lksf << "    . = ALIGN(0x10);\n";
     lksf << "    __omptgt__img_start_" << tgt_name << " = .;\n";
     lksf << "    " << Targets[i].second << "\n";
     lksf << "    __omptgt__img_end_" << tgt_name << " = .;\n";
+
+    // We append the host entries and target name associated with the target
+    // image
+
+    lksf << "    QUAD(__omptgt__host_entries_begin);\n";
+    lksf << "    QUAD(__omptgt__host_entries_end);\n";
+
+    for(const char *c = tgt_name.c_str(); *c != '\0'; ++c )
+      lksf << "    BYTE(" << (unsigned)*c  << ");\n";
+    lksf << "    BYTE(0);\n";
+
   }
 
   lksf << "  }\n";
   // Add commands to define host entries begin and end
-  lksf << "  .openmptgt_host_entries : {\n";
+  lksf << "  .openmptgt_host_entries ALIGN(0x10) : {\n";
   lksf << "    __omptgt__host_entries_begin = .;\n";
   lksf << "    *(.openmptgt_host_entries)\n";
   lksf << "    __omptgt__host_entries_end = .;\n";

@@ -173,6 +173,7 @@ public:
     return FunctionsWithTargetRegistry.count(F);
   }
 
+
   enum EAtomicOperation {
     OMP_Atomic_add,
     OMP_Atomic_sub,
@@ -358,11 +359,11 @@ public:
 
   /// \brief Return a pointer to the device image begin
   ///
-  virtual llvm::Constant* GetDeviceImageBeginPointer(llvm::Triple TargetTriple);
+  llvm::Constant* GetDeviceImageBeginPointer(llvm::Triple TargetTriple);
 
-  /// \brief Return a pointer to the device image begin
+  /// \brief Return a pointer to the device image end
   ///
-  virtual llvm::Constant* GetDeviceImageEndPointer(llvm::Triple TargetTriple);
+  llvm::Constant* GetDeviceImageEndPointer(llvm::Triple TargetTriple);
 };
 
 /// \brief Returns an implementation of the OpenMP RT for a given target

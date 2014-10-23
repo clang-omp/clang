@@ -98,11 +98,9 @@
 // CHK-CODEGEN-HOST:   [[S1:@.tgt_sizes[0-9]*]] = private constant [1 x i32] [i32 4]
 /// Map types (to-from)
 // CHK-CODEGEN-HOST:   [[M1:@.tgt_types[0-9]*]] = private constant [1 x i32] [i32 3]
-/// Dummy host pointer (we do not use the function pointer because we do not
-/// want to prevent inlining
-// CHK-CODEGEN-HOST:   @__omptgt__host_ptr_0 = internal constant i8 0
-// CHK-CODEGEN-HOST:   @__omptgt__[[ID:[0-9a-f]+_[0-9a-f]+]]_0_hst_entry =
-// CHK-CODEGEN-HOST:   constant { i8*, i32 } { i8* @__omptgt__host_ptr_0, i32 0 },
+// CHK-CODEGEN-HOST:   @__omptgt__host_ptr_0 = internal constant [{{[1-9][0-9]*}} x i8] c"__omptgt__0_[[ID:[0-9a-f]+_[0-9a-f]+]]_\00"
+// CHK-CODEGEN-HOST:   @__omptgt__0_[[ID]]__hst_entry =
+// CHK-CODEGEN-HOST:   constant { i8*, i32 } { i8* getelementptr inbounds ([{{[1-9][0-9]*}} x i8]* @__omptgt__host_ptr_0, i32 0, i32 0), i32 0 },
 // CHK-CODEGEN-HOST:   section ".openmptgt_host_entries"
 
 
@@ -110,11 +108,9 @@
 // CHK-CODEGEN-HOST:   [[S2:@.tgt_sizes[0-9]*]] = private constant [1 x i32] [i32 4]
 /// Map types (to-from)
 // CHK-CODEGEN-HOST:   [[M2:@.tgt_types[0-9]*]] = private constant [1 x i32] [i32 3]
-/// Dummy host pointer (we do not use the function pointer because we do not
-/// want to prevent inlining
-// CHK-CODEGEN-HOST:   @__omptgt__host_ptr_1 = internal constant i8 0
-// CHK-CODEGEN-HOST:   @__omptgt__[[ID]]_1_hst_entry =
-// CHK-CODEGEN-HOST:   constant { i8*, i32 } { i8* @__omptgt__host_ptr_1, i32 0 },
+// CHK-CODEGEN-HOST:   @__omptgt__host_ptr_1 = internal constant [{{[1-9][0-9]*}} x i8] c"__omptgt__1_[[ID:[0-9a-f]+_[0-9a-f]+]]_\00"
+// CHK-CODEGEN-HOST:   @__omptgt__1_[[ID]]__hst_entry =
+// CHK-CODEGEN-HOST:   constant { i8*, i32 } { i8* getelementptr inbounds ([{{[1-9][0-9]*}} x i8]* @__omptgt__host_ptr_1, i32 0, i32 0), i32 0 },
 // CHK-CODEGEN-HOST:   section ".openmptgt_host_entries"
 
 #pragma omp declare target
@@ -145,7 +141,7 @@ int foo(int a){
 
   // CHK-CODEGEN-HOST: [[RET1:%[a-zA-Z0-9_\.]+]] = call i32 @__kmpc_target(
   // CHK-CODEGEN-HOST: i32 [[DEVICEID1:0]],
-  // CHK-CODEGEN-HOST: i8* @__omptgt__host_ptr_0,
+  // CHK-CODEGEN-HOST: i8* getelementptr inbounds ([{{[1-9][0-9]*}} x i8]* @__omptgt__host_ptr_0, i32 0, i32 0),
   // CHK-CODEGEN-HOST: i32 [[ARGNUM1:[0-9]+]],
   // CHK-CODEGEN-HOST: i8** [[DATA1:%[a-zA-Z0-9_\.]+]],
   // CHK-CODEGEN-HOST: i32* getelementptr inbounds ([1 x i32]* [[S1]], i32 0, i32 0),
@@ -154,13 +150,13 @@ int foo(int a){
   // CHK-CODEGEN-HOST: br i1 [[CMP1]], label %[[OFFSUCCESS1:[a-zA-Z0-9_\.]+]], label %[[OFFFAIL1:[a-zA-Z0-9_\.]+]]
 
   // CHK-CODEGEN-HOST: [[OFFFAIL1]]{{.*}}
-  // CHK-CODEGEN-HOST: call void @__omptgt__[[ID]]_0(i32* %{{.*}})
+  // CHK-CODEGEN-HOST: call void @__omptgt__0_[[ID]]_(i32* %{{.*}})
   // CHK-CODEGEN-HOST: br label %[[OFFSUCCESS1]]
 
   // CHK-CODEGEN-HOST: [[OFFSUCCESS1]]{{.*}}
 
-  // CHK-CODEGEN-TARGET1: define void @__omptgt__[[ID:[0-9a-f]+_[0-9a-f]+]]_nvptx64_nvidia_cuda_0
-  // CHK-CODEGEN-TARGET2: define void @__omptgt__[[ID:[0-9a-f]+_[0-9a-f]+]]_powerpc64_ibm_linux_gnu_0
+  // CHK-CODEGEN-TARGET1: define void @__omptgt__0_[[ID:[0-9a-f]+_[0-9a-f]+]]_nvptx64_nvidia_cuda
+  // CHK-CODEGEN-TARGET2: define void @__omptgt__0_[[ID:[0-9a-f]+_[0-9a-f]+]]_powerpc64_ibm_linux_gnu
 #pragma omp target
   {
     a += tsquare(a);
@@ -169,7 +165,7 @@ int foo(int a){
   for(i=0; i<5; ++i){
     // CHK-CODEGEN-HOST: [[RET2:%[a-zA-Z0-9_\.]+]] = call i32 @__kmpc_target(
     // CHK-CODEGEN-HOST: i32 [[DEVICEID2:0]],
-    // CHK-CODEGEN-HOST: i8* @__omptgt__host_ptr_1,
+    // CHK-CODEGEN-HOST: i8* getelementptr inbounds ([{{[1-9][0-9]*}} x i8]* @__omptgt__host_ptr_1, i32 0, i32 0),
     // CHK-CODEGEN-HOST: i32 [[ARGNUM2:[0-9]+]],
     // CHK-CODEGEN-HOST: i8** [[DATA2:%[a-zA-Z0-9_\.]+]],
     // CHK-CODEGEN-HOST: i32* getelementptr inbounds ([1 x i32]* [[S2]], i32 0, i32 0),
@@ -178,13 +174,13 @@ int foo(int a){
     // CHK-CODEGEN-HOST: br i1 [[CMP2]], label %[[OFFSUCCESS2:[a-zA-Z0-9_\.]+]], label %[[OFFFAIL2:[a-zA-Z0-9_\.]+]]
 
     // CHK-CODEGEN-HOST: [[OFFFAIL2]]{{.*}}
-    // CHK-CODEGEN-HOST: call void @__omptgt__[[ID]]_1(i32* %{{.*}})
+    // CHK-CODEGEN-HOST: call void @__omptgt__1_[[ID]]_(i32* %{{.*}})
     // CHK-CODEGEN-HOST: br label %[[OFFSUCCESS2]]
 
     // CHK-CODEGEN-HOST: [[OFFSUCCESS2]]{{.*}}
 
-    // CHK-CODEGEN-TARGET1: define void @__omptgt__[[ID]]_nvptx64_nvidia_cuda_1
-    // CHK-CODEGEN-TARGET2: define void @__omptgt__[[ID]]_powerpc64_ibm_linux_gnu_1
+    // CHK-CODEGEN-TARGET1: define void @__omptgt__1_[[ID]]_nvptx64_nvidia_cuda
+    // CHK-CODEGEN-TARGET2: define void @__omptgt__1_[[ID]]_powerpc64_ibm_linux_gnu
 #pragma omp target
     {
       a -= tdouble(a) + tadd(a);

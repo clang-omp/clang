@@ -24,6 +24,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Constant.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/TypeBuilder.h"
 #include "llvm/IR/Value.h"
@@ -790,34 +791,6 @@ static std::string LegalizeTripleString(llvm::Triple TargetTriple) {
   return OS.str();
 }
 
-/// Return a pointer to the device image begin
-///
-llvm::Constant* CGOpenMPRuntime::GetDeviceImageBeginPointer(
-                                                    llvm::Triple TargetTriple){
-  return new llvm::GlobalVariable(
-          CGM.getModule(),
-          CGM.Int8Ty,
-          true,
-          llvm::GlobalValue::ExternalLinkage,
-          0,
-          Twine("__omptgt__img_start_")
-          + Twine(LegalizeTripleString(TargetTriple)));
-}
-
-/// Return a pointer to the device image begin
-///
-llvm::Constant* CGOpenMPRuntime::GetDeviceImageEndPointer(
-                                                    llvm::Triple TargetTriple){
-  return new llvm::GlobalVariable(
-          CGM.getModule(),
-          CGM.Int8Ty,
-          true,
-          llvm::GlobalValue::ExternalLinkage,
-          0,
-          Twine("__omptgt__img_end_")
-          + Twine(LegalizeTripleString(TargetTriple)));
-}
-
 ///===---------------
 ///
 /// NVPTX OpenMP Runtime Implementation
@@ -915,6 +888,35 @@ public:
 /// Generate target regions descriptor
 ///
 ///===---------------
+
+/// Return a pointer to the device image begin.
+///
+llvm::Constant* CGOpenMPRuntime::GetDeviceImageBeginPointer(
+                                                    llvm::Triple TargetTriple){
+  return new llvm::GlobalVariable(
+          CGM.getModule(),
+          CGM.Int8Ty,
+          true,
+          llvm::GlobalValue::ExternalLinkage,
+          0,
+          Twine("__omptgt__img_start_")
+          + Twine(LegalizeTripleString(TargetTriple)));
+}
+
+/// Return a pointer to the device image end.
+///
+llvm::Constant* CGOpenMPRuntime::GetDeviceImageEndPointer(
+                                                    llvm::Triple TargetTriple){
+  return new llvm::GlobalVariable(
+          CGM.getModule(),
+          CGM.Int8Ty,
+          true,
+          llvm::GlobalValue::ExternalLinkage,
+          0,
+          Twine("__omptgt__img_end_")
+          + Twine(LegalizeTripleString(TargetTriple)));
+}
+
 /// Return a string with the mangled name of a target region for the given module
 /// and target region index
 ///
@@ -924,14 +926,14 @@ std::string CGOpenMPRuntime::GetOffloadEntryMangledName(
   std::string S;
   llvm::raw_string_ostream OS(S);
 
-  OS << "__omptgt__" << CGM.getLangOpts().OMPModuleUniqueID << "_";
+  // append the module unique region index
+  OS << "__omptgt__"
+     << NumTargetRegions << '_'
+     << CGM.getLangOpts().OMPModuleUniqueID << '_';
 
   // if we are in target mode append the target triple to the mangled name
   if (!TargetTriple.getTriple().empty())
-    OS << LegalizeTripleString(TargetTriple) << '_';
-
-  // append the module unique region index
-  OS << NumTargetRegions;
+    OS << LegalizeTripleString(TargetTriple);
 
   return OS.str();
 }
@@ -1008,11 +1010,8 @@ llvm::Constant* CGOpenMPRuntime::GetTargetRegionsDescriptor(){
       "__omptgt__host_entries_end");
 
   //This is a Zero array to be used in the creation of the constant expressions
-  llvm::Constant *Zero = llvm::Constant::getNullValue(
-      llvm::TypeBuilder<llvm::types::i<32>, true>::get(C));
-  llvm::SmallVector<llvm::Constant*, 2> ZeroZero;
-  ZeroZero.push_back(Zero);
-  ZeroZero.push_back(Zero);
+  llvm::Constant *Index[] = { llvm::Constant::getNullValue(CGM.Int32Ty),
+                              llvm::Constant::getNullValue(CGM.Int32Ty)};
 
   //Create the target region descriptor:
   // - number of devices
@@ -1021,10 +1020,8 @@ llvm::Constant* CGOpenMPRuntime::GetTargetRegionsDescriptor(){
   // - end of host entries point
   llvm::Constant *TargetRegionsDescriptorInit = llvm::ConstantStruct::get(
       DescTy,
-      llvm::ConstantInt::get(
-            llvm::TypeBuilder<llvm::types::i<32>, true>::get(C),
-            Devices.size()),
-      llvm::ConstantExpr::getGetElementPtr(DeviceImages,ZeroZero),
+      llvm::ConstantInt::get(CGM.Int32Ty, Devices.size()),
+      llvm::ConstantExpr::getGetElementPtr(DeviceImages,Index),
       HostEntriesBegin, HostEntriesEnd, NULL);
 
   TargetRegionsDescriptor = new llvm::GlobalVariable(
@@ -1047,17 +1044,29 @@ llvm::Constant* CGOpenMPRuntime::GetHostPtrForCurrentTargetRegion(){
   llvm::LLVMContext &C = CGM.getModule().getContext();
   llvm::Module &M = CGM.getModule();
 
-  // Create the unique host pointer for a target region, currently is a constant
-  // to a null variable (the content of the variable does not matter, only its
-  // address). We do not use the outlined function address so that it can be
-  // during optimization
-  llvm::GlobalVariable *HostPtr = new llvm::GlobalVariable(
+  // Create the unique host pointer for a target region. We do not use the
+  // outlined function address so that it can be inlined by the optimizer if
+  // appropriate.
+  // In the offloading scheme, the content being pointed by this pointer is not
+  // relevant. Nevertheless, we fill this content with a string that
+  // correspond to the entries' name. This information can be
+  // useful for some targets to expedite the runtime look-up of the entries
+  // in the target image. In order to use this information the target OpenMP
+  // codegen class should encode the host entries in his image.
+
+  llvm::Constant *HostPtrInit = llvm::ConstantDataArray::getString(C,
+                                    GetOffloadEntryMangledName(llvm::Triple()));
+
+  llvm::Constant *HostPtrStr = new llvm::GlobalVariable(
       M,
-      llvm::Type::getInt8Ty(C),
+      HostPtrInit->getType(),
       true,
       llvm::GlobalValue::InternalLinkage,
-      llvm::Constant::getNullValue(llvm::Type::getInt8Ty(C)),
+      HostPtrInit,
       Twine("__omptgt__host_ptr_") + Twine(NumTargetRegions) );
+
+  llvm::Constant *HostPtr = llvm::ConstantExpr::getBitCast(HostPtrStr,
+                                                           CGM.VoidPtrTy);
 
   // Create the entry struct
   // - pointer
@@ -1067,8 +1076,7 @@ llvm::Constant* CGOpenMPRuntime::GetHostPtrForCurrentTargetRegion(){
   llvm::StructType *EntryTy = llvm::TypeBuilder<__tgt_offload_entry, true>::get(C);
 
   llvm::Constant *EntryInit = llvm::ConstantStruct::get(EntryTy, HostPtr,
-          llvm::ConstantInt::get(
-                llvm::TypeBuilder<llvm::types::i<32>, true>::get(C), 0), NULL);
+          llvm::ConstantInt::get(CGM.Int32Ty, 0), NULL);
 
   llvm::GlobalVariable *Entry = new llvm::GlobalVariable(
       M,
