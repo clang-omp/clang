@@ -24,31 +24,34 @@
 // RUN:   %clang -### -fopenmp -target powerpc64-linux -omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHK-COMMANDS %s
 //
-// Host front-end command
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-main-file-path"
+// Host commands
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-main-file-path" "[[SRC:[^ ]+]].c"
+// CHK-COMMANDS: "-E"
+// CHK-COMMANDS: "-o" "[[PP:.+]].i"
+// CHK-COMMANDS: "-x" "c" "[[SRC]].c"
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-main-file-path" "[[SRC:[^ ]+]].c"
+// CHK-COMMANDS: "-S"
+// CHK-COMMANDS: "-o" "[[HOSTASM:.+]].s"
+// CHK-COMMANDS: "-x" "cpp-output" "[[PP]].i"
+// CHK-COMMANDS: as" "-a64" "-mppc64" "-many" "-o" "[[HOSTOBJ:.+]].o" "[[HOSTASM]].s"
+
 // Target1 commands
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "nvptx64-nvidia-cuda" "-E"
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" "[[SRC]].c" "-triple" "nvptx64-nvidia-cuda" "-S"
 // CHK-COMMANDS: "-target-cpu" "sm_20"
-// CHK-COMMANDS: "-o" "[[T1PP:.+]].i"
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "nvptx64-nvidia-cuda" "-S"
-// CHK-COMMANDS: "-target-cpu" "sm_20"
-// CHK-COMMANDS: "-o" "[[T1ASM:.+]].s" "-x" "cpp-output" "[[T1PP]].i"
+// CHK-COMMANDS: "-o" "[[T1ASM:.+]].s" "-x" "cpp-output" "[[PP]].i"
 // CHK-COMMANDS: ptxas" "-o" "[[T1OBJ:.+]].o" "-c" "-arch" "sm_20" "[[T1ASM]].s"
 // CHK-COMMANDS: cp" "[[T1OBJ]].o" "[[T1CBIN:.+]].cubin"
 // CHK-COMMANDS: nvlink" "-o" "[[T1LIB:.+]].so" "-arch" "sm_20" "[[T1CBIN]].cubin"
 
 // Target2 command
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "powerpc64-ibm-linux-gnu" "-E"
+// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" "[[SRC]].c" "-triple" "powerpc64-ibm-linux-gnu" "-S"
 // CHK-COMMANDS: "-target-cpu" "ppc64"
-// CHK-COMMANDS: "-o" "[[T2PP:.+]].i"
-// CHK-COMMANDS: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "powerpc64-ibm-linux-gnu" "-S"
-// CHK-COMMANDS: "-target-cpu" "ppc64"
-// CHK-COMMANDS: "-o" "[[T2ASM:.+]].s" "-x" "cpp-output" "[[T2PP]].i"
+// CHK-COMMANDS: "-o" "[[T2ASM:.+]].s" "-x" "cpp-output" "[[PP]].i"
 // CHK-COMMANDS: as" "-a64" "-mppc64" "-many" "-o" "[[T2OBJ:.+]].o" "[[T2ASM]].s"
 // CHK-COMMANDS: ld" "--eh-frame-hdr" "-m" "elf64ppc" "-shared" "-o" "[[T2LIB:.+]].so" {{.*}} "[[T2OBJ]].o"
 
 // Final linking command
-// CHK-COMMANDS: ld" {{.*}} "-o" "a.out"  {{.*}}  "[[HOSTOBJ:.+]].o" "-liomp5" "-lomptarget" {{.*}} "-T" "[[LKSCRIPT:.+]].lk"
+// CHK-COMMANDS: ld" {{.*}} "-o" "a.out"  {{.*}}  "[[HOSTOBJ]].o" "-liomp5" "-lomptarget" {{.*}} "-T" "[[LKSCRIPT:.+]].lk"
 
 /// Check frontend require main file name
 // RUN:   not %clang_cc1 "-fopenmp" "-omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda" "-triple" "powerpc64-ibm-linux-gnu" %s 2>&1 \
@@ -67,9 +70,10 @@
 /// Check the subtarget detection
 // RUN:   %clang -### -fopenmp -target powerpc64-linux -omptargets=nvptx64sm_35-nvidia-cuda %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHK-SUBTARGET %s
-// CHK-SUBTARGET: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=nvptx64sm_35-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "nvptx64sm_35-nvidia-cuda" "-E"
+// CHK-SUBTARGET: clang{{.*}}" "-cc1" "-fopenmp" "-omptargets=nvptx64sm_35-nvidia-cuda" "-omp-target-mode" "-omp-main-file-path" {{.*}} "-triple" "nvptx64sm_35-nvidia-cuda" "-S"
 // CHK-SUBTARGET: "-target-cpu" "sm_35"
-// CHK-SUBTARGET: "-o" "[[T1PP:.+]].i"
+// CHK-SUBTARGET: "-o" "[[ASM:.+]].s"
+// CHK-SUBTARGET: "-x" "cpp-output" "[[PP:.+]].i"
 
 /// Check the codegen
 // RUN:   %clang -S -emit-llvm -O0 -fopenmp -target powerpc64-linux -omptargets=powerpc64-ibm-linux-gnu,nvptx64-nvidia-cuda %s 2>&1

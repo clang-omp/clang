@@ -180,6 +180,17 @@ private:
   mutable llvm::StringMap<ToolChain *> ToolChains;
   mutable llvm::StringMap<ToolChain *> OpenMPTargetToolChains;
 
+  /// Type of the map used to trace the result information for a given action.
+  /// This is useful to avoid recomputing the action results and allow the same
+  /// result to be used by different actions, as required by OpenMP offloading.
+  /// This has to take into account that the same action may produce different
+  /// results for different toolchains.
+  typedef llvm::SmallDenseMap<const ToolChain*, InputInfo*>
+                                                       ResultInfoMapPerActionTy;
+  typedef llvm::SmallDenseMap<const Action*, ResultInfoMapPerActionTy>
+                                                                ResultInfoMapTy;
+  mutable ResultInfoMapTy ResultInfoMap;
+
 private:
   /// TranslateInputArgs - Create a new derived argument list from the input
   /// arguments, after applying the standard argument translations.
@@ -190,6 +201,18 @@ private:
   // which option we used to determine the final phase.
   phases::ID getFinalPhase(const llvm::opt::DerivedArgList &DAL,
                            llvm::opt::Arg **FinalPhaseArg = nullptr) const;
+
+  // registerResultInfo - Register the result information obtained for a given
+  // action in a given toolchain.
+  void registerResultInfo(const ToolChain *TC, const Action *A, InputInfo Res)
+                                                                          const;
+  // getResultInfo - Returns the results obtained for an action in a compatible
+  // toolchain. Offloading implementation can use results from other toolchains,
+  // thus this procedure does the proper checks for compatibility.
+  InputInfo *getResultInfo(const ToolChain *TC, const Action *A) const;
+
+  // clearResultInfo - Clear the contents of the result info map.
+  void clearResultInfo() const;
 
 public:
   Driver(StringRef _ClangExecutable,

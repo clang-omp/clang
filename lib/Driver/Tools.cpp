@@ -8232,6 +8232,9 @@ void NVPTX::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
                                        const char *LinkingOutput) const {
   ArgStringList CmdArgs;
 
+  if (Args.hasArg(options::OPT_v))
+    CmdArgs.push_back("-v");
+
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
@@ -8270,6 +8273,9 @@ void NVPTX::Link::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
+  if (Args.hasArg(options::OPT_v))
+    CmdArgs.push_back("-v");
+
   std::string CPU = getCPUName(Args, getToolChain().getTriple(),
       JA.getOffloadingDevice());
 
@@ -8286,11 +8292,21 @@ void NVPTX::Link::ConstructJob(Compilation &C, const JobAction &JA,
   // output type for the assembly action, however this would expose
   // the target details to the driver and maybe we do not want to do
   // that
-  for (InputInfoList::const_iterator
-       it = Inputs.begin(), ie = Inputs.end(); it != ie; ++it) {
-    const InputInfo &II = *it;
+  for (const auto &II : Inputs) {
 
-    ArgStringList CopyCmdArgs;
+    if (II.getType() == types::TY_LLVM_IR ||
+        II.getType() == types::TY_LTO_IR ||
+        II.getType() == types::TY_LLVM_BC ||
+        II.getType() == types::TY_LTO_BC){
+      C.getDriver().Diag(diag::err_drv_no_linker_llvm_support)
+        << getToolChain().getTripleString();
+      continue;
+    }
+
+    // Currently, we only pass the input files to the linker, we do not pass
+    // any libraries that may be valid only for the host.
+    if (!II.isFilename())
+      continue;
 
     StringRef Name = llvm::sys::path::filename(II.getFilename());
     std::pair<StringRef, StringRef> Split = Name.rsplit('.');
@@ -8302,6 +8318,7 @@ void NVPTX::Link::ConstructJob(Compilation &C, const JobAction &JA,
         Args.MakeArgString(getToolChain().GetProgramPath(
             C.getDriver().IsCLMode() ? "copy" : "cp" ));
 
+    ArgStringList CopyCmdArgs;
     CopyCmdArgs.push_back(II.getFilename());
     CopyCmdArgs.push_back(CubinF);
     C.addCommand(new Command(JA, *this, CopyExec, CopyCmdArgs));

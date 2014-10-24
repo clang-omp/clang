@@ -79,6 +79,7 @@ Driver::~Driver() {
 
   llvm::DeleteContainerSeconds(ToolChains);
   llvm::DeleteContainerSeconds(OpenMPTargetToolChains);
+  clearResultInfo();
 }
 
 void Driver::ParseDriverMode(ArrayRef<const char *> Args) {
@@ -151,6 +152,48 @@ InputArgList *Driver::ParseArgStrings(ArrayRef<const char *> ArgList) {
   return Args;
 }
 
+void Driver::registerResultInfo(const ToolChain *TC, const Action *A,
+                                InputInfo Res) const{
+  assert( TC && A && "Invalid Toolchain or Action!!!");
+
+  InputInfo *R;
+  ResultInfoMap[A][TC] = R = new InputInfo();
+  *R = Res;
+}
+InputInfo *Driver::getResultInfo(const ToolChain *TC, const Action *A) const{
+
+  // If no results were ever registered for the requested action, return NULL
+  ResultInfoMapTy::const_iterator ResultsPerAction = ResultInfoMap.find(A);
+  if (ResultsPerAction == ResultInfoMap.end())
+    return nullptr;
+
+  const ResultInfoMapPerActionTy &MapPerAction = ResultsPerAction->second;
+  ResultInfoMapPerActionTy::const_iterator DefaultResult = MapPerAction.begin();
+  ResultInfoMapPerActionTy::const_iterator Result = MapPerAction.find(TC);
+
+  assert( DefaultResult != MapPerAction.end() &&
+      "Action registered before without toolchain??");
+
+  // If we found results for the requested toolchain just return it
+  if ( Result != MapPerAction.end())
+    return Result->second;
+
+  // If we didn't find results for the requested toolchain but it is used for
+  // offloading, we can use whatever toolchain was registered
+  // before as long as it is not an offloading toolchain as well.
+  if (TC->isOpenMPTargetToolchain())
+    for (const auto &R : MapPerAction)
+      if (!R.first->isOpenMPTargetToolchain())
+        return R.second;
+
+  // In all other cases return null
+  return nullptr;
+}
+void Driver::clearResultInfo() const{
+  for( auto &M : ResultInfoMap)
+    llvm::DeleteContainerSeconds(M.second);
+  ResultInfoMap.clear();
+}
 // Determine which compilation mode we are in. We look for options which
 // affect the phase, starting with the earliest phases, and record which
 // option we used to determine the final phase.
@@ -1261,10 +1304,11 @@ void Driver::BuildActions(const ToolChain &TC, DerivedArgList &Args,
     // Initialize with the current input
     ActionsForTarget[0].reset(new InputAction(*InputArg, InputType));
 
-    // The number of targets we should take into account
+    // The number of targets we should take into account.
     // Before the compile phase there is only one and from
     // the compile phase on we will have N+1 targets
     // where N is all the available omp targets
+    unsigned PreviousTotalTargets = 1;
     unsigned TotalTargets = 1;
 
     for (SmallVectorImpl<phases::ID>::iterator
@@ -1275,19 +1319,35 @@ void Driver::BuildActions(const ToolChain &TC, DerivedArgList &Args,
       if (Phase > FinalPhase)
         break;
 
-      // if it is a preprocess phase the total targets also contain the omp targets
-      if ( Phase == phases::Preprocess )
-        TotalTargets = 1+OpenMPTargets.size();
-
       bool NothingElseToDo = false;
 
+      // keep track of the number of targets in the previous phase
+      PreviousTotalTargets = TotalTargets;
+
+      // if it is past the preprocess phase, the total targets also contain the
+      // omp targets
+      if ( Phase > phases::Preprocess )
+        TotalTargets = 1+OpenMPTargets.size();
+
       for (unsigned tgt=TotalTargets; tgt>0; --tgt){
+
+        // Get the right input action
+        Action *CurrentInput = 0;
+
+        // If we are coming from a single to multiple targets, we need to use
+        // the input file in all actions before removing it
+
+        if ( PreviousTotalTargets < TotalTargets && tgt>1 )
+          CurrentInput = ActionsForTarget[0].get();
+        else
+          CurrentInput = ActionsForTarget[tgt-1].release();
+
+        assert( CurrentInput && "Expecting an input to be defined");
 
         // Queue linker inputs.
         if (Phase == phases::Link) {
           assert((i + 1) == e && "linking must be final compilation step.");
-          LinkerInputsForTarget[tgt-1]
-                                .push_back(ActionsForTarget[tgt-1].release());
+          LinkerInputsForTarget[tgt-1].push_back(CurrentInput);
           NothingElseToDo = true;
           continue;
         }
@@ -1296,19 +1356,11 @@ void Driver::BuildActions(const ToolChain &TC, DerivedArgList &Args,
         // encode this in the steps because the intermediate type depends on
         // arguments. Just special case here.
         if (Phase == phases::Assemble &&
-            ActionsForTarget[tgt-1]->getType() != types::TY_PP_Asm){
+            CurrentInput->getType() != types::TY_PP_Asm){
+          // Just store the current input to be used directly in the next phase
+          ActionsForTarget[tgt-1].reset(CurrentInput);
           continue;
         }
-
-        // Otherwise construct the appropriate action
-        Action *CurrentInput = 0;
-
-        // If this is a preprocess phase, we need to use the input program
-        // in all actions before removing it
-        if ( Phase == phases::Preprocess && tgt>1 )
-          CurrentInput = ActionsForTarget[0].get();
-        else
-          CurrentInput = ActionsForTarget[tgt-1].release();
 
         // Build the phase action
         ActionsForTarget[tgt-1].reset(
@@ -1317,15 +1369,14 @@ void Driver::BuildActions(const ToolChain &TC, DerivedArgList &Args,
         if (ActionsForTarget[tgt-1]->getType() == types::TY_Nothing)
           NothingElseToDo = true;
 
-        // If it is a compile phase and we have more than one target set the
-        // input
-        // ownership flag to false
-        if ( Phase == phases::Preprocess && TotalTargets > 1)
-          ActionsForTarget[tgt-1]->setOwnsInputs(false);
+        // If we are coming from a single to multiple target phase, set the
+        // input ownership flag to false
+        ActionsForTarget[tgt-1]->setOwnsInputs(
+            !(PreviousTotalTargets < TotalTargets));
 
-        // If this is a compile phase or after, we need to explicitly bind it to
-        // the target
-        if ( Phase >= phases::Preprocess && tgt > 1){
+        // If we we are processing a target action, we need to bind it to the
+        // target it refers to
+        if ( tgt > 1 ){
           ActionsForTarget[tgt-1]->setOffloadingDevice(OpenMPTargets[tgt-2]);
           ActionsForTarget[tgt-1].reset(
               new BindTargetAction(ActionsForTarget[tgt-1].release(),
@@ -1360,6 +1411,14 @@ void Driver::BuildActions(const ToolChain &TC, DerivedArgList &Args,
     TgtLinkAction.reset(
         new LinkJobAction(LinkerInputsForTarget[tgt], types::TY_SObject));
     TgtLinkAction.get()->setOffloadingDevice(OpenMPTargets[tgt-1]);
+
+    // if the target link phase takes an input that is not binded to it, it
+    // means it does not own it, as it may be used by other targets and host too
+    for (const auto &II : LinkerInputsForTarget[tgt]){
+      if ( !isa<BindTargetAction>(II) )
+        TgtLinkAction.get()->setOwnsInputs(false);
+    }
+
     // Bind action to target
     TgtLinkAction.reset(
         new BindTargetAction(TgtLinkAction.release(), OpenMPTargets[tgt-1]));
@@ -1490,6 +1549,9 @@ void Driver::BuildJobs(Compilation &C) const {
     }
   }
 
+  // Make sure the results map is cleared before starting to create jobs.
+  clearResultInfo();
+
   for (ActionList::const_iterator it = C.getActions().begin(),
          ie = C.getActions().end(); it != ie; ++it) {
     Action *A = *it;
@@ -1596,13 +1658,18 @@ static const Tool *SelectToolForJob(Compilation &C, const ToolChain *TC,
 
   // See if we should use an integrated preprocessor. We do so when we have
   // exactly one input, since this is the only use case we care about
-  // (irrelevant since we don't support combine yet).
+  // (irrelevant since we don't support combine yet). If we have OpenMP
+  // offloading targets, we do not use the integrated preprocessor too as the
+  // input file needs to be preprocessed by the host and the result used by both
+  // host and targets.
   if (Inputs->size() == 1 && isa<PreprocessJobAction>(*Inputs->begin()) &&
       !C.getArgs().hasArg(options::OPT_no_integrated_cpp) &&
       !C.getArgs().hasArg(options::OPT_traditional_cpp) &&
       !C.getArgs().hasArg(options::OPT_save_temps) &&
       !C.getArgs().hasArg(options::OPT_rewrite_objc) &&
-      ToolForJob->hasIntegratedCPP())
+      !(C.getArgs().hasArg(options::OPT_fopenmp) &&
+        C.getArgs().hasArg(options::OPT_omptargets_EQ)) &&
+      ToolForJob->hasIntegratedCPP() )
     Inputs = &(*Inputs)[0]->getInputs();
 
   return ToolForJob;
@@ -1618,6 +1685,13 @@ void Driver::BuildJobsForAction(Compilation &C,
                                 InputInfo &Result) const {
   llvm::PrettyStackTraceString CrashInfo("Building compilation jobs");
 
+  // If we already have compatible result information for this action we do not
+  // need to compute it again.
+  if (const InputInfo *PrevInfo = getResultInfo(TC,A)){
+    Result = *PrevInfo;
+    return;
+  }
+
   if (const InputAction *IA = dyn_cast<InputAction>(A)) {
     // FIXME: It would be nice to not claim this here; maybe the old scheme of
     // just using Args was better?
@@ -1628,6 +1702,8 @@ void Driver::BuildJobsForAction(Compilation &C,
       Result = InputInfo(Name, A, Name);
     } else
       Result = InputInfo(&Input, A, "");
+
+    registerResultInfo(TC,A,Result);
     return;
   }
 
@@ -1642,6 +1718,8 @@ void Driver::BuildJobsForAction(Compilation &C,
 
     BuildJobsForAction(C, *BAA->begin(), TC, BAA->getArchName(),
                        AtTopLevel, MultipleArchs, LinkingOutput, Result);
+
+    registerResultInfo(TC,A,Result);
     return;
   }
 
@@ -1663,6 +1741,8 @@ void Driver::BuildJobsForAction(Compilation &C,
 
     BuildJobsForAction(C, *BTA->begin(), TC, BTA->getTargetName(),
                        AtTopLevel, false, LinkingOutput, Result);
+
+    registerResultInfo(TC,A,Result);
     return;
   }
 
@@ -1677,6 +1757,7 @@ void Driver::BuildJobsForAction(Compilation &C,
   InputInfoList InputInfos;
   for (ActionList::const_iterator it = Inputs->begin(), ie = Inputs->end();
        it != ie; ++it) {
+
     // Treat dsymutil and verify sub-jobs as being at the top-level too, they
     // shouldn't get temporary output names.
     // FIXME: Clean this up.
@@ -1705,6 +1786,8 @@ void Driver::BuildJobsForAction(Compilation &C,
     Result = InputInfo(GetNamedOutputPath(C, *JA, BaseInput, BoundArch,
                                           AtTopLevel, MultipleArchs),
                        A, BaseInput);
+
+  registerResultInfo(TC,A,Result);
 
   if (CCCPrintBindings && !CCGenDiagnostics) {
     llvm::errs() << "# \"" << T->getToolChain().getTripleString() << '"'
