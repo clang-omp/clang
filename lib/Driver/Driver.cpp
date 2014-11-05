@@ -168,11 +168,10 @@ InputInfo *Driver::getResultInfo(const ToolChain *TC, const Action *A) const{
     return nullptr;
 
   const ResultInfoMapPerActionTy &MapPerAction = ResultsPerAction->second;
-  ResultInfoMapPerActionTy::const_iterator DefaultResult = MapPerAction.begin();
   ResultInfoMapPerActionTy::const_iterator Result = MapPerAction.find(TC);
 
-  assert( DefaultResult != MapPerAction.end() &&
-      "Action registered before without toolchain??");
+  assert(!MapPerAction.empty() &&
+         "Action registered before without toolchain??");
 
   // If we found results for the requested toolchain just return it
   if ( Result != MapPerAction.end())
