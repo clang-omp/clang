@@ -4729,6 +4729,19 @@ CodeGenFunction::EmitCloseOMPReductionClause(const OMPReductionClause &C,
     Builder.CreateBr(Switch->getDefaultDest());
     // Switch->addCase(llvm::ConstantInt::get(Int32Ty, 1), RedBB1);
     Builder.SetInsertPoint(RedBB2, IP2);
+    // __kmpc_end_reduce[_nowait](ident_t *loc, int32_t global_tid, *lck);
+    // ident_t loc = {...};
+    Loc = OPENMPRTL_LOC(C.getLocStart(), *this);
+    // global_tid = __kmpc_global_thread_num(...);
+    GTid = OPENMPRTL_THREADNUM(C.getLocStart(), *this);
+    // kmp_critical_name lck;
+    RealArgs[0] = Loc;
+    RealArgs[1] = GTid;
+    RealArgs[2] = CGM.OpenMPSupport.getReductionLockVar();
+    EmitRuntimeCall(CGM.OpenMPSupport.getNoWait()
+                        ? OPENMPRTL_FUNC(end_reduce_nowait)
+                        : OPENMPRTL_FUNC(end_reduce),
+                    RealArgs);
     Builder.CreateBr(Switch->getDefaultDest());
     // Switch->addCase(llvm::ConstantInt::get(Int32Ty, 2), RedBB2);
     Builder.restoreIP(SavedIP);
