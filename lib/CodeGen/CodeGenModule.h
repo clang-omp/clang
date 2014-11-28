@@ -1201,10 +1201,14 @@ public:
     OpenMPSupportStackTy(CodeGenModule &CGM)
       : OpenMPThreadPrivate(), OpenMPStack(), CGM(CGM), KMPDependInfoType(0) { }
     const Expr *hasThreadPrivateVar(const VarDecl *VD) {
-      llvm::DenseMap<const Decl *, const Expr *>::iterator I =
-                                                  OpenMPThreadPrivate.find(VD);
-      if (I != OpenMPThreadPrivate.end())
-        return I->second;
+      const VarDecl *RVD = VD->getMostRecentDecl();
+      while (RVD) {
+        llvm::DenseMap<const Decl *, const Expr *>::iterator I =
+            OpenMPThreadPrivate.find(RVD);
+        if (I != OpenMPThreadPrivate.end())
+          return I->second;
+        RVD = RVD->getPreviousDecl();
+      }
       return 0;
     }
     void addThreadPrivateVar(const VarDecl *VD, const Expr *TPE) {
