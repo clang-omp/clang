@@ -961,6 +961,7 @@ void CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
   }
   CGM.OpenMPSupport.setScheduleChunkSize(Schedule, 0);
 
+  llvm::BasicBlock *PrecondEndBB = createBasicBlock("omp.loop.precond_end");
   {
     RunCleanupsScope ExecutedScope(*this);
     // CodeGen for clauses (call start).
@@ -1050,7 +1051,10 @@ void CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
       ArrayRef<Expr *> Arr = getCountersFromLoopDirective(&S);
       if (const CapturedStmt *CS = dyn_cast_or_null<CapturedStmt>(Body))
         Body = CS->getCapturedStmt();
+      const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(IterVar)->getDecl());
+      CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
       for (unsigned I = 0; I < getCollapsedNumberFromLoopDirective(&S); ++I) {
+        RunCleanupsScope InitScope(*this);
         const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(Arr[I])->getDecl());
         bool SkippedContainers = false;
         while (!SkippedContainers) {
@@ -1074,11 +1078,16 @@ void CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
         llvm::AllocaInst *Private =
             CreateMemTemp(QTy, CGM.getMangledName(VD) + ".private.");
         CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
+        llvm::BasicBlock *PrecondBB = createBasicBlock("omp.loop.precond");
+        if (isa<DeclStmt>(For->getInit()))
+          EmitAnyExprToMem(VD->getAnyInitializer(), Private,
+                           VD->getType().getQualifiers(),
+                           /*IsInitializer=*/true);
+        else
+          EmitStmt(For->getInit());
+        EmitBranchOnBoolExpr(For->getCond(), PrecondBB, PrecondEndBB, 0);
+        EmitBlock(PrecondBB);
       }
-      while (const CapturedStmt *CS = dyn_cast_or_null<CapturedStmt>(Body))
-        Body = CS->getCapturedStmt();
-      const VarDecl *VD = cast<VarDecl>(cast<DeclRefExpr>(IterVar)->getDecl());
-      CGM.OpenMPSupport.addOpenMPPrivateVar(VD, Private);
 
       if (IsStaticSchedule) {
         llvm::Value *RealArgs[] = {
@@ -1366,6 +1375,7 @@ void CodeGenFunction::EmitOMPDirectiveWithLoop(OpenMPDirectiveKind DKind,
     // Emit the final values of 'linear' variables.
     SimdWrapper.emitLinearFinal(*this);
   }
+  EmitBlock(PrecondEndBB);
 }
 
 /// Generate an instructions for '#pragma omp for' directive.

@@ -2599,7 +2599,7 @@ bool Sema::CollapseOpenMPLoop(OpenMPDirectiveKind Kind,
     // [StmtCount-1, -1, -1] in the case of 'omp for', but in an 'omp simd'
     // directive the reverse order is required because we may have loop-carried
     // dependencies (as specified by 'safelen' clause).
-    // For cache locality reasons this may be also preffered for 'omp for', as
+    // For cache locality reasons this may be also preferred for 'omp for', as
     // usually programs walk inner array dimensions first.
     int LoopIdBegin = StmtCount - 1;
     int LoopIdEnd = -1;
