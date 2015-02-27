@@ -129,6 +129,8 @@ LANGOPT(NativeHalfType    , 1, 0, "Native half type support")
 LANGOPT(CUDA              , 1, 0, "CUDA")
 LANGOPT(OpenMP            , 1, 0, "OpenMP support")
 LANGOPT(OpenMPTargetMode  , 1, 0, "OpenMP codegen for target only")
+LANGOPT(OpenMPHostIRDump  , 1, 0, "OpenMP host codegen is dumped after completion")
+LANGOPT(OpenMPTargetIRDump, 1, 0, "OpenMP target codegen is dumped after completion")
 
 LANGOPT(AssumeSaneOperatorNew , 1, 1, "implicit __attribute__((malloc)) for C++'s new operators")
 LANGOPT(SizedDeallocation , 1, 0, "enable sized deallocation functions")

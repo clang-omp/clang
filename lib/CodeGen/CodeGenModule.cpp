@@ -330,6 +330,7 @@ void CodeGenModule::Release() {
   EmitDeferred();
   applyReplacements();
   checkAliases();
+  EmitOMPRegisterLib();
   EmitCXXGlobalInitFunc();
   EmitCXXGlobalDtorFunc();
   EmitCXXThreadLocalInitFunc();
@@ -394,6 +395,10 @@ void CodeGenModule::Release() {
   EmitVersionIdentMetadata();
 
   EmitTargetMetadata();
+
+  //Let OpenMP implementation to post-process the module
+  if (OpenMPRuntime)
+    OpenMPRuntime->PostProcessModule(*this);
 }
 
 void CodeGenModule::UpdateCompletedType(const TagDecl *TD) {
@@ -1040,10 +1045,82 @@ void CodeGenModule::EmitModuleLinkOptions() {
                                               LinkerOptionsMetadata));
 }
 
+/// Recursivelly find target regions starting from the given statement
+static void FindAndProcessTargetRegions(CodeGenFunction &CGF, const Stmt *S){
+
+  if (!S)
+    return;
+
+  // If we find a OMP target directive, codegen it using the proper codegen
+  // function. We cannot use the regular EmitStmt because it is going to
+  // assume the statement is dead code
+  switch (S->getStmtClass()){
+  default:
+    break;
+  case Stmt::OMPTargetDirectiveClass:
+    CGF.EmitOMPTargetDirective(cast<OMPTargetDirective>(*S));
+    return;
+  case Stmt::OMPTargetTeamsDirectiveClass:
+    CGF.EmitOMPTargetTeamsDirective(cast<OMPTargetTeamsDirective>(*S));
+    return;
+  case Stmt::OMPTargetTeamsDistributeDirectiveClass:
+    CGF.EmitOMPTargetTeamsDistributeDirective(
+        cast<OMPTargetTeamsDistributeDirective>(*S));
+    return;
+  case Stmt::OMPTargetTeamsDistributeParallelForDirectiveClass:
+    CGF.EmitOMPTargetTeamsDistributeParallelForDirective(
+        cast<OMPTargetTeamsDistributeParallelForDirective>(*S));
+    return;
+  case Stmt::OMPTargetTeamsDistributeParallelForSimdDirectiveClass:
+    CGF.EmitOMPTargetTeamsDistributeParallelForSimdDirective(
+        cast<OMPTargetTeamsDistributeParallelForSimdDirective>(*S));
+    return;
+  case Stmt::OMPTargetTeamsDistributeSimdDirectiveClass:
+    CGF.EmitOMPTargetTeamsDistributeSimdDirective(
+        cast<OMPTargetTeamsDistributeSimdDirective>(*S));
+    return;
+  }
+
+  if (const OMPExecutableDirective *E = dyn_cast<OMPExecutableDirective>(S)){
+
+    if (!E->getAssociatedStmt())
+      return;
+
+    FindAndProcessTargetRegions(CGF, cast<CapturedStmt>(E->getAssociatedStmt())
+                                       ->getCapturedStmt());
+    return;
+  }
+
+  // Keep looking for target regions recursively
+  for(Stmt::const_child_iterator ii=S->child_begin(), ie=S->child_end(); ii != ie; ++ii)
+    FindAndProcessTargetRegions(CGF,*ii);
+}
+static void ScanFunctionTargetRegions(CodeGenModule &CGM, const FunctionDecl*D){
+
+  CodeGenFunction CGF(CGM);
+  CGF.CurFuncDecl = D;
+
+  FindAndProcessTargetRegions(CGF, D->getBody());
+  return;
+}
+
 void CodeGenModule::EmitDeferred() {
   // Emit code for any potentially referenced deferred decls.  Since a
   // previously unused static decl may become used during the generation of code
   // for a static function, iterate until no changes are made.
+
+  // If we are in OpenMP Target Mode and we are emiting deferred declarations it
+  // means they were in some declare target construct. Therefore we load that
+  // information in the OpenMP stack.
+  if (OpenMPRuntime){
+    assert( OpenMPSupport.isEmpty()
+        && "Do we still have some state in the OpenMP stack??");
+
+    if (LangOpts.OpenMPTargetMode){
+      OpenMPSupport.startOpenMPRegion(false);
+      OpenMPSupport.setTargetDeclare(true);
+    }
+  }
 
   while (true) {
     if (!DeferredVTables.empty()) {
@@ -1062,6 +1139,21 @@ void CodeGenModule::EmitDeferred() {
     GlobalDecl D = G.GD;
     llvm::GlobalValue *GV = G.GV;
     DeferredDeclsToEmit.pop_back();
+
+    // In target code we may have inexistent global values meaning that they
+    // refer to host global and we are in OpenMP target mode. Therefore we
+    // will scan these declaration looking for target regions
+    if (!GV){
+      assert (LangOpts.OpenMPTargetMode && "Undefined host global??");
+      const auto *FD = cast<FunctionDecl>(D.getDecl());
+
+      // Unset declare target while we scan the host function
+      OpenMPSupport.setTargetDeclare(false);
+      ScanFunctionTargetRegions(*this,FD);
+      OpenMPSupport.setTargetDeclare(true);
+
+      continue;
+    }
 
     assert(GV == GetGlobalValue(getMangledName(D)));
     // Check to see if we've already emitted this.  This is necessary
@@ -1084,6 +1176,8 @@ void CodeGenModule::EmitDeferred() {
     EmitOMPDeclareSimd(DSimd);
   }
 
+  if (!OpenMPSupport.isEmpty())
+    OpenMPSupport.endOpenMPRegion();
 }
 
 void CodeGenModule::EmitGlobalAnnotations() {
@@ -1286,7 +1380,19 @@ void CodeGenModule::EmitGlobal(GlobalDecl GD) {
     DelayedCXXInitPosition[Global] = CXXGlobalInits.size();
     CXXGlobalInits.push_back(nullptr);
   }
-  
+
+  // If we are generating code for a OpenMP target and there is a Host function
+  // to be deferred, it means that is a deferred function used by the host
+  // that we didn't scan yet looking for target regions, therefore we need to
+  // scan it later when we emit the deferred target declaration
+  if (OpenMPRuntime && getLangOpts().OpenMPTargetMode
+      && !Global->getDeclContext()->isOMPDeclareTarget()){
+      if (Global->getKind() == Decl::Function)
+        addDeferredDeclToEmit(nullptr, GD);
+
+    return;
+  }
+
   // If the value has already been used, add it directly to the
   // DeferredDeclsToEmit list.
   StringRef MangledName = getMangledName(GD);
@@ -1450,6 +1556,13 @@ CodeGenModule::GetOrCreateLLVMFunction(StringRef MangledName,
                                        bool DontDefer,
                                        llvm::AttributeSet ExtraAttrs) {
   const Decl *D = GD.getDecl();
+
+  // Process function name as required by the OpenMP runtime
+  if (OpenMPRuntime) {
+    // Make sure this is not a user-defined function (FIXME)
+    if (!OpenMPRuntime->isEntryDeclaration(D))
+      MangledName = OpenMPRuntime->RenameStandardFunction(MangledName);
+  }
 
   // Lookup the entry, lazily creating it if necessary.
   llvm::GlobalValue *Entry = GetGlobalValue(MangledName);
@@ -1643,11 +1756,24 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     return llvm::ConstantExpr::getBitCast(Entry, Ty);
   }
 
+  // If we are compiling with OpenMP we need to enforce entries ordering
+  // in the module
+  llvm::GlobalVariable *Successor = nullptr;
+  if (OpenMPRuntime){
+    Successor = OpenMPRuntime->getNextGlobalVarForEntryDeclaration(D);
+  }
+
   unsigned AddrSpace = GetGlobalVarAddressSpace(D, Ty->getAddressSpace());
   auto *GV = new llvm::GlobalVariable(
       getModule(), Ty->getElementType(), false,
-      llvm::GlobalValue::ExternalLinkage, nullptr, MangledName, nullptr,
+      llvm::GlobalValue::ExternalLinkage, nullptr, MangledName, Successor,
       llvm::GlobalVariable::NotThreadLocal, AddrSpace);
+
+  // Create the OpenMP entries for this global making sure it follows the
+  // right ordering
+  if (OpenMPRuntime){
+    OpenMPRuntime->CreateHostEntryForTargetGlobal(D,GV,Successor);
+  }
 
   // This is the first use or definition of a mangled name.  If there is a
   // deferred decl with this name, remember that we need to emit it at the end
@@ -1833,7 +1959,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D) {
 
   // If we are generating code for a target we only generate the var definition
   // if it is inside a declare target region
-  if ( LangOpts.OpenMPTargetMode && !OpenMPSupport.getTargetDeclare() )
+  if ( LangOpts.OpenMPTargetMode && !OpenMPRuntime->isEntryDeclaration(D) )
     return;
 
   llvm::Constant *Init = nullptr;
@@ -2268,21 +2394,6 @@ void CodeGenModule::HandleCXXStaticMemberVarInstantiation(VarDecl *VD) {
   EmitTopLevelDecl(VD);
 }
 
-/// Recursivelly find target regions starting from the given statement
-static void FindAndProcessTargetRegions(CodeGenFunction &CGF, const Stmt *S){
-
-  if (!S)
-    return;
-
-  // If we found a OMP target directive, codegen it
-  if ( const OMPTargetDirective *D = dyn_cast<OMPTargetDirective>(S))
-    CGF.EmitOMPTargetDirective(*D);
-
-  // Keep looking for target regions recursively
-  for(Stmt::const_child_iterator ii=S->child_begin(), ie=S->child_end(); ii != ie; ++ii)
-    FindAndProcessTargetRegions(CGF,*ii);
-}
-
 void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD,
                                                  llvm::GlobalValue *GV) {
   const auto *D = cast<FunctionDecl>(GD.getDecl());
@@ -2291,11 +2402,7 @@ void CodeGenModule::EmitGlobalFunctionDefinition(GlobalDecl GD,
   // into the function declarations for target regions instead
   // of codegening the function
   if ( LangOpts.OpenMPTargetMode && !OpenMPSupport.getTargetDeclare() ){
-
-    CodeGenFunction CGF(*this);
-    CGF.CurFuncDecl = D;
-
-    FindAndProcessTargetRegions(CGF, D->getBody());
+    ScanFunctionTargetRegions(*this,D);
     return;
   }
 
@@ -3120,7 +3227,11 @@ void CodeGenModule::EmitTopLevelDecl(Decl *D) {
 
   // Ignore any declaration other than Function and OMPDeclareTarget
   // if we are generating code for a target
-  if ( LangOpts.OpenMPTargetMode && !(D->getKind() == Decl::Function || D->getKind() == Decl::OMPDeclareTarget ))
+  if ( LangOpts.OpenMPTargetMode && !(D->getKind() == Decl::Function
+                                    ||D->getKind() == Decl::FunctionTemplate
+                                    ||D->getKind() == Decl::OMPDeclareTarget
+                                    ||D->getKind() == Decl::Namespace
+                                    ||OpenMPRuntime->isEntryDeclaration(D)))
     return;
 
   switch (D->getKind()) {
@@ -3459,7 +3570,9 @@ CodeGenModule::OpenMPSupportStackTy::OMPStackElemTy::OMPStackElemTy(CodeGenModul
     NoWait(true), Mergeable(false), Schedule(0), ChunkSize(0), NewTask(false),
     Untied(false), HasLastPrivate(false),
     TaskPrivateTy(0), TaskPrivateQTy(), TaskPrivateBase(0), NumTeams(0), ThreadLimit(0),
-    WaitDepsArgs(0), OffloadingDevice(0) { }
+    WaitDepsArgs(0), MapsBegin(0), MapsEnd(0),
+    OffloadingMapBeginFunctionCall(0), OffloadingDevice(0),
+    OffloadingHostFunctionCall(0) { }
 
 CodeGenFunction &CodeGenModule::OpenMPSupportStackTy::getCGFForReductionFunction() {
   if (!OpenMPStack.back().RedCGF) {
@@ -3700,7 +3813,6 @@ bool CodeGenModule::OpenMPSupportStackTy::getDistribute(){
   return OpenMPStack.back().Distribute;
 }
 
-
 llvm::Value *CodeGenModule::OpenMPSupportStackTy::getTaskFlags() {
   return OpenMPStack.back().TaskFlags;
 }
@@ -3799,19 +3911,19 @@ void CodeGenModule::OpenMPSupportStackTy::getParentUntiedData(llvm::Value *&Unti
   }
 }
 
-void CodeGenModule::OpenMPSupportStackTy::setNumTeams(llvm::Value *Num) {
+void CodeGenModule::OpenMPSupportStackTy::setNumTeams(Expr *Num) {
   OpenMPStack.back().NumTeams = Num;
 }
 
-void CodeGenModule::OpenMPSupportStackTy::setThreadLimit(llvm::Value *Num) {
+void CodeGenModule::OpenMPSupportStackTy::setThreadLimit(Expr *Num) {
   OpenMPStack.back().ThreadLimit = Num;
 }
 
-llvm::Value *CodeGenModule::OpenMPSupportStackTy::getNumTeams() {
+Expr *CodeGenModule::OpenMPSupportStackTy::getNumTeams() {
   return OpenMPStack.back().NumTeams;
 }
 
-llvm::Value *CodeGenModule::OpenMPSupportStackTy::getThreadLimit() {
+Expr *CodeGenModule::OpenMPSupportStackTy::getThreadLimit() {
   return OpenMPStack.back().ThreadLimit;
 }
 
@@ -3837,20 +3949,178 @@ llvm::Constant *CodeGenModule::GetAddrOfRTTIDescriptor(QualType Ty,
 
   return getCXXABI().getAddrOfRTTIDescriptor(Ty);
 }
-
-void CodeGenModule::OpenMPSupportStackTy::getMapData(ArrayRef<llvm::Value*> &MapPointers, ArrayRef<llvm::Value*> &MapSizes, ArrayRef<unsigned> &MapTypes){
-  MapPointers = OpenMPStack.back().MapPointers;
-  MapSizes = OpenMPStack.back().MapSizes;
-  MapTypes = OpenMPStack.back().MapTypes;
+void CodeGenModule::OpenMPSupportStackTy::addOffloadingMap(const Expr* DExpr, llvm::Value *BasePtr, llvm::Value *Ptr, llvm::Value *Size, unsigned Type){
+  OpenMPStack.back().OffloadingMapDecls.push_back(DExpr);
+  OpenMPStack.back().OffloadingMapBasePtrs.push_back(BasePtr);
+  OpenMPStack.back().OffloadingMapPtrs.push_back(Ptr);
+  OpenMPStack.back().OffloadingMapSizes.push_back(Size);
+  OpenMPStack.back().OffloadingMapTypes.push_back(Type);
 }
-void CodeGenModule::OpenMPSupportStackTy::addMapData(llvm::Value *MapPointer, llvm::Value *MapSize, unsigned MapType){
-  OpenMPStack.back().MapPointers.push_back(MapPointer);
-  OpenMPStack.back().MapSizes.push_back(MapSize);
-  OpenMPStack.back().MapTypes.push_back(MapType);
+void CodeGenModule::OpenMPSupportStackTy::getOffloadingMapArrays(ArrayRef<const Expr*> &DExprs, ArrayRef<llvm::Value*> &BasePtrs, ArrayRef<llvm::Value*> &Ptrs, ArrayRef<llvm::Value*> &Sizes, ArrayRef<unsigned> &Types){
+  DExprs = OpenMPStack.back().OffloadingMapDecls;
+  BasePtrs = OpenMPStack.back().OffloadingMapBasePtrs;
+  Ptrs  = OpenMPStack.back().OffloadingMapPtrs;
+  Sizes = OpenMPStack.back().OffloadingMapSizes;
+  Types = OpenMPStack.back().OffloadingMapTypes;
+}
+
+bool CodeGenModule::OpenMPSupportStackTy::locateInCurrentOffloadingMap(const DeclRefExpr *DExpr, llvm::Value *&BasePtr, llvm::Value *&Ptr, llvm::Value *&Size, unsigned &Type){
+
+  OMPStackTy::reverse_iterator I = OpenMPStack.rbegin();
+
+  for (unsigned i=0; i<I->OffloadingMapBasePtrs.size(); ++i){
+    const Expr *E = I->OffloadingMapDecls[i];
+
+    assert( (E->getStmtClass() == Stmt::ArraySubscriptExprClass
+        ||   E->getStmtClass() == Stmt::DeclRefExprClass)
+        &&  "Unexpected expression in map clause!");
+
+    const DeclRefExpr *DE = 0;
+    bool hasRange = false;
+
+    // Get the declaration associated with the entry in the map clause under
+    // test
+    if (const ArraySubscriptExpr *T1 = dyn_cast<ArraySubscriptExpr>(E)){
+      if (const ImplicitCastExpr *T2 =
+                                    dyn_cast<ImplicitCastExpr>(T1->getBase()))
+        if (const DeclRefExpr *T3 = dyn_cast<DeclRefExpr>(T2->getSubExpr())){
+          hasRange = true;
+          DE = T3;
+        }
+    } else {
+      DE = cast<DeclRefExpr>(E);
+    }
+
+    // If the declaration does not match with the one requested, continue the
+    // search
+    if (DE->getDecl() != DExpr->getDecl())
+      continue;
+
+    BasePtr = I->OffloadingMapBasePtrs[i];
+    Ptr = I->OffloadingMapPtrs[i];
+    Size = I->OffloadingMapSizes[i];
+    Type = I->OffloadingMapTypes[i];
+
+    return true;
+  }
+
+  // unable to locate anything
+  return false;
+}
+bool CodeGenModule::OpenMPSupportStackTy::locateInPreviousOffloadingMap(const DeclRefExpr *DExpr, llvm::Value *&BasePtr, llvm::Value *&Ptr, llvm::Value *&Size, unsigned &Type){
+
+  OMPStackTy::reverse_iterator I = OpenMPStack.rbegin();
+  OMPStackTy::reverse_iterator E = OpenMPStack.rend();
+
+  for (++I; I != E; ++I) {
+    for (unsigned i=0; i<I->OffloadingMapBasePtrs.size(); ++i){
+      const Expr *E = I->OffloadingMapDecls[i];
+
+      assert( (E->getStmtClass() == Stmt::ArraySubscriptExprClass
+          ||   E->getStmtClass() == Stmt::DeclRefExprClass)
+          &&  "Unexpected expression in map clause!");
+
+      const DeclRefExpr *DE = 0;
+      bool hasRange = false;
+
+      // Get the declaration associated with the entry in the map clause under
+      // test
+      if (const ArraySubscriptExpr *T1 = dyn_cast<ArraySubscriptExpr>(E)){
+        if (const ImplicitCastExpr *T2 =
+                                      dyn_cast<ImplicitCastExpr>(T1->getBase()))
+          if (const DeclRefExpr *T3 = dyn_cast<DeclRefExpr>(T2->getSubExpr())){
+            hasRange = true;
+            DE = T3;
+          }
+      } else {
+        DE = cast<DeclRefExpr>(E);
+      }
+
+      // If the declaration does not match with the one requested, continue the
+      // search
+      if (DE->getDecl() != DExpr->getDecl())
+        continue;
+
+      BasePtr = I->OffloadingMapBasePtrs[i];
+      Ptr = I->OffloadingMapPtrs[i];
+      Size = I->OffloadingMapSizes[i];
+      Type = I->OffloadingMapTypes[i];
+
+      return true;
+    }
+  }
+
+  //unable to locate anything
+  return false;
+}
+bool CodeGenModule::OpenMPSupportStackTy::locateInPreviousOffloadingMap(const DeclRefExpr *DExpr){
+
+  OMPStackTy::reverse_iterator I = OpenMPStack.rbegin();
+  OMPStackTy::reverse_iterator E = OpenMPStack.rend();
+
+  for (++I; I != E; ++I) {
+    for (unsigned i=0; i<I->OffloadingMapBasePtrs.size(); ++i){
+      const Expr *E = I->OffloadingMapDecls[i];
+
+      assert( (E->getStmtClass() == Stmt::ArraySubscriptExprClass
+          ||   E->getStmtClass() == Stmt::DeclRefExprClass)
+          &&  "Unexpected expression in map clause!");
+
+      const DeclRefExpr *DE = 0;
+      bool hasRange = false;
+
+      // Get the declaration associated with the entry in the map clause under
+      // test
+      if (const ArraySubscriptExpr *T1 = dyn_cast<ArraySubscriptExpr>(E)){
+        if (const ImplicitCastExpr *T2 =
+                                      dyn_cast<ImplicitCastExpr>(T1->getBase()))
+          if (const DeclRefExpr *T3 = dyn_cast<DeclRefExpr>(T2->getSubExpr())){
+            hasRange = true;
+            DE = T3;
+          }
+      } else {
+        DE = cast<DeclRefExpr>(E);
+      }
+
+      // If the declaration does not match with the one requested, continue the
+      // search
+      if (DE->getDecl() != DExpr->getDecl())
+        continue;
+
+      return true;
+    }
+  }
+
+  //unable to locate anything
+  return false;
+}
+llvm::CallInst*  CodeGenModule::OpenMPSupportStackTy::getOffloadingMapBeginFunctionCall(){
+  return OpenMPStack.back().OffloadingMapBeginFunctionCall;
+}
+void CodeGenModule::OpenMPSupportStackTy::setOffloadingMapBeginFunctionCall(llvm::CallInst *OffloadingMapBeginFunctionCall){
+  OpenMPStack.back().OffloadingMapBeginFunctionCall = OffloadingMapBeginFunctionCall;
+}
+void CodeGenModule::OpenMPSupportStackTy::setMapsBegin(bool Flag){
+  OpenMPStack.back().MapsBegin = Flag;
+}
+bool CodeGenModule::OpenMPSupportStackTy::getMapsBegin(){
+  return OpenMPStack.back().MapsBegin;
+}
+void CodeGenModule::OpenMPSupportStackTy::setMapsEnd(bool Flag){
+  OpenMPStack.back().MapsEnd = Flag;
+}
+bool CodeGenModule::OpenMPSupportStackTy::getMapsEnd(){
+  return OpenMPStack.back().MapsEnd;
 }
 void CodeGenModule::OpenMPSupportStackTy::setOffloadingDevice(llvm::Value *device){
   OpenMPStack.back().OffloadingDevice = device;
 }
 llvm::Value *CodeGenModule::OpenMPSupportStackTy::getOffloadingDevice(){
   return OpenMPStack.back().OffloadingDevice;
+}
+void CodeGenModule::OpenMPSupportStackTy::setOffloadingHostFunctionCall(llvm::CallInst *OffloadingHostFunctionCall){
+  OpenMPStack.back().OffloadingHostFunctionCall = OffloadingHostFunctionCall;
+}
+llvm::CallInst* CodeGenModule::OpenMPSupportStackTy::getOffloadingHostFunctionCall(){
+  return OpenMPStack.back().OffloadingHostFunctionCall;
 }

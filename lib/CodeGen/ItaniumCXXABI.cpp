@@ -19,6 +19,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CGCXXABI.h"
+#include "CGOpenMPRuntime.h"
 #include "CGRecordLayout.h"
 #include "CGVTables.h"
 #include "CodeGenFunction.h"
@@ -1240,7 +1241,7 @@ void ItaniumCXXABI::emitVTableDefinitions(CodeGenVTables &CGVT,
       RD->getIdentifier()->isStr("__fundamental_type_info") &&
       isa<NamespaceDecl>(DC) && cast<NamespaceDecl>(DC)->getIdentifier() &&
       cast<NamespaceDecl>(DC)->getIdentifier()->isStr("__cxxabiv1") &&
-      DC->getParent()->isTranslationUnit())
+      DC->getParent()->isTranslationUnitOrDeclareTarget())
     EmitFundamentalRTTIDescriptors();
 }
 
@@ -1757,11 +1758,108 @@ void ItaniumCXXABI::EmitGuardedInit(CodeGenFunction &CGF,
   CGF.EmitBlock(EndBlock);
 }
 
+
+/// Emit the destructor kernel for the target and the triggering function in the
+/// the host for OpenMP offloading
+static void emitOMPOfloadingKernelTarget(CodeGenFunction &CGF,
+                                          llvm::Constant *dtor,
+                                          llvm::Constant *addr) {
+  CodeGenModule &CGM = CGF.CGM;
+
+  // Create the function that will call the the destructor ( void omptgt_() )
+  std::string CallerName = CGM.getOpenMPRuntime().
+                GetOffloadEntryMangledName(CGM.getTarget().getTriple());
+  llvm::FunctionType *CallerTy = llvm::FunctionType::get(CGM.VoidTy, false);
+  llvm::Function *Caller = llvm::Function::Create(CallerTy,
+      llvm::GlobalValue::InternalLinkage, CallerName, &CGM.getModule());
+
+  // This only increments the counter of the target regions.
+  CGM.getOpenMPRuntime().CreateHostPtrForCurrentTargetRegion(nullptr,
+                                                             nullptr);
+  CGM.getOpenMPRuntime().PostProcessTargetFunction(Caller);
+
+  // Call the desructor from the caller function
+  {
+    CodeGenFunction CGF(CGM);
+    CGF.StartFunction(GlobalDecl(), CGF.getContext().VoidTy, Caller,
+        CGF.getTypes().arrangeNullaryFunction(), FunctionArgList());
+    CGF.Builder.CreateCall(dtor,addr);
+    CGF.FinishFunction();
+  }
+
+}
+static llvm::Constant* emitOMPOfloadingKernelHost(CodeGenFunction &CGFC,
+                                                  llvm::Constant *dtor,
+                                                  llvm::Constant *addr) {
+  CodeGenModule &CGM = CGFC.CGM;
+
+  // Create the function that will call the kernel that runs the destructor on
+  // the target ( void F(void*) )
+  llvm::FunctionType *CallerTy = llvm::FunctionType::get(CGM.VoidTy,
+      CGM.VoidPtrTy, false);
+  llvm::Function *Caller = llvm::Function::Create(CallerTy,
+      llvm::GlobalValue::InternalLinkage, "__omptgt__dtor_caller",
+      &CGM.getModule());
+
+  CGM.getOpenMPRuntime().CreateHostPtrForCurrentTargetRegion(nullptr, Caller);
+
+  // Call the desructor from the caller function
+  {
+    CodeGenFunction CGF(CGM);
+    const CGFunctionInfo &FI = CGF.getTypes().arrangeLLVMFunctionInfo(
+        CGF.getContext().VoidTy,
+        false,
+        CGF.getContext().VoidPtrTy,
+        FunctionType::ExtInfo(),
+        RequiredArgs::All);
+    FunctionArgList ArgList;
+    ArgList.push_back(ParmVarDecl::Create(CGF.getContext(),
+        nullptr,
+        SourceLocation(),
+        SourceLocation(),
+        nullptr,
+        CGF.getContext().VoidPtrTy,
+        nullptr,
+        StorageClass(),
+        nullptr));
+    CGF.StartFunction(GlobalDecl(), CGF.getContext().VoidTy, Caller,
+        FI, ArgList);
+
+    llvm::SmallVector<llvm::Value*, 10> TgtArgs;
+
+    TgtArgs.push_back(CGF.Builder.getInt32(
+        CGOpenMPRuntime::OMPRTL__target_device_id_dtors));
+    TgtArgs.push_back(llvm::ConstantExpr::getBitCast(Caller, CGM.VoidPtrTy));
+    TgtArgs.push_back(CGF.Builder.getInt32(0));
+    TgtArgs.push_back(llvm::Constant::getNullValue(CGM.VoidPtrPtrTy));
+    TgtArgs.push_back(llvm::Constant::getNullValue(CGM.VoidPtrPtrTy));
+    TgtArgs.push_back(llvm::Constant::getNullValue(CGM.Int64Ty->getPointerTo()));
+    TgtArgs.push_back(llvm::Constant::getNullValue(CGM.Int32Ty->getPointerTo()));
+    //FIXME: maybe use more than one team/thread would be nice
+    TgtArgs.push_back(CGF.Builder.getInt32(1));
+    TgtArgs.push_back(CGF.Builder.getInt32(1));
+
+    CGF.Builder.CreateCall(CGM.getOpenMPRuntime().Get_target_teams(), TgtArgs);
+
+    CGF.FinishFunction();
+  }
+
+  return Caller;
+}
+
 /// Register a global destructor using __cxa_atexit.
 static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
                                         llvm::Constant *dtor,
                                         llvm::Constant *addr,
                                         bool TLS) {
+
+  // If we are in OpenMP target mode, we need to create a new kernel that will
+  // execute the destructor
+  if (CGF.CGM.getLangOpts().OpenMPTargetMode){
+    emitOMPOfloadingKernelTarget(CGF,dtor,addr);
+    return;
+  }
+
   const char *Name = "__cxa_atexit";
   if (TLS) {
     const llvm::Triple &T = CGF.getTarget().getTriple();
@@ -1794,6 +1892,18 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
     handle
   };
   CGF.EmitNounwindRuntimeCall(atexit, args);
+
+  // If we are supporting OpenMP and we are in a declare target region, we need
+  // to register a function to call the destructor in the target
+  if (CGF.CGM.hasOpenMPRuntime() && CGF.CGM.OpenMPSupport.getTargetDeclare()){
+    llvm::Constant *Caller = emitOMPOfloadingKernelHost(CGF,dtor,addr);
+    llvm::Value *args[] = {
+      llvm::ConstantExpr::getBitCast(Caller, dtorTy),
+      llvm::ConstantExpr::getBitCast(addr, CGF.Int8PtrTy),
+      handle
+    };
+    CGF.EmitNounwindRuntimeCall(atexit, args);
+  }
 }
 
 /// Register a global destructor as best as we know how.
@@ -1804,6 +1914,9 @@ void ItaniumCXXABI::registerGlobalDtor(CodeGenFunction &CGF,
   // Use __cxa_atexit if available.
   if (CGM.getCodeGenOpts().CXAAtExit)
     return emitGlobalDtorWithCXAAtExit(CGF, dtor, addr, D.getTLSKind());
+
+  assert(!CGM.getLangOpts().OpenMPTargetMode
+      && "We are currently supporting cxx_atexit only...");
 
   if (D.getTLSKind())
     CGM.ErrorUnsupported(&D, "non-trivial TLS destruction");

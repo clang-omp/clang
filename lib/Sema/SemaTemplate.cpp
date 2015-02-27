@@ -5581,7 +5581,7 @@ Sema::CheckTemplateDeclScope(Scope *S, TemplateParameterList *TemplateParams) {
   //   A template-declaration can appear only as a namespace scope or
   //   class scope declaration.
   if (Ctx) {
-    if (Ctx->isFileContext())
+    if (Ctx->isFileContext() || Ctx->isOMPDeclareTarget())
       return false;
     if (CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(Ctx)) {
       // C++ [temp.mem]p2:
@@ -8182,7 +8182,7 @@ bool Sema::IsInsideALocalClassWithinATemplateFunction() {
     if (CXXRecordDecl *RD = dyn_cast<CXXRecordDecl>(CurContext)) {
       const FunctionDecl *FD = RD->isLocalClass();
       return (FD && FD->getTemplatedKind() != FunctionDecl::TK_NonTemplate);
-    } else if (DC->isTranslationUnit() || DC->isNamespace())
+    } else if (DC->isTranslationUnitOrDeclareTarget() || DC->isNamespace())
       return false;
 
     DC = DC->getParent();

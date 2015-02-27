@@ -3723,6 +3723,13 @@ bool NVPTX_TC::hasBlocksRuntime() const {
   return false;
 }
 
+bool NVPTX_TC::UseHostToolChainInstead(const JobAction *JA) const{
+  if (isa<PreprocessJobAction>(JA))
+    return true;
+
+  return ToolChain::UseHostToolChainInstead(JA);
+}
+
 llvm::opt::DerivedArgList *
 NVPTX_TC::TranslateArgs(const llvm::opt::DerivedArgList &Args,
               const char *BoundArch,

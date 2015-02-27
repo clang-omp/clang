@@ -133,7 +133,8 @@ namespace gcc {
     /// the particular tool mode.
     virtual void
         RenderExtraToolArgs(const JobAction &JA,
-                            llvm::opt::ArgStringList &CmdArgs) const = 0;
+                            llvm::opt::ArgStringList &CmdArgs,
+                            const llvm::opt::ArgList &Args) const = 0;
   };
 
   class LLVM_LIBRARY_VISIBILITY Preprocess : public Common {
@@ -145,7 +146,8 @@ namespace gcc {
     bool hasIntegratedCPP() const override { return false; }
 
     void RenderExtraToolArgs(const JobAction &JA,
-                             llvm::opt::ArgStringList &CmdArgs) const override;
+                             llvm::opt::ArgStringList &CmdArgs,
+                             const llvm::opt::ArgList &Args) const override;
   };
 
   class LLVM_LIBRARY_VISIBILITY Compile : public Common  {
@@ -157,7 +159,8 @@ namespace gcc {
     bool hasIntegratedCPP() const override { return true; }
 
     void RenderExtraToolArgs(const JobAction &JA,
-                             llvm::opt::ArgStringList &CmdArgs) const override;
+                             llvm::opt::ArgStringList &CmdArgs,
+                             const llvm::opt::ArgList &Args) const override;
   };
 
   class LLVM_LIBRARY_VISIBILITY Link : public Common  {
@@ -169,7 +172,8 @@ namespace gcc {
     bool isLinkJob() const override { return true; }
 
     void RenderExtraToolArgs(const JobAction &JA,
-                             llvm::opt::ArgStringList &CmdArgs) const override;
+                             llvm::opt::ArgStringList &CmdArgs,
+                             const llvm::opt::ArgList &Args) const override;
   };
 } // end namespace gcc
 

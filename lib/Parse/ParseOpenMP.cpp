@@ -823,6 +823,7 @@ Parser::ParseOpenMPDeclarativeOrExecutableDirective(bool StandAloneAllowed) {
                         : 1;
       Actions.ActOnCapturedRegionStart(Loc, getCurScope(), CR_OpenMP, NumArgs);
       Actions.ActOnStartOfCompoundStmt();
+      Actions.EnterOpenMPDSACapturedRegion();
       AssociatedStmt = ParseStatement();
       Actions.ActOnFinishOfCompoundStmt();
       if (!AssociatedStmt.isUsable()) {

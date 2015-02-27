@@ -1542,6 +1542,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   //}
   Opts.OpenMP = Args.hasArg(OPT_fopenmp);
   Opts.OpenMPTargetMode = Args.hasArg(OPT_omp_target_mode);
+  Opts.OpenMPHostIRDump = Args.hasArg(OPT_omp_dump_host_ir);
+  Opts.OpenMPTargetIRDump = Args.hasArg(OPT_omp_dump_target_ir);
 
   // Get the OpenMP target triples if any
   if ( Arg *A = Args.getLastArg(options::OPT_omptargets_EQ) ){

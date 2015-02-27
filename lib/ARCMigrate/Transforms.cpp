@@ -93,7 +93,7 @@ bool trans::isPlusOne(const Expr *E) {
 
       if (FD->isGlobal() &&
           FD->getIdentifier() &&
-          FD->getParent()->isTranslationUnit() &&
+          FD->getParent()->isTranslationUnitOrDeclareTarget() &&
           FD->isExternallyVisible() &&
           ento::cocoa::isRefType(callE->getType(), "CF",
                                  FD->getIdentifier()->getName())) {

@@ -342,7 +342,7 @@ void clang::FormatASTNodeDiagnosticArgument(
       assert(DC && "Should never have a null declaration context");
       NeedQuotes = false;
 
-      if (DC->isTranslationUnit()) {
+      if (DC->isTranslationUnitOrDeclareTarget()) {
         // FIXME: Get these strings from some localized place
         if (Context.getLangOpts().CPlusPlus)
           OS << "the global namespace";

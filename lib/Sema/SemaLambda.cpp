@@ -120,7 +120,7 @@ getStackIndexOfNearestEnclosingCaptureReadyLambda(
     
     assert(CurScopeIndex);
     --CurScopeIndex;
-  } while (!EnclosingDC->isTranslationUnit() &&
+  } while (!EnclosingDC->isTranslationUnitOrDeclareTarget() &&
            EnclosingDC->isDependentContext() &&
            isLambdaCallOperator(EnclosingDC));
 

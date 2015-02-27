@@ -348,6 +348,14 @@ public:
   AddFastMathRuntimeIfAvailable(const llvm::opt::ArgList &Args,
                                 llvm::opt::ArgStringList &CmdArgs) const;
 
+  /// UseHostToolChainInstead - If the job corresponds to an OpenMP target, the
+  /// toolchain may inform the client to use the host toolchain instead. In that
+  /// case this function returns true. By default this return true if the job
+  /// is not an host job.
+  virtual bool UseHostToolChainInstead(const JobAction *JA) const{
+    return !IsOpenMPTargetToolchain;
+  }
+
 };
 
 } // end namespace driver

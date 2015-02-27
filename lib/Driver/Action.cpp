@@ -57,6 +57,7 @@ void BindTargetAction::anchor() {}
 
 BindTargetAction::BindTargetAction(Action *Input, const char *_TargetName)
   : Action(BindTargetClass, Input, Input->getType()), TargetName(_TargetName) {
+  setOffloadingDevice(_TargetName);
 }
 void JobAction::anchor() {}
 

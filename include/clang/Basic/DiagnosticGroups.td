@@ -695,6 +695,7 @@ def ASM : DiagGroup<"asm", [
 def SourceUsesOpenMP : DiagGroup<"source-uses-openmp">;
 def OpenMPClauses : DiagGroup<"openmp-clauses">;
 def OpenMPLoopForm : DiagGroup<"openmp-loop-form">;
+def OpenMPOffloading : DiagGroup<"openmp-offloading">;
 
 // Backend warnings.
 def BackendInlineAsm : DiagGroup<"inline-asm">;

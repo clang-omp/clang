@@ -14,6 +14,7 @@
 #include "CodeGenFunction.h"
 #include "CGCXXABI.h"
 #include "CGObjCRuntime.h"
+#include "CGOpenMPRuntime.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/Intrinsics.h"
@@ -309,12 +310,26 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
     // FIXME: We only need to register one __cxa_thread_atexit function for the
     // entire TU.
     CXXThreadLocalInits.push_back(Fn);
+    // If we are generating code for OpenMP and we are inside a declare target
+    // region we need to register the initializer so we can properly generate
+    // the device initialization
+    if (OpenMPRuntime && OpenMPSupport.getTargetDeclare())
+      OpenMPRuntime->registerTargetGlobalInitializer(Fn);
   } else if (PerformInit && ISA) {
     EmitPointerToInitFunc(D, Addr, Fn, ISA);
     DelayedCXXInitPosition.erase(D);
   } else if (auto *IPA = D->getAttr<InitPriorityAttr>()) {
     OrderGlobalInits Key(IPA->getPriority(), PrioritizedCXXGlobalInits.size());
     PrioritizedCXXGlobalInits.push_back(std::make_pair(Key, Fn));
+
+    // If we are generating code for OpenMP and we are inside a declare target
+    // region we need to register the initializer so we can properly generate
+    // the device initialization. We do not need to do anything special for
+    // priorities because we use the host initializer to trigger the target
+    // initializer too, so it uses the same priorities specified for the host
+    if (OpenMPRuntime && OpenMPSupport.getTargetDeclare())
+      OpenMPRuntime->registerTargetGlobalInitializer(Fn);
+
     DelayedCXXInitPosition.erase(D);
   } else if (D->getTemplateSpecializationKind() != TSK_ExplicitSpecialization &&
              D->getTemplateSpecializationKind() != TSK_Undeclared) {
@@ -337,9 +352,19 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
       DelayedCXXInitPosition.find(D);
     if (I == DelayedCXXInitPosition.end()) {
       CXXGlobalInits.push_back(Fn);
+      // If we are generating code for OpenMP and we are inside a declare target
+      // region we need to register the initializer so we can properly generate
+      // the device initialization
+      if (OpenMPRuntime && OpenMPSupport.getTargetDeclare())
+        OpenMPRuntime->registerTargetGlobalInitializer(Fn);
     } else {
       assert(CXXGlobalInits[I->second] == nullptr);
       CXXGlobalInits[I->second] = Fn;
+      // If we are generating code for OpenMP and we are inside a declare target
+      // region we need to register the initializer so we can properly generate
+      // the device initialization
+      if (OpenMPRuntime && OpenMPSupport.getTargetDeclare())
+        OpenMPRuntime->registerTargetGlobalInitializer(Fn);
       DelayedCXXInitPosition.erase(I);
     }
   }
@@ -406,7 +431,11 @@ CodeGenModule::EmitCXXGlobalInitFunc() {
         LocalCXXGlobalInits.push_back(I->second);
 
       CodeGenFunction(*this).GenerateCXXGlobalInitFunc(Fn, LocalCXXGlobalInits);
-      AddGlobalCtor(Fn, Priority);
+
+      // If we are supporting OpenMP and are in target mode, we do not need to
+      // add any constructor
+      if (!(OpenMPRuntime && LangOpts.OpenMPTargetMode))
+        AddGlobalCtor(Fn, Priority);
     }
   }
   
@@ -426,7 +455,11 @@ CodeGenModule::EmitCXXGlobalInitFunc() {
       *this, FTy, llvm::Twine("_GLOBAL__sub_I_", FileName));
 
   CodeGenFunction(*this).GenerateCXXGlobalInitFunc(Fn, CXXGlobalInits);
-  AddGlobalCtor(Fn);
+
+  // If we are supporting OpenMP and are in target mode, we do not need to
+  // add any constructor
+  if (!(OpenMPRuntime && LangOpts.OpenMPTargetMode))
+    AddGlobalCtor(Fn);
 
   CXXGlobalInits.clear();
   PrioritizedCXXGlobalInits.clear();
@@ -444,6 +477,49 @@ void CodeGenModule::EmitCXXGlobalDtorFunc() {
 
   CodeGenFunction(*this).GenerateCXXGlobalDtorsFunc(Fn, CXXGlobalDtors);
   AddGlobalDtor(Fn);
+}
+
+void CodeGenModule::EmitOMPRegisterLib() {
+  // If we are not supporting OpenMP in this module, just return
+  if (!OpenMPRuntime)
+   return;
+
+  // If in target mode don't need to do anything here
+  if (LangOpts.OpenMPTargetMode)
+    return;
+
+  // If we do not have target regions nor relevant initializers, just return
+  if (!OpenMPRuntime->requiresTargetDescriptorRegistry())
+    return;
+
+  llvm::Constant *TRD = OpenMPRuntime->GetTargetRegionsDescriptor();
+
+  llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, false);
+
+  // Create a function that registers the descriptor
+  llvm::Function *TRD_F =
+      CreateGlobalInitOrDestructFunction(*this, FTy, "__omptgt__register_lib");
+
+  {
+    CodeGenFunction CGF(*this);
+    CGF.StartFunction(GlobalDecl(), CGF.getContext().VoidTy, TRD_F,
+        CGF.getTypes().arrangeNullaryFunction(), FunctionArgList());
+    CGF.Builder.CreateCall(OpenMPRuntime->Get_register_lib(),TRD);
+    CGF.FinishFunction();
+  }
+
+  llvm::Function *Fn =
+      CreateGlobalInitOrDestructFunction(*this, FTy,
+                                         "_GLOBAL__A_000000_OPENMP_TGT");
+  {
+    CodeGenFunction CGF(*this);
+    CGF.StartFunction(GlobalDecl(), CGF.getContext().VoidTy, Fn,
+        CGF.getTypes().arrangeNullaryFunction(), FunctionArgList());
+    CGF.Builder.CreateCall(TRD_F);
+    CGF.FinishFunction();
+  }
+
+  AddGlobalCtor(Fn, 0);
 }
 
 /// Emit the code necessary to initialize the given global variable.
@@ -509,9 +585,58 @@ CodeGenFunction::GenerateCXXGlobalInitFunc(llvm::Function *Fn,
       EmitObjCAutoreleasePoolCleanup(token);
     }
 
+    bool RequireOpenMPInitialization = false;
+
     for (unsigned i = 0, e = Decls.size(); i != e; ++i)
-      if (Decls[i])
+      if (Decls[i]){
         EmitRuntimeCall(Decls[i]);
+
+        if (CGM.hasOpenMPRuntime() &&
+            CGM.getOpenMPRuntime().isTargetGlobalInitializer(Decls[i]))
+          RequireOpenMPInitialization = true;
+      }
+
+    // If we need to implement a target kernel to do the initialization do it
+    // now
+    if (RequireOpenMPInitialization){
+
+      // If we are in target mode, we just rename the GLOBAL init function to
+      // the names of the next available target region. Otherwise, we call the
+      // entry point from the host to trigger the initialization in the target.
+
+      if (CGM.getLangOpts().OpenMPTargetMode){
+        // In target mode the host pointer is not relevant, we still register it
+        // to keep track of how many entry points we have while adding the
+        // constructors
+
+        std::string NewName = CGM.getOpenMPRuntime().
+            GetOffloadEntryMangledName(CGM.getTarget().getTriple());
+
+        Fn->setName(NewName);
+        CGM.getOpenMPRuntime().CreateHostPtrForCurrentTargetRegion(nullptr,
+                                                                   nullptr);
+        CGM.getOpenMPRuntime().PostProcessTargetFunction(Fn);
+      }
+      else{
+        CGM.getOpenMPRuntime().CreateHostPtrForCurrentTargetRegion(nullptr, Fn);
+
+        llvm::SmallVector<llvm::Value*, 10> TgtArgs;
+
+        TgtArgs.push_back(Builder.getInt32(
+            CGOpenMPRuntime::OMPRTL__target_device_id_ctors));
+        TgtArgs.push_back(llvm::ConstantExpr::getBitCast(Fn, CGM.VoidPtrTy));
+        TgtArgs.push_back(Builder.getInt32(0));
+        TgtArgs.push_back(llvm::Constant::getNullValue(CGM.VoidPtrPtrTy));
+        TgtArgs.push_back(llvm::Constant::getNullValue(CGM.VoidPtrPtrTy));
+        TgtArgs.push_back(llvm::Constant::getNullValue(CGM.Int64Ty->getPointerTo()));
+        TgtArgs.push_back(llvm::Constant::getNullValue(CGM.Int32Ty->getPointerTo()));
+        //FIXME: maybe use more than one team/thread would be nice
+        TgtArgs.push_back(Builder.getInt32(1));
+        TgtArgs.push_back(Builder.getInt32(1));
+
+        Builder.CreateCall(CGM.getOpenMPRuntime().Get_target_teams(), TgtArgs);
+      }
+    }
 
     Scope.ForceCleanup();
 

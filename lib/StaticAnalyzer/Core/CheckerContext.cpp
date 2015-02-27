@@ -62,7 +62,7 @@ bool CheckerContext::isCLibraryFunction(const FunctionDecl *FD,
     DC = DC->getParent();
 
   // If this function is in a namespace, it is not a C library function.
-  if (!DC->isTranslationUnit())
+  if (!DC->isTranslationUnitOrDeclareTarget())
     return false;
 
   // If this function is not externally visible, it is not a C library function.

@@ -684,7 +684,7 @@ static bool LookupDirect(Sema &S, LookupResult &R, const DeclContext *DC) {
     }
   }
 
-  if (!Found && DC->isTranslationUnit() && LookupBuiltin(S, R))
+  if (!Found && DC->isTranslationUnitOrDeclareTarget() && LookupBuiltin(S, R))
     return true;
 
   if (R.getLookupName().getNameKind()

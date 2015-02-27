@@ -377,7 +377,7 @@ void CodeCompletionBuilder::AddChunk(CodeCompletionString::ChunkKind CK,
 }
 
 void CodeCompletionBuilder::addParentContext(const DeclContext *DC) {
-  if (DC->isTranslationUnit()) {
+  if (DC->isTranslationUnitOrDeclareTarget()) {
     return;
   }
   

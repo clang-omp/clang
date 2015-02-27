@@ -796,7 +796,8 @@ void AddTopLevelDeclarationToHash(Decl *D, unsigned &Hash) {
   if (!DC)
     return;
   
-  if (!(DC->isTranslationUnit() || DC->getLookupParent()->isTranslationUnit()))
+  if (!(DC->isTranslationUnitOrDeclareTarget()
+      || DC->getLookupParent()->isTranslationUnitOrDeclareTarget()))
     return;
 
   if (NamedDecl *ND = dyn_cast<NamedDecl>(D)) {

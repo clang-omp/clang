@@ -41,24 +41,34 @@ class InputInfo {
   Class Kind;
   types::ID Type;
   const char *BaseInput;
-  // Action that lead to this info
+
+  // Action that originates this info
   const Action* OrigAction;
+
+  // True if the filename associated with this info should have the OpenMP
+  // target appended
+  bool RequiresTargetSuffixToBeApended;
 
 public:
   InputInfo() {}
-  InputInfo(const Action* _OrigAction, const char *_BaseInput)
+  InputInfo(const Action* _OrigAction, const char *_BaseInput,
+            bool _RequiresTargetSuffixToBeApended)
     : Kind(Nothing), Type(_OrigAction->getType()), BaseInput(_BaseInput),
-      OrigAction(_OrigAction) {
+      OrigAction(_OrigAction),
+      RequiresTargetSuffixToBeApended(_RequiresTargetSuffixToBeApended) {
   }
-  InputInfo(const char *_Filename, const Action* _OrigAction, const char *_BaseInput)
+  InputInfo(const char *_Filename, const Action* _OrigAction,
+            const char *_BaseInput, bool _RequiresTargetSuffixToBeApended)
     : Kind(Filename), Type(_OrigAction->getType()), BaseInput(_BaseInput),
-      OrigAction(_OrigAction) {
+      OrigAction(_OrigAction),
+      RequiresTargetSuffixToBeApended(_RequiresTargetSuffixToBeApended)  {
     Data.Filename = _Filename;
   }
   InputInfo(const llvm::opt::Arg *_InputArg, const Action* _OrigAction,
-            const char *_BaseInput)
+            const char *_BaseInput, bool _RequiresTargetSuffixToBeApended)
       : Kind(InputArg), Type(_OrigAction->getType()), BaseInput(_BaseInput),
-        OrigAction(_OrigAction) {
+        OrigAction(_OrigAction),
+        RequiresTargetSuffixToBeApended(_RequiresTargetSuffixToBeApended) {
     Data.InputArg = _InputArg;
   }
 
@@ -91,6 +101,13 @@ public:
   // getOriginalAction - Return the action that produced
   // this input info
   const Action *getOriginalAction() const {return OrigAction;}
+
+  // RequiresTargetSuffixToBeApended- Return true if the target suffix has to be
+  // appended to the filename
+  bool requiresTargetSuffixToBeApended(){
+     return RequiresTargetSuffixToBeApended;
+  }
+
 };
 
 } // end namespace driver

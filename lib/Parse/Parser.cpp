@@ -1005,7 +1005,7 @@ Decl *Parser::ParseFunctionDefinition(ParsingDeclarator &D,
            !TemplateInfo.TemplateParams &&
            (Tok.is(tok::l_brace) || Tok.is(tok::kw_try) ||
             Tok.is(tok::colon)) && 
-      Actions.CurContext->isTranslationUnit()) {
+      Actions.CurContext->isTranslationUnitOrDeclareTarget()) {
     ParseScope BodyScope(this, Scope::FnScope|Scope::DeclScope);
     Scope *ParentScope = getCurScope()->getParent();
 

@@ -208,6 +208,18 @@ typedef int32_t(__kmpc_omp_task_parts)(ident_t *loc, int32_t gtid,
 typedef void(__kmpc_taskgroup)(ident_t *loc, int32_t global_tid);
 typedef void(__kmpc_end_taskgroup)(ident_t *loc, int32_t global_tid);
 
+// OMP runtime functions used within clang
+typedef int32_t(omp_get_num_threads)();
+typedef int32_t(omp_get_num_teams)();
+
+
+// Target-NVPTX specific functions, we may need to move these elsewhere
+typedef void(__kmpc_kernel_init)();
+typedef int(__kmpc_kernel_prepare_parallel)();
+typedef void(__kmpc_kernel_parallel)();
+typedef void(__kmpc_kernel_end_parallel)();
+typedef void(__kmpc_serialized_parallel)(ident_t *loc, int32_t global_tid);
+typedef void(__kmpc_end_serialized_parallel)(ident_t *loc, int32_t global_tid);
 
 //struct target_size_t {};
 typedef void *(*kmpc_ctor)(void *);
@@ -221,19 +233,30 @@ typedef void *(__kmpc_threadprivate_cached)(ident_t *loc, int32_t global_tid,
                                             void *data, target_size_t size,
                                             void ***cache);
 
-const unsigned OMP_TGT_MAPTYPE_ALLOC   = 0;
-const unsigned OMP_TGT_MAPTYPE_TO      = 1;
-const unsigned OMP_TGT_MAPTYPE_FROM    = 2;
-const unsigned OMP_TGT_MAPTYPE_TOFROM  = 3;
+const unsigned OMP_TGT_MAPTYPE_ALLOC   = 0x0000;
+const unsigned OMP_TGT_MAPTYPE_TO      = 0x0001;
+const unsigned OMP_TGT_MAPTYPE_FROM    = 0x0002;
+const unsigned OMP_TGT_MAPTYPE_ALWAYS  = 0x0004;
+const unsigned OMP_TGT_MAPTYPE_RELEASE = 0x0008;
+const unsigned OMP_TGT_MAPTYPE_DELETE  = 0x0018;
+const unsigned OMP_TGT_MAPTYPE_POINTER = 0x0020;
+const unsigned OMP_TGT_MAPTYPE_EXTRA   = 0x0040;
+
+struct __tgt_offload_entry{
+  void      *addr;       // Pointer to the offload entry info (function or global)
+  char      *name;       // Name of the function or global
+  int64_t    size;       // Size of the entry info (0 if it a function)
+};
 
 struct __tgt_device_image{
   void   *ImageStart;       // Pointer to the target code start
   void   *ImageEnd;         // Pointer to the target code end
+  // We also add the host entries to the device image, as it may be useful
+  // for the target runtime to have access to that information
+  __tgt_offload_entry  *EntriesBegin;   // Begin of the table with all the entries
+  __tgt_offload_entry  *EntriesEnd;     // End of the table with all the entries (non inclusive)
 };
-struct __tgt_offload_entry{
-  void      *addr;       // Pointer to the offload entry info (function or global)
-  int32_t    size;        // Size of the entry info (0 if it a function)
-};
+
 struct __tgt_bin_desc{
   int32_t              NumDevices;     // Number of devices supported
   __tgt_device_image   *DeviceImages;   // Arrays of device images (one per device)
@@ -241,16 +264,24 @@ struct __tgt_bin_desc{
   __tgt_offload_entry  *EntriesEnd;     // End of the table with all the entries (non inclusive)
 };
 
-typedef void(__kmpc_register_lib)(__tgt_bin_desc* desc);
+typedef void(__tgt_register_lib)(__tgt_bin_desc* desc);
 
-typedef int32_t(__kmpc_target)(int32_t device_id, void *host_addr,
-    int32_t num_args, void** args, int32_t *args_size, int32_t *args_maptype);
+typedef int32_t(__tgt_target)(int32_t device_id, void *host_addr,
+    int32_t num_args, void** args_base, void** args, int64_t *args_size,
+    int32_t *args_maptype);
 
-typedef void(__kmpc_target_data_begin)(int32_t device_id, int32_t num_args,
-    void** args, int32_t *args_size, int32_t *args_maptype);
+typedef int32_t(__tgt_target_teams)(int32_t device_id, void *host_addr,
+    int32_t num_args, void** args_base, void** args, int64_t *args_size,
+    int32_t *args_maptype, int32_t num_teams, int32_t thread_limit);
 
-typedef void(__kmpc_target_data_end)(int32_t device_id, int32_t num_args,
-    void** args, int32_t *args_size, int32_t *args_maptype);
+typedef void(__tgt_target_data_begin)(int32_t device_id, int32_t num_args,
+    void** args_base, void** args, int64_t *args_size, int32_t *args_maptype);
+
+typedef void(__tgt_target_data_end)(int32_t device_id, int32_t num_args,
+    void** args_base, void** args, int64_t *args_size, int32_t *args_maptype);
+
+typedef void(__tgt_target_data_update)(int32_t device_id, int32_t num_args,
+    void** args_base, void** args, int64_t *args_size, int32_t *args_maptype);
 }
 
 namespace llvm {
@@ -339,6 +370,25 @@ public:
                              false);
   }
 };
+template <typename R, typename A1, typename A2, typename A3, typename A4,
+          typename A5, typename A6, typename A7, typename A8, bool cross>
+class TypeBuilder<R(A1, A2, A3, A4, A5, A6, A7, A8), cross> {
+public:
+  static FunctionType *get(LLVMContext &Context) {
+    Type *params[] = {
+        TypeBuilder<A1, cross>::get(Context),
+        TypeBuilder<A2, cross>::get(Context),
+        TypeBuilder<A3, cross>::get(Context),
+        TypeBuilder<A4, cross>::get(Context),
+        TypeBuilder<A5, cross>::get(Context),
+        TypeBuilder<A6, cross>::get(Context),
+        TypeBuilder<A7, cross>::get(Context),
+        TypeBuilder<A8, cross>::get(Context),
+    };
+    return FunctionType::get(TypeBuilder<R, cross>::get(Context), params,
+                             false);
+  }
+};
 template <bool X> class TypeBuilder<sched_type, X> {
 public:
   static IntegerType *get(LLVMContext &C) {
@@ -385,40 +435,57 @@ typedef llvm::TypeBuilder<ident_t, false> IdentTBuilder;
 //  };
 //};
 
-template <bool X> class TypeBuilder<__tgt_device_image, X> {
-public:
-  static StructType *get(LLVMContext &C) {
-    return StructType::get(
-        TypeBuilder<llvm::types::i<8>*, X>::get(C), // Pointer to the target code start
-        TypeBuilder<llvm::types::i<8>*, X>::get(C), // Pointer to the target code end
-        NULL);
-  }
-  enum {
-    image_start,
-    image_end
-  };
-};
 template <bool X> class TypeBuilder<__tgt_offload_entry, X> {
 public:
   static StructType *get(LLVMContext &C) {
     return StructType::get(
-        TypeBuilder<llvm::types::i<8>*, X>::get(C),  // Pointer to the offload entry info (function or global)
-        TypeBuilder<llvm::types::i<32>, X>::get(C),  // Size of the entry info (0 if it a function)
+    	// Pointer to the offload entry info (function or global)
+        TypeBuilder<llvm::types::i<8>*, X>::get(C),
+      // Name of the function or global
+        TypeBuilder<llvm::types::i<8>*, X>::get(C),
+		  // Size of the entry info (0 if it a function)
+        TypeBuilder<llvm::types::i<64>, X>::get(C),
         NULL);
   }
   enum {
     address,
+    name,
     size
+  };
+};
+template <bool X> class TypeBuilder<__tgt_device_image, X> {
+public:
+  static StructType *get(LLVMContext &C) {
+    return StructType::get(
+    // Pointer to the target code start
+        TypeBuilder<llvm::types::i<8>*, X>::get(C),
+    // Pointer to the target code end
+        TypeBuilder<llvm::types::i<8>*, X>::get(C),
+    // Begin of the table with all the entries
+        TypeBuilder<__tgt_offload_entry*, X>::get(C),
+    // End of the table with all the entries (non inclusive)
+        TypeBuilder<__tgt_offload_entry*, X>::get(C),
+        NULL);
+  }
+  enum {
+    image_start,
+    image_end,
+    entries_begin,
+    entries_end
   };
 };
 template <bool X> class TypeBuilder<__tgt_bin_desc, X> {
 public:
   static StructType *get(LLVMContext &C) {
     return StructType::get(
-        TypeBuilder<llvm::types::i<32>,   X>::get(C), // Number of devices supported
-        TypeBuilder<__tgt_device_image*,  X>::get(C), // Arrays of device images (one per device)
-        TypeBuilder<__tgt_offload_entry*, X>::get(C), // Begin of the table with all the entries
-        TypeBuilder<__tgt_offload_entry*, X>::get(C), // End of the table with all the entries (non inclusive)
+    	// Number of devices supported
+        TypeBuilder<llvm::types::i<32>,   X>::get(C),
+		// Arrays of device images (one per device)
+        TypeBuilder<__tgt_device_image*,  X>::get(C),
+		// Begin of the table with all the entries
+        TypeBuilder<__tgt_offload_entry*, X>::get(C),
+		// End of the table with all the entries (non inclusive)
+        TypeBuilder<__tgt_offload_entry*, X>::get(C),
         NULL);
   }
   enum {

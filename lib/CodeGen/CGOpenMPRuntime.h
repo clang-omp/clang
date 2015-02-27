@@ -78,6 +78,18 @@ public:
     OMPRTL__kmpc_global_thread_num
   };
 
+  enum OpenMPReservedDeviceID {
+    // Device ID if the device was not defined, runtime should get it from the
+    // global variables in the spec.
+    OMPRTL__target_device_id_undef = -1,
+    // Means target all devices and should be run the first time they hit a
+    // regular target region - used for Ctors
+    OMPRTL__target_device_id_ctors = -2,
+    // Means target all devices and should run on all devices that were used in
+    // the current shared library - used for Dtors
+    OMPRTL__target_device_id_dtors = -3
+  };
+
 protected:
   CodeGenModule &CGM;
 
@@ -146,33 +158,112 @@ protected:
   // Number of target regions processed so far
   unsigned NumTargetRegions;
 
-  // Set of all functions that register target libraries
-  llvm::SmallSet<const llvm::Function*, 32> FunctionsWithTargetRegistry;
+  // Number of globals processed so far that are to be mapped into a target
+  unsigned NumTargetGlobals;
+
+  // Set of all local variables that need to be turned global due to data sharing
+  // constraints
+  llvm::SmallSet<llvm::Value*, 32> ValuesToBeInSharedMemory;
+
+  // Set of all global initializers required in the declare target regions
+  llvm::SmallSet<const llvm::Constant*, 32> TargetGlobalInitializers;
+
+  // Set of all captured globals used in the current target region
+  llvm::SmallSet<const VarDecl*, 32> CapturedGlobals;
+
+  // List of the order declaration appear in the code generation. This is
+  // required to ensure the source order is followed and enable interoperability
+  // with other tools that may generate OpenMP code. We use a map to locate
+  // the right entry in the list from the declaration.
+  typedef std::list<llvm::GlobalVariable*> EntriesListTy;
+  EntriesListTy EntriesList;
+  typedef llvm::SmallDenseMap<const Decl*, EntriesListTy::iterator>
+                                 EntriesListMapTy;
+  EntriesListMapTy EntriesListMap;
+
+  // Map between target directives and the outlined function/host-entry pair.
+  // This is useful to trace whether a given target region was processed before
+  // and avoid duplicate the code generation. The code generation for a target
+  // directive may be called more than once if ,e.g., if-clauses are employed
+  typedef llvm::DenseMap<const  Decl*, llvm::Function*>
+                           TargetDirectiveToEntriesMapTy ;
+  TargetDirectiveToEntriesMapTy TargetDirectiveToEntriesMap;
 
   // Target regions descriptor for the current compilation unit
   llvm::Constant *TargetRegionsDescriptor;
 
+  /// \brief  Return host pointer for the current target regions. This creates
+  /// the offload entry for the target region. This takes the record decl
+  /// associated with the target region to determine the ordering of the entry.
+  ///
+  virtual void CreateHostPtrForCurrentTargetRegionTD(const Decl *D,
+                                                     llvm::Function *Fn);
+
+  /// \brief  Creates the host entry for a given global and places it in the
+  /// entries reserved section
+  ///
+  virtual void CreateHostEntryForTargetGlobalTD(const Decl *D,
+                                                llvm::GlobalVariable* GV,
+                                                llvm::GlobalVariable* Succ);
+
 public:
 
-  // Returns the number of target regions processed so far
-  unsigned getNumOfProcessedTargetRegions(){ return NumTargetRegions; }
-
-  // Incremented number of processed target regions
-  void incNumOfProcessedTargetRegions(){ ++NumTargetRegions; }
-
-  // Get and Incremented number of processed target regions
-  unsigned getAndIncNumOfProcessedTargetRegions(){ return NumTargetRegions++; }
-
-  // Mark function as using target registry
-  void setFunctionRegisterTarget(const llvm::Function *F){
-    FunctionsWithTargetRegistry.insert(F);
+  // Register a global that was captured for the current target region
+  void registerTargetCapturedGlobal(const VarDecl *D){
+    CapturedGlobals.insert(D);
   }
 
-  // Return true if the function registers a target
-  bool getFunctionRegisterTarget(const llvm::Function *F){
-    return FunctionsWithTargetRegistry.count(F);
+  // Return true if the global was captured for the current target region
+  bool isTargetCapturedGlobal(const VarDecl *D){
+    return CapturedGlobals.count(D) != 0;
   }
 
+  // Clear all the information about captured globals
+  void clearTargetCapturedGlobal(){
+    CapturedGlobals.clear();
+  }
+
+  // Return true if the current module requires a the target descriptor to be
+  // registered
+  bool requiresTargetDescriptorRegistry(){
+    return NumTargetRegions != 0 || !TargetGlobalInitializers.empty();
+  }
+
+  // Register global declaration as required for OpenMP Target offloading
+  void registerEntryDeclaration(const Decl *D);
+
+  // Register global initializer for OpenMP Target offloading
+  void registerTargetGlobalInitializer(const llvm::Constant *D);
+
+  // Return true if D is a global initializer for OpenMP Target offloading
+  bool isTargetGlobalInitializer(const llvm::Constant *D);
+
+  // Return true if the current module has global initializers
+  bool hasTargetGlobalInitializers();
+
+  // Return true if this declaration corresponds to an offloading entry
+  bool isEntryDeclaration(const Decl *D);
+
+  // Mark value as requiring to be moved to global memory
+  void setRequiresSharedVersion(llvm::Value *V);
+
+  // Register the global value created for a given global declaration that
+  // is used in OpenMP offloading code
+  void registerGlobalVarForEntryDeclaration(const Decl *D,
+                                            llvm::GlobalVariable *GV);
+
+  // Return the first global value that comes after the one associated with
+  // the requested declaration by reference. Return true if the requested
+  // declaration is registered and false otherwise.
+  llvm::GlobalVariable *getNextGlobalVarForEntryDeclaration(const Decl *D);
+
+  // Return a pair of Function/host entry for a given directive with target
+  llvm::Function*
+  getEntryForDirectiveWithTarget(const Decl *D);
+
+  // Register a function and host entry for a given diretive with target
+  void registerEntryForDirectiveWithTarget(const Decl *D,
+                                           llvm::Function *F);
 
   enum EAtomicOperation {
     OMP_Atomic_add,
@@ -280,11 +371,21 @@ public:
   DEFAULT_EMIT_OPENMP_DECL(end_taskgroup)
   DEFAULT_EMIT_OPENMP_DECL(register_lib)
   DEFAULT_EMIT_OPENMP_DECL(target)
+  DEFAULT_EMIT_OPENMP_DECL(target_teams)
   DEFAULT_EMIT_OPENMP_DECL(target_data_begin)
   DEFAULT_EMIT_OPENMP_DECL(target_data_end)
+  DEFAULT_EMIT_OPENMP_DECL(target_data_update)
 
   DEFAULT_EMIT_OPENMP_DECL(threadprivate_register)
   DEFAULT_EMIT_OPENMP_DECL(global_thread_num)
+
+  DEFAULT_EMIT_OPENMP_DECL(kernel_init)
+  DEFAULT_EMIT_OPENMP_DECL(kernel_prepare_parallel)
+  DEFAULT_EMIT_OPENMP_DECL(kernel_parallel)
+  DEFAULT_EMIT_OPENMP_DECL(kernel_end_parallel)
+
+  DEFAULT_EMIT_OPENMP_DECL(serialized_parallel)
+  DEFAULT_EMIT_OPENMP_DECL(end_serialized_parallel)
 
   virtual llvm::Type *getKMPDependInfoType();
 
@@ -311,7 +412,6 @@ public:
   // DEFAULT_GET_OPENMP_FUNC(threadprivate_cached)
   virtual llvm::Constant *  Get_threadprivate_cached();
 
-
   virtual QualType GetAtomicType(CodeGenFunction &CGF, QualType QTy);
   virtual llvm::Value *GetAtomicFuncGeneral(CodeGenFunction &CGF, QualType QTyRes,
                                            QualType QTyIn, EAtomicOperation Aop,
@@ -319,6 +419,8 @@ public:
   virtual llvm::Value *GetAtomicFunc(CodeGenFunction &CGF, QualType QTy,
       OpenMPReductionClauseOperator Op);
 
+  /// This is a hook to enable postprocessing of the module.
+  virtual void PostProcessModule(CodeGenModule &CGM);
 
   /// Implement some target dependent transformation for the target region
   /// outlined function
@@ -326,6 +428,7 @@ public:
   virtual void PostProcessTargetFunction(const Decl *D,
                                           llvm::Function *F,
                                           const CGFunctionInfo &FI);
+  virtual void PostProcessTargetFunction(llvm::Function *F);
 
   /// \brief Creates a structure with the location info for Intel OpenMP RTL.
   virtual llvm::Value *CreateIntelOpenMPRTLLoc(SourceLocation Loc,
@@ -347,15 +450,31 @@ public:
   ///
   std::string GetOffloadEntryMangledName(llvm::Triple TargetTriple);
 
+  /// \brief Return a string with the mangled name of a global host entry for
+  /// the given module
+  ///
+  std::string GetTargetGlobalMangledName(llvm::Triple TargetTriple);
+
   /// \brief  Return the target regions descriptor or a create a new
   /// one if if does not exist
   ///
   llvm::Constant* GetTargetRegionsDescriptor();
 
   /// \brief  Return host pointer for the current target regions. This creates
-  /// the offload entry for the target region
-  ///
-  llvm::Constant* GetHostPtrForCurrentTargetRegion();
+  /// the offload entry for the target region. This takes the record decl
+  /// associated with the target region to determine the ordering of the entry.
+  /// This does what the target dependent implementation does but increments
+  /// the target regions counter.
+  void CreateHostPtrForCurrentTargetRegion(const Decl *D,
+                                           llvm::Function *Fn);
+
+  /// \brief  Creates the host entry for a given global and places it in the
+  /// entries reserved section
+  /// This does what the target dependent implementation does but increments
+  /// the target globals counter.
+  void CreateHostEntryForTargetGlobal(const Decl *D,
+                                      llvm::GlobalVariable* GV,
+                                      llvm::GlobalVariable* Succ);
 
   /// \brief Return a pointer to the device image begin
   ///
@@ -364,6 +483,75 @@ public:
   /// \brief Return a pointer to the device image end
   ///
   llvm::Constant* GetDeviceImageEndPointer(llvm::Triple TargetTriple);
+
+  // \brief If needed, re-initialize part of the state
+  virtual void StartNewTargetRegion();
+
+  /// \brief Code generation helper in target regions. Create a control-loop
+  //  with inspector/executor for special back-ends (e.g. nvptx)
+  virtual void GenerateTargetControlLoop(SourceLocation Loc,
+      CodeGenFunction &CGF);
+
+  // \brief Code generation for closing of sequential region. Set ups the next
+  // labels for special back-ends (e.g. nvptx)
+  virtual void GenerateFinishLabelSetting(SourceLocation Loc,
+      CodeGenFunction &CGF, bool prevIsParallel);
+
+  // \brief Function to close an openmp region. Set the labels and generate
+  // new switch case
+  virtual void GenerateNextLabel (CodeGenFunction &CGF, bool prevIsParallel,
+      bool nextIsParallel);
+
+  virtual void GenerateIfMaster (SourceLocation Loc, CapturedStmt *CS,
+      CodeGenFunction &CGF);
+
+  // \brief Rename function if part of standard libraries. This is useful to
+  // distinguish whether such functions are called from the device, as they
+  // will have a different implementation than the one on the host.
+  virtual StringRef RenameStandardFunction (StringRef name);
+
+  virtual void SelectActiveThreads (CodeGenFunction &CGF);
+
+  // these three functions are not directly called in the implementation of
+  // #parallel because they are not needed for all OpenMP back-ends, but
+  // only for nvptx
+  virtual llvm::Value * CallParallelRegionPrepare(CodeGenFunction &CGF);
+
+  virtual void CallParallelRegionStart(CodeGenFunction &CGF);
+
+  virtual void CallParallelRegionEnd(CodeGenFunction &CGF);
+
+  virtual void CallSerializedParallelStart(CodeGenFunction &CGF);
+
+  virtual void CallSerializedParallelEnd(CodeGenFunction &CGF);
+
+  virtual void StartParallelRegionInTarget (CodeGenFunction &CGF);
+
+  virtual void EndParallelRegionInTarget (CodeGenFunction &CGF);
+
+  virtual void SupportCritical (const OMPCriticalDirective &S,
+      CodeGenFunction &CGF, llvm::Function * CurFn, llvm::GlobalVariable *Lck);
+
+  virtual void EmitNativeBarrier(CodeGenFunction &CGF);
+
+  virtual bool IsNestedParallel();
+
+  virtual llvm::Value * AllocateThreadLocalInfo(CodeGenFunction & CGF);
+
+  virtual llvm::Value * GetNextIdIncrement(CodeGenFunction &CGF,
+        bool IsStaticSchedule, const Expr * ChunkSize, llvm::Value * Chunk,
+        llvm::Type * IdxTy, QualType QTy, llvm::Value * Idx,
+        OpenMPDirectiveKind Kind, OpenMPDirectiveKind SKind, llvm::Value * PSt);
+
+  // \brief Returns true if the target requires a microtask for teams directive
+  virtual bool requiresMicroTaskForTeams();
+
+  // \brief Returns true if the target requires a microtask for parallel
+  // directive
+  virtual bool requiresMicroTaskForParallel();
+
+  virtual llvm::Value * Get_omp_get_num_threads();
+  virtual llvm::Value * Get_omp_get_num_teams();
 };
 
 /// \brief Returns an implementation of the OpenMP RT for a given target

@@ -585,6 +585,10 @@ def omp_target_mode : Flag<["-"], "omp-target-mode">,
   HelpText<"Generate code for an OpenMP target">;
 def omp_main_file_path : Separate<["-"], "omp-main-file-path">,
   HelpText<"Path to the original source file that requires OpenMP code generation">;
+def omp_dump_host_ir : Flag<["-"], "omp-dump-host-ir">,
+  HelpText<"Dump LLVM IR generated for OpenMP host">;
+def omp_dump_target_ir : Flag<["-"], "omp-dump-target-ir">,
+  HelpText<"Dump LLVM IR generated for OpenMP offloading target">;
 } // let Flags = [CC1Option]
 
 //===----------------------------------------------------------------------===//

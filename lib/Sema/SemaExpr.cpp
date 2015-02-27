@@ -1683,7 +1683,9 @@ Sema::BuildDeclRefExpr(ValueDecl *D, QualType Ty, ExprValueKind VK,
     (CurContext != D->getDeclContext() &&
      D->getDeclContext()->isFunctionOrMethod()) ||
     (isa<VarDecl>(D) &&
-     cast<VarDecl>(D)->isInitCapture());
+     cast<VarDecl>(D)->isInitCapture()) ||
+    (isa<VarDecl>(D) &&
+     NeedToCaptureVariable(cast<VarDecl>(D), NameInfo.getLoc()));
 
   DeclRefExpr *E;
   if (isa<VarTemplateSpecializationDecl>(D)) {
@@ -11668,7 +11670,7 @@ static DeclContext *getParentOfCapturingContextOrNull(DeclContext *DC, VarDecl *
                                  const bool Diagnose, Sema &S) {
   if (isa<BlockDecl>(DC) || isa<CapturedDecl>(DC) || isLambdaCallOperator(DC))
     return getLambdaAwareParentOfDeclContext(DC);
-  else {
+  else if (Var->hasLocalStorage()){
     if (Diagnose)
        diagnoseUncapturableValueReference(S, Loc, Var, DC);
   }
@@ -12135,7 +12137,13 @@ bool Sema::tryCaptureVariable(VarDecl *Var, SourceLocation ExprLoc,
   // If the variable is declared in the current context (and is not an 
   // init-capture), there is no need to capture it.
   if (!Var->isInitCapture() && Var->getDeclContext() == DC) return true;
-  if (!Var->hasLocalStorage()) return true;
+
+  // Capture global variables if it is required to use private copy of this
+  // variable.
+  Scope *OpenMPStopScope = nullptr;
+  if (!Var->hasLocalStorage()
+      && !(LangOpts.OpenMP && IsOpenMPCapturedVar(Var,OpenMPStopScope)))
+    return true;
 
   // Walk up the stack to determine whether we can capture the variable,
   // performing the "simple" checks that don't depend on type. We stop when
@@ -12150,13 +12158,41 @@ bool Sema::tryCaptureVariable(VarDecl *Var, SourceLocation ExprLoc,
   bool Explicit = (Kind != TryCapture_Implicit);
   unsigned FunctionScopesIndex = MaxFunctionScopesIndex;
   do {
+
+    if (OpenMPStopScope){
+      Explicit = false;
+
+      CapturedRegionScopeInfo *CSI = nullptr;
+
+      for(;FunctionScopesIndex > 0; --FunctionScopesIndex, DC=DC->getParent() ){
+        if (CapturedRegionScopeInfo *C =
+            dyn_cast<CapturedRegionScopeInfo>(FunctionScopes[FunctionScopesIndex]))
+          if (C->TheScope == OpenMPStopScope){
+            CSI = C;
+            --FunctionScopesIndex;
+            break;
+          }
+      }
+
+      // Found a captured region scope that matches the OpenMP scope
+      if (CSI)
+        break;
+    }
+
     // Only block literals, captured statements, and lambda expressions can
     // capture; other scopes don't work.
     DeclContext *ParentDC = getParentOfCapturingContextOrNull(DC, Var, 
                                                               ExprLoc, 
                                                               BuildAndDiagnose,
                                                               *this);
-    if (!ParentDC) return true;
+
+    if (!ParentDC) {
+      if (!Var->hasLocalStorage()) {
+        FunctionScopesIndex = MaxFunctionScopesIndex - 1;
+        break;
+      }
+      return true;
+    }
     
     FunctionScopeInfo  *FSI = FunctionScopes[FunctionScopesIndex];
     CapturingScopeInfo *CSI = cast<CapturingScopeInfo>(FSI);
@@ -12358,6 +12394,14 @@ bool Sema::tryCaptureVariable(VarDecl *Var, SourceLocation Loc,
   QualType DeclRefType;
   return tryCaptureVariable(Var, Loc, Kind, EllipsisLoc,
                             /*BuildAndDiagnose=*/true, CaptureType,
+                            DeclRefType, nullptr);
+}
+
+bool Sema::NeedToCaptureVariable(VarDecl *Var, SourceLocation Loc) {
+  QualType CaptureType;
+  QualType DeclRefType;
+  return !tryCaptureVariable(Var, Loc, TryCapture_Implicit, SourceLocation(),
+                            /*BuildAndDiagnose=*/false, CaptureType,
                             DeclRefType, nullptr);
 }
 

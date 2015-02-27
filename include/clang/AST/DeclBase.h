@@ -1152,6 +1152,14 @@ public:
     return DeclKind == Decl::TranslationUnit;
   }
 
+  bool isOMPDeclareTarget() const {
+    return DeclKind == Decl::OMPDeclareTarget;
+  }
+
+  bool isTranslationUnitOrDeclareTarget() const {
+    return isOMPDeclareTarget() || isTranslationUnit();
+  }
+
   bool isRecord() const {
     return DeclKind >= Decl::firstRecord && DeclKind <= Decl::lastRecord;
   }

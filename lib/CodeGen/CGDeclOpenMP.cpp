@@ -83,6 +83,11 @@ void CodeGenModule::EmitOMPThreadPrivate(const VarDecl *VD, const Expr *TPE) {
       CGF.EmitRuntimeCall(OPENMPRTL_FUNC(threadprivate_register), Args);
       CGF.FinishFunction();
       CXXGlobalInits.push_back(InitFn);
+      // If we are generating code for OpenMP and we are inside a declare target
+      // region we need to register the initializer so we can properly generate
+      // the device initialization
+      if (OpenMPRuntime && OpenMPSupport.getTargetDeclare())
+        OpenMPRuntime->registerTargetGlobalInitializer(InitFn);
     }
   } else if (Ty) {
     // void __omp_threadprivate_Var();
@@ -107,6 +112,11 @@ void CodeGenModule::EmitOMPThreadPrivate(const VarDecl *VD, const Expr *TPE) {
       CGF.EmitRuntimeCall(OPENMPRTL_FUNC(threadprivate_register), Args);
       CGF.FinishFunction();
       CXXGlobalInits.push_back(InitFn);
+      // If we are generating code for OpenMP and we are inside a declare target
+      // region we need to register the initializer so we can properly generate
+      // the device initialization
+      if (OpenMPRuntime && OpenMPSupport.getTargetDeclare())
+        OpenMPRuntime->registerTargetGlobalInitializer(InitFn);
     }
   }
 }
@@ -242,6 +252,10 @@ void CodeGenModule::EmitOMPDeclareTarget(const OMPDeclareTargetDecl *D) {
       if (VD->getTemplateSpecializationKind() != TSK_ExplicitSpecialization &&
           VD->getTemplateSpecializationKind() != TSK_Undeclared)
         continue;
+
+    // Inform the runtime this declaration is in a declare target region so it
+    // knows how to order the entries in the module
+    getOpenMPRuntime().registerEntryDeclaration(*I);
     EmitTopLevelDecl(*I);
   }
 

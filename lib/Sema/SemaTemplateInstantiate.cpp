@@ -96,7 +96,7 @@ Sema::getTemplateInstantiationArgs(NamedDecl *D,
     // that will own this template template parameter. In this case, we
     // use empty template parameter lists for all of the outer templates
     // to avoid performing any substitutions.
-    if (Ctx->isTranslationUnit()) {
+    if (Ctx->isTranslationUnitOrDeclareTarget()) {
       if (TemplateTemplateParmDecl *TTP 
                                       = dyn_cast<TemplateTemplateParmDecl>(D)) {
         for (unsigned I = 0, N = TTP->getDepth() + 1; I != N; ++I)

@@ -804,6 +804,7 @@ public:
   virtual bool isPICDefaultForced() const;
   virtual bool SupportsProfiling() const;
   virtual bool hasBlocksRuntime() const;
+  virtual bool UseHostToolChainInstead(const JobAction *JA) const;
 //  virtual void AddClangSystemIncludeArgs(const llvm::opt::ArgList &DriverArgs,
 //                            llvm::opt::ArgStringList &CC1Args) const;
 //  virtual void addClangTargetOptions(const llvm::opt::ArgList &DriverArgs,

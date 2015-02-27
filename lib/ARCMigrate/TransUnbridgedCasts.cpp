@@ -155,7 +155,7 @@ private:
             // attention instead.
             if (FD->getName() == "CFRetain" && 
                 FD->getNumParams() == 1 &&
-                FD->getParent()->isTranslationUnit() &&
+                FD->getParent()->isTranslationUnitOrDeclareTarget() &&
                 FD->isExternallyVisible()) {
               Expr *Arg = callE->getArg(0);
               if (const ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Arg)) {
@@ -420,7 +420,7 @@ private:
       if (FunctionDecl *
             FD = dyn_cast_or_null<FunctionDecl>(callE->getCalleeDecl()))
         if (FD->getName() == "CFRetain" && FD->getNumParams() == 1 &&
-            FD->getParent()->isTranslationUnit() &&
+            FD->getParent()->isTranslationUnitOrDeclareTarget() &&
             FD->isExternallyVisible())
           return true;
 

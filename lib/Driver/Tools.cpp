@@ -283,7 +283,9 @@ static void AddOpenMPLinkerScript(const ToolChain &TC, Compilation &C,
 
   lksf << "SECTIONS\n";
   lksf << "{\n";
-  lksf << "  .openmptgt ALIGN(0x10) : {\n";
+  lksf << "  .openmptgt :\n";
+  lksf << "  ALIGN(0x10)\n";
+  lksf << "  {\n";
 
   for (unsigned i=0; i<Targets.size(); ++i){
     std::string tgt_name(Targets[i].first);
@@ -292,22 +294,14 @@ static void AddOpenMPLinkerScript(const ToolChain &TC, Compilation &C,
     lksf << "    __omptgt__img_start_" << tgt_name << " = .;\n";
     lksf << "    " << Targets[i].second << "\n";
     lksf << "    __omptgt__img_end_" << tgt_name << " = .;\n";
-
-    // We append the host entries and target name associated with the target
-    // image
-
-    lksf << "    QUAD(__omptgt__host_entries_begin);\n";
-    lksf << "    QUAD(__omptgt__host_entries_end);\n";
-
-    for(const char *c = tgt_name.c_str(); *c != '\0'; ++c )
-      lksf << "    BYTE(" << (unsigned)*c  << ");\n";
-    lksf << "    BYTE(0);\n";
-
   }
 
   lksf << "  }\n";
   // Add commands to define host entries begin and end
-  lksf << "  .openmptgt_host_entries ALIGN(0x10) : {\n";
+  lksf << "  .openmptgt_host_entries :\n";
+  lksf << "  ALIGN(0x10)\n";
+  lksf << "  SUBALIGN(0x01)\n";
+  lksf << "  {\n";
   lksf << "    __omptgt__host_entries_begin = .;\n";
   lksf << "    *(.openmptgt_host_entries)\n";
   lksf << "    __omptgt__host_entries_end = .;\n";
@@ -5015,6 +5009,8 @@ void gcc::Common::ConstructJob(Compilation &C, const JobAction &JA,
   const Driver &D = getToolChain().getDriver();
   ArgStringList CmdArgs;
 
+  bool isLinkJob = JA.getKind() == Action::LinkJobClass;
+
   for (const auto &A : Args) {
     if (forwardToGCC(A->getOption())) {
       // Don't forward any -g arguments to assembly steps.
@@ -5036,7 +5032,7 @@ void gcc::Common::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
-  RenderExtraToolArgs(JA, CmdArgs);
+  RenderExtraToolArgs(JA, CmdArgs, Args);
 
   // If using a driver driver, force the arch.
   llvm::Triple::ArchType Arch = getToolChain().getArch();
@@ -5102,8 +5098,14 @@ void gcc::Common::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(types::getTypeName(II.getType()));
     }
 
-    if (II.isFilename())
+
+    if (II.isFilename()){
+      bool isTargetLinkage = isLinkJob && JA.getOffloadingDevice();
+      if ( !isTargetLinkage && II.getOriginalAction()->getOffloadingDevice() )
+        continue;
+
       CmdArgs.push_back(II.getFilename());
+    }
     else {
       const Arg &A = II.getInputArg();
 
@@ -5127,18 +5129,23 @@ void gcc::Common::ConstructJob(Compilation &C, const JobAction &JA,
   } else
     GCCName = "gcc";
 
+  if (isLinkJob)
+    AddOpenMPLinkerScript(getToolChain(), C, JA, Output, Inputs, Args, CmdArgs);
+
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath(GCCName));
   C.addCommand(new Command(JA, *this, Exec, CmdArgs));
 }
 
 void gcc::Preprocess::RenderExtraToolArgs(const JobAction &JA,
-                                          ArgStringList &CmdArgs) const {
+                                          ArgStringList &CmdArgs,
+                                          const ArgList &Args) const {
   CmdArgs.push_back("-E");
 }
 
 void gcc::Compile::RenderExtraToolArgs(const JobAction &JA,
-                                       ArgStringList &CmdArgs) const {
+                                       ArgStringList &CmdArgs,
+                                       const ArgList &Args) const {
   const Driver &D = getToolChain().getDriver();
 
   // If -flto, etc. are present then make sure not to force assembly output.
@@ -5155,8 +5162,17 @@ void gcc::Compile::RenderExtraToolArgs(const JobAction &JA,
 }
 
 void gcc::Link::RenderExtraToolArgs(const JobAction &JA,
-                                    ArgStringList &CmdArgs) const {
+                                    ArgStringList &CmdArgs,
+                                    const ArgList &Args) const {
   // The types are (hopefully) good enough.
+
+  if (!Args.hasArg(options::OPT_nostdlib))
+    if (!Args.hasArg(options::OPT_nodefaultlibs))
+      if (Args.hasArg(options::OPT_fopenmp)) {
+        CmdArgs.push_back("-liomp5");
+        if (Args.hasArg(options::OPT_omptargets_EQ))
+          CmdArgs.push_back("-lomptarget");
+      }
 }
 
 // Hexagon tools start.
@@ -8235,6 +8251,9 @@ void NVPTX::Assemble::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_v))
     CmdArgs.push_back("-v");
 
+  if (Args.hasArg(options::OPT_g_Flag))
+    CmdArgs.push_back("-g");
+
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
@@ -8273,6 +8292,9 @@ void NVPTX::Link::ConstructJob(Compilation &C, const JobAction &JA,
     assert(Output.isNothing() && "Invalid output.");
   }
 
+  if (Args.hasArg(options::OPT_g_Flag))
+    CmdArgs.push_back("-g");
+
   if (Args.hasArg(options::OPT_v))
     CmdArgs.push_back("-v");
 
@@ -8283,6 +8305,9 @@ void NVPTX::Link::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-arch");
     CmdArgs.push_back(Args.MakeArgString(CPU));
   }
+
+  // add linking against library implementing OpenMP calls on NVPTX target
+  CmdArgs.push_back("-lomptarget-nvptx");
 
   // nvlink relies on the extension used by the input files
   // to decide what to do. Given that ptxas produces cubin files
@@ -8327,6 +8352,9 @@ void NVPTX::Link::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   AddOpenMPLinkerScript(getToolChain(), C, JA, Output, Inputs, Args, CmdArgs);
+
+  // add paths specified in LIBRARY_PATH environment variable as -L options
+  addDirectoryList(Args, CmdArgs, "-L", "LIBRARY_PATH");
 
   const char *Exec =
     Args.MakeArgString(getToolChain().GetProgramPath("nvlink"));

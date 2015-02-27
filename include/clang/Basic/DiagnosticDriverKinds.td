@@ -131,6 +131,9 @@ def err_drv_omp_target_translation_not_available : Error<
   "OpenMP target '%0' arguments translation is not supported.">;
 def err_drv_omp_target_toolchain_not_available : Error<
   "Toolchain for target '%0' is not supporting OpenMP offloading.">;
+def remark_drv_target_file_found : Remark<
+  "Identified OpenMP target file '%0' to be used in the '%1' toolchain.">, 
+  InGroup<OpenMPOffloading>;
 
 def warn_O4_is_O3 : Warning<"-O4 is equivalent to -O3">, InGroup<Deprecated>;
 def warn_drv_optimization_value : Warning<"optimization level '%0' is not supported; using '%1%2' instead">,

@@ -3623,7 +3623,7 @@ uint64_t ASTWriter::WriteDeclContextVisibleBlock(ASTContext &Context,
 
   // If not in C++, we perform name lookup for the translation unit via the
   // IdentifierInfo chains, don't bother to build a visible-declarations table.
-  if (DC->isTranslationUnit() && !Context.getLangOpts().CPlusPlus)
+  if (DC->isTranslationUnitOrDeclareTarget() && !Context.getLangOpts().CPlusPlus)
     return 0;
 
   // Serialize the contents of the mapping used for lookup. Note that,

@@ -173,7 +173,7 @@ bool Decl::isTemplateDecl() const {
 
 const DeclContext *Decl::getParentFunctionOrMethod() const {
   for (const DeclContext *DC = getDeclContext();
-       DC && !DC->isTranslationUnit() && !DC->isNamespace(); 
+       DC && !DC->isTranslationUnitOrDeclareTarget() && !DC->isNamespace();
        DC = DC->getParent())
     if (DC->isFunctionOrMethod())
       return DC;
@@ -813,7 +813,7 @@ bool DeclContext::isStdNamespace() const {
     return ND->getParent()->isStdNamespace();
   }
 
-  if (!getParent()->getRedeclContext()->isTranslationUnit())
+  if (!getParent()->getRedeclContext()->isTranslationUnitOrDeclareTarget())
     return false;
 
   const IdentifierInfo *II = ND->getIdentifier();
@@ -1283,7 +1283,7 @@ void DeclContext::buildLookupImpl(DeclContext *DCtx) {
     if (NamedDecl *ND = dyn_cast<NamedDecl>(D))
       if (ND->getDeclContext() == DCtx && !shouldBeHidden(ND) &&
           (!ND->isFromASTFile() ||
-           (isTranslationUnit() &&
+           (isTranslationUnitOrDeclareTarget() &&
             !getParentASTContext().getLangOpts().CPlusPlus)))
         makeDeclVisibleInContextImpl(ND, false);
 
@@ -1488,7 +1488,7 @@ void DeclContext::makeDeclVisibleInContextWithFlags(NamedDecl *D, bool Internal,
   if (LookupPtr.getPointer() || hasExternalVisibleStorage() ||
       ((!Recoverable || D->getDeclContext() != D->getLexicalDeclContext()) &&
        (getParentASTContext().getLangOpts().CPlusPlus ||
-        !isTranslationUnit()))) {
+        !isTranslationUnitOrDeclareTarget()))) {
     // If we have lazily omitted any decls, they might have the same name as
     // the decl which we are adding, so build a full lookup table before adding
     // this decl.
