@@ -2592,7 +2592,8 @@ void CodeGenFunction::InitOpenMPFunction(llvm::Value *Context,
   }
 }
 
-void CodeGenFunction::InitOpenMPTargetFunction(const CapturedStmt &S,
+void CodeGenFunction::InitOpenMPTargetFunction(const OMPExecutableDirective &D,
+                                               const CapturedStmt &S,
                                                bool InitContext) {
 
   const RecordDecl *RD = S.getCapturedRecordDecl();
@@ -2620,7 +2621,10 @@ void CodeGenFunction::InitOpenMPTargetFunction(const CapturedStmt &S,
   CapturedStmt::const_capture_iterator C = S.capture_begin();
   for (CapturedStmt::capture_init_iterator I = S.capture_init_begin(),
                                            E = S.capture_init_end();
-       I != E; ++I, ++C, ++CurField, ++Arg) {
+       I != E; ++I, ++C, ++CurField) {
+
+    if (ShouldIgnoreOpenMPCapture(D,OMPD_target,cast<DeclRefExpr>(*I)))
+      continue;
 
     QualType QTy = (*CurField)->getType();
 
@@ -2636,6 +2640,8 @@ void CodeGenFunction::InitOpenMPTargetFunction(const CapturedStmt &S,
       const VarDecl *VD = C->getCapturedVar();
       CapturedStmtInfo->addCachedVar(VD, Arg);
     }
+
+    ++Arg;
   }
 
   // If 'this' is captured, load it into CXXThisValue. We only do thhis if we

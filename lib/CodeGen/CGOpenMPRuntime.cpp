@@ -2438,9 +2438,9 @@ public:
 
 	  // Unset the number of threads required by the parallel region at the end
       llvm::Function *UnsetFn = cast<llvm::Function>(CGM.CreateRuntimeFunction(
-              llvm::TypeBuilder<__glomp_unset_num_threads, false>::get(
+              llvm::TypeBuilder<__kmpc_unset_num_threads, false>::get(
               		CGM.getLLVMContext()),
-  					"__glomp_unset_num_threads"));
+  					"__kmpc_unset_num_threads"));
       Bld.CreateCall(UnsetFn);
 
 	  Bld.CreateRetVoid();
@@ -2506,7 +2506,7 @@ public:
   }
 
   // these are run-time functions which are only exposed by the gpu library
-  typedef void(__glomp_unset_num_threads)();
+  typedef void(__kmpc_unset_num_threads)();
 
   bool requiresMicroTaskForTeams(){
     return false;
@@ -2560,12 +2560,12 @@ public:
       // control loop.
       // FIXME: Get right row from the lane master.
 
-      // FIXME: Currently, there is a bug in NVPTX backend that is causing the
-      // struct fields codegen to be wrong. We need to fix that before using
-      // the table version. For now we generate a variable per each alloca
-      // that needs to be shared. This won't work for nested parallel, but it
-      // is the best we can do for now.
-#if 0
+      // FIXME: There used to be a bug in NVPTX backend that is causing the
+      // struct fields codegen to be wrong. We seem to have fix that. However
+      // I'm still leaving the old code here just in case we find any issue.
+
+#define NVPTX_GEP_BUG_IS_FIXED
+#ifdef NVPTX_GEP_BUG_IS_FIXED
       // Get the type associated with each ID (the table row)
       llvm::SmallVector<llvm::Type*, 16> RowTys;
       for (auto L : ValuesToBeInSharedMemory){

@@ -2123,10 +2123,16 @@ public:
 
   LValue InitCapturedStruct(const CapturedStmt &S);
   void InitOpenMPFunction(llvm::Value *Context, const CapturedStmt &S);
-  void InitOpenMPTargetFunction(const CapturedStmt &S, bool InitContext);
+  void InitOpenMPTargetFunction(const OMPExecutableDirective &D,
+                                const CapturedStmt &S, bool InitContext);
   void InitOpenMPSharedizeParameters(const CapturedStmt &S,
       SmallVector<const VarDecl *, 8> &MappingDecls,
       SmallVector<llvm::Value *, 8>   &MappingVals);
+
+  bool ShouldIgnoreOpenMPCapture(const OMPExecutableDirective &S,
+                                 OpenMPDirectiveKind CurrentD,
+                                 const DeclRefExpr *DE);
+
   llvm::Function *EmitCapturedStmt(const CapturedStmt &S, CapturedRegionKind K);
   llvm::Function *GenerateCapturedStmtFunction(const CapturedStmt &S);
   llvm::Value *GenerateCapturedStmtArgument(const CapturedStmt &S);

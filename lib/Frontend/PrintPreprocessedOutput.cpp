@@ -589,6 +589,38 @@ struct UnknownPragmaHandler : public PragmaHandler {
     Callbacks->setEmittedDirectiveOnThisLine();
   }
 };
+struct OMPPragmaHandler : public PragmaHandler {
+  const char *Prefix;
+  PrintPPOutputPPCallbacks *Callbacks;
+
+  OMPPragmaHandler(const char *prefix, PrintPPOutputPPCallbacks *callbacks)
+    : Prefix(prefix), Callbacks(callbacks) {}
+  void HandlePragma(Preprocessor &PP, PragmaIntroducerKind Introducer,
+                    Token &PragmaTok) override {
+
+    // The tokens after pragma omp need to be expanded in the directive all
+    // tokens following the omp token have to be replaced
+    //
+    //  OpenMP [2.1, Directive format]
+    //  Preprocessing tokens following the #pragma omp are subject to macro
+    //  replacement.
+
+    // Figure out what line we went to and insert the appropriate number of
+    // newline characters.
+    Callbacks->startNewLineIfNeeded();
+    Callbacks->MoveToLine(PragmaTok.getLocation());
+    Callbacks->OS.write(Prefix, strlen(Prefix));
+    // Read and print all of the pragma tokens.
+    while (PragmaTok.isNot(tok::eod)) {
+      if (PragmaTok.hasLeadingSpace())
+        Callbacks->OS << ' ';
+      std::string TokSpell = PP.getSpelling(PragmaTok);
+      Callbacks->OS.write(&TokSpell[0], TokSpell.size());
+      PP.Lex(PragmaTok);
+    }
+    Callbacks->setEmittedDirectiveOnThisLine();
+  }
+};
 } // end anonymous namespace
 
 
@@ -723,6 +755,7 @@ void clang::DoPrintPreprocessedInput(Preprocessor &PP, raw_ostream *OS,
   PP.AddPragmaHandler("GCC", new UnknownPragmaHandler("#pragma GCC",Callbacks));
   PP.AddPragmaHandler("clang",
                       new UnknownPragmaHandler("#pragma clang", Callbacks));
+  PP.AddPragmaHandler("omp", new OMPPragmaHandler("#pragma omp",Callbacks));
 
   PP.addPPCallbacks(Callbacks);
 

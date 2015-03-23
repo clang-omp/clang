@@ -1622,10 +1622,26 @@ static void CheckDeclInTargetContext(SourceLocation SL, SourceRange SR,
     LD = cast<TagDecl>(D)->getDefinition();
   } else if (isa<VarDecl>(D)) {
     LD = cast<VarDecl>(D)->getDefinition();
+
+    // If this is an implicit variable that is legal and we do not need to do
+    // anything
+    if (cast<VarDecl>(D)->isImplicit()){
+      Stack->addDeclareTargetDecl(D);
+      return;
+    }
+
   } else if (isa<FunctionDecl>(D)) {
     const FunctionDecl *FD = 0;
     if (cast<FunctionDecl>(D)->hasBody(FD))
       LD = const_cast<FunctionDecl *>(FD);
+
+    // If the definition is associated with the current declaration in the
+    // target region (it can be e.g. a lambda) that is legal and we do not need
+    // to do anything else
+    if (LD == D){
+      Stack->addDeclareTargetDecl(D);
+      return;
+    }
   }
   if (!LD)
     LD = D;

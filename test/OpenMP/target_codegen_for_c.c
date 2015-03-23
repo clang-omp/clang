@@ -132,12 +132,10 @@ void T1(){
 
 // The map types in #target data are
 // to | from          -> &A[0]
-// alloc | pointer    -> pA
-// extra | to | from  -> &pA[0]
-// CK2:     [[MT1:@.mapped_types[0-9]*]] = private constant [3 x i32] [
+// pointer | to | from-> pA
+// CK2:     [[MT1:@.mapped_types[0-9]*]] = private constant [2 x i32] [
 // CK2-DAG: i32 3
-// CK2-DAG: i32 32
-// CK2-NEXT: i32 67
+// CK2-DAG: i32 35
 // CK2: ]
 
 // the map types in #target are:
@@ -146,16 +144,14 @@ void T1(){
 // alloc            -> &A[0] (already mapped)
 // alloc            -> pA (already mapped)
 // from             -> &B[0]
-// alloc | pointer  -> pB
-// extra | to       -> &pB[0]
-// CK2:     [[MT2:@.tgt_types[0-9]*]] = private constant [7 x i32] [
+// pointer | to     -> pB
+// CK2:     [[MT2:@.tgt_types[0-9]*]] = private constant [6 x i32] [
 // CK2-DAG: i32 2
 // CK2-DAG: i32 3
 // CK2-DAG: i32 0
 // CK2-DAG: i32 0
 // CK2-DAG: i32 2
-// CK2-DAG: i32 32
-// CK2-NEXT: i32 65
+// CK2-DAG: i32 33
 // CK2: ]
 
 // CK2-LABEL: @T2

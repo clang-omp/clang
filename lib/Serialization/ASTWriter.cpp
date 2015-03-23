@@ -1130,6 +1130,13 @@ void ASTWriter::WriteControlBlock(Preprocessor &PP, ASTContext &Context,
   }
   Record.push_back(LangOpts.CommentOpts.ParseAllComments);
 
+  // OpenMP offloading options
+  AddString(Context.getLangOpts().OMPModuleUniqueID, Record);
+
+  Record.push_back(Context.getLangOpts().OMPTargetTriples.size());
+  for( auto &T : Context.getLangOpts().OMPTargetTriples)
+    AddString(T.getTriple(), Record);
+
   Stream.EmitRecord(LANGUAGE_OPTIONS, Record);
 
   // Target options.

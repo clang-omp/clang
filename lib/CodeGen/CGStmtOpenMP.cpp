@@ -663,7 +663,9 @@ private:
   SmallVector<llvm::Value*, 8> MappingVals;
 
 public:
-  OpenMPRegionRAII(CodeGenFunction &CGF, const CapturedStmt &CS,
+  OpenMPRegionRAII(CodeGenFunction &CGF,
+      const OMPExecutableDirective &S,
+      const CapturedStmt &CS,
       llvm::Value *Context = nullptr,
       OMPRegionTypes RegionType = OMPRegionType_Default) :
       CGF(CGF), isTargetRegion(false) {
@@ -681,14 +683,14 @@ public:
       assert(!CGF.CapturedStmtInfo &&
           "Capture statement already exists for region??");
       OwnsCaptureStmtInfo = true;
-      CGF.InitOpenMPTargetFunction(CS, false);
+      CGF.InitOpenMPTargetFunction(S, CS, false);
       break;
     case OMPRegionType_Target:
       isTargetRegion = true;
       assert(CGF.CapturedStmtInfo &&
           "Capture statement does not exist for region??");
       OwnsCaptureStmtInfo = false;
-      CGF.InitOpenMPTargetFunction(CS, true);
+      CGF.InitOpenMPTargetFunction(S, CS, true);
       break;
     case OMPRegionType_Shared:
       isTargetRegion = false;
@@ -749,6 +751,48 @@ static llvm::GlobalVariable *CreateRuntimeVariable(CodeGenModule &CGM,
       llvm::GlobalValue::PrivateLinkage, llvm::Constant::getNullValue(Ty),
       MangledName, 0, llvm::GlobalVariable::NotThreadLocal, AddrSpace);
 }
+
+// Utility function that identifies captured declaration that can be ignored
+// in combined directives
+bool CodeGenFunction::ShouldIgnoreOpenMPCapture(const OMPExecutableDirective &S,
+    OpenMPDirectiveKind CurrentD,
+    const DeclRefExpr *DE) {
+
+  // If this is a directive with loop we need to ignore the loop bounds before
+  // capture before the actual loop directive
+  if (CurrentD == OMPD_target || CurrentD == OMPD_teams){
+    const DeclRefExpr* UB = 0;
+    const DeclRefExpr* LB = 0;
+    if (auto *SS =
+        dyn_cast<OMPTargetTeamsDistributeParallelForSimdDirective>(&S)){
+      UB = cast<DeclRefExpr>(SS->getUpperBound());
+      LB = cast<DeclRefExpr>(SS->getLowerBound());
+    }
+    else if (auto *SS =
+        dyn_cast<OMPTargetTeamsDistributeParallelForDirective>(&S)){
+      UB = cast<DeclRefExpr>(SS->getUpperBound());
+      LB = cast<DeclRefExpr>(SS->getLowerBound());
+    }
+    else if (auto *SS =
+        dyn_cast<OMPTeamsDistributeParallelForSimdDirective>(&S)){
+      UB = cast<DeclRefExpr>(SS->getUpperBound());
+      LB = cast<DeclRefExpr>(SS->getLowerBound());
+    }
+    else if (auto *SS = dyn_cast<OMPTeamsDistributeParallelForDirective>(&S)){
+      UB = cast<DeclRefExpr>(SS->getUpperBound());
+      LB = cast<DeclRefExpr>(SS->getLowerBound());
+    }
+
+    if (UB && UB->getDecl() == DE->getDecl())
+      return true;
+
+    if (LB && LB->getDecl() == DE->getDecl())
+      return true;
+  }
+
+  return false;
+}
+
 
 void CodeGenFunction::EmitOMPBarrier(SourceLocation L, unsigned Flags) {
 	// replace this with appropriate overridable call to OpenMPRuntime object
@@ -814,7 +858,7 @@ void CodeGenFunction::EmitOMPDirectiveWithParallelNoMicrotask(
       !(isTargetMode && CGM.getLangOpts().OMPTargetTriples.empty())
           && "Are we in target mode and no targets were specified??");
 
-  OpenMPRegionRAII OMPRegion(*this, *CS, nullptr,
+  OpenMPRegionRAII OMPRegion(*this, S, *CS, nullptr,
                              OpenMPRegionRAII::OMPRegionType_Shared);
 
   // Init list of private globals in the stack.
@@ -1005,7 +1049,7 @@ void CodeGenFunction::EmitOMPDirectiveWithParallelMicrotask(
 
   // CodeGen for clauses (call start).
   {
-    OpenMPRegionRAII OMPRegion(CGF, *CS, RecArg);
+    OpenMPRegionRAII OMPRegion(CGF, S, *CS, RecArg);
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(), E =
         S.clauses().end(); I != E; ++I)
       if (*I
@@ -1746,6 +1790,9 @@ void CodeGenFunction::EmitOMPDirectiveWithTeamsMicrotask(
 
       DeclRefExpr *DE = cast<DeclRefExpr>(*I);
 
+      if (ShouldIgnoreOpenMPCapture(S,OMPD_teams, DE))
+        continue;
+
       LValue LV = EmitLValueForFieldInitialization(SlotLV, *CurField);
       LValue LVInit = EmitDeclRefLValue(DE);
 
@@ -1850,7 +1897,7 @@ void CodeGenFunction::EmitOMPDirectiveWithTeamsMicrotask(
 
   // CodeGen for clauses (call start).
   {
-    OpenMPRegionRAII OMPRegion(CGF, *CS, RecArg);
+    OpenMPRegionRAII OMPRegion(CGF, S, *CS, RecArg);
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(), E =
         S.clauses().end(); I != E; ++I)
       if (*I && isAllowedClauseForDirective(OMPD_teams,(*I)->getClauseKind()))
@@ -2006,15 +2053,27 @@ void CodeGenFunction::EmitOMPDirectiveWithTarget(OpenMPDirectiveKind DKind,
     FunctionArgList FnArgs;
 
     // Get function type
-    for (RecordDecl::field_iterator fb = RD->field_begin(), fe = RD->field_end();
-        fb != fe; ++fb) {
+    {
+      RecordDecl::field_iterator fb = RD->field_begin();
+      for (CapturedStmt::capture_init_iterator ci = CS->capture_init_begin(),
+          ce = CS->capture_init_end(); ci != ce; ++ci, ++fb) {
 
-      QualType QTy = (*fb)->getType();
+        DeclRefExpr *DE = cast<DeclRefExpr>(*ci);
 
-      // We don't need to emit types here as they are emitted when we start the
-      // outlined function.
+        if (ShouldIgnoreOpenMPCapture(S,OMPD_target, DE))
+          continue;
 
-      FnArgTypes.push_back(QTy);
+        QualType QTy = (*fb)->getType();
+
+        // We don't need to emit types here as they are emitted when we start the
+        // outlined function.
+
+        //      if (QTy->isVariablyModifiedType()) {
+        //        EmitVariablyModifiedType(QTy);
+        //      }
+
+        FnArgTypes.push_back(QTy);
+      }
     }
 
     FunctionProtoType::ExtProtoInfo EPI;
@@ -2030,17 +2089,25 @@ void CodeGenFunction::EmitOMPDirectiveWithTarget(OpenMPDirectiveKind DKind,
         SourceLocation(), Id, FnTy, TI, SC_Static, false, false, false);
 
     // Create function arguments
-    for (RecordDecl::field_iterator fb = RD->field_begin(), fe = RD->field_end();
-        fb != fe; ++fb) {
-      QualType QTy = (*fb)->getType();
-      TypeSourceInfo *TI = getContext().getTrivialTypeSourceInfo(QTy,
-          SourceLocation());
-      ParmVarDecl *Arg = ParmVarDecl::Create(getContext(), FD, SourceLocation(),
-          SourceLocation(), 0, QTy, TI, SC_Auto, 0);
+    {
+      RecordDecl::field_iterator fb = RD->field_begin();
+      for (CapturedStmt::capture_init_iterator ci = CS->capture_init_begin(),
+          ce = CS->capture_init_end(); ci != ce; ++ci, ++fb) {
 
-      FnArgs.push_back(Arg);
+        DeclRefExpr *DE = cast<DeclRefExpr>(*ci);
+
+        if (ShouldIgnoreOpenMPCapture(S,OMPD_target, DE))
+          continue;
+
+        QualType QTy = (*fb)->getType();
+        TypeSourceInfo *TI = getContext().getTrivialTypeSourceInfo(QTy,
+            SourceLocation());
+        ParmVarDecl *Arg = ParmVarDecl::Create(getContext(), FD, SourceLocation(),
+            SourceLocation(), 0, QTy, TI, SC_Auto, 0);
+
+        FnArgs.push_back(Arg);
+      }
     }
-
     CodeGenFunction CGF(CGM, true);
     const CGFunctionInfo &FI = getTypes().arrangeFunctionDeclaration(FD);
     // The linkage here is going to be overwritten when the attributes are set
@@ -2066,14 +2133,14 @@ void CodeGenFunction::EmitOMPDirectiveWithTarget(OpenMPDirectiveKind DKind,
     // StartFunction will work. CGF has to have the right function in order
     // for that to work.
     CGF.CurFn = Fn;
-    OpenMPRegionRAII OMPRegion(CGF, *CS, nullptr,
+    OpenMPRegionRAII OMPRegion(CGF, S, *CS, nullptr,
                                OpenMPRegionRAII::OMPRegionType_TargetInit);
 
     CGF.StartFunction(FD, getContext().VoidTy, Fn, FI, FnArgs, SourceLocation());
 
     {
       // This will complete the initialization done before
-      OpenMPRegionRAII OMPRegion(CGF, *CS, nullptr,
+      OpenMPRegionRAII OMPRegion(CGF, S, *CS, nullptr,
                                  OpenMPRegionRAII::OMPRegionType_Target);
 
       if (isTargetMode) {
@@ -2150,7 +2217,6 @@ void CodeGenFunction::EmitOMPDirectiveWithTarget(OpenMPDirectiveKind DKind,
 
     if (!RD->field_empty()) {
       RecordDecl::field_iterator fb = RD->field_begin();
-      unsigned idx = 0;
 
       // Get the map clause information
       ArrayRef<const Expr*>  MapClauseDecls;
@@ -2165,9 +2231,12 @@ void CodeGenFunction::EmitOMPDirectiveWithTarget(OpenMPDirectiveKind DKind,
 
       // Scan the captured declarations
       for (CapturedStmt::capture_init_iterator ci = CS->capture_init_begin(),
-          ce = CS->capture_init_end(); ci != ce; ++ci, ++fb, ++idx) {
+          ce = CS->capture_init_end(); ci != ce; ++ci, ++fb) {
 
         DeclRefExpr *DE = cast<DeclRefExpr>(*ci);
+
+        if (ShouldIgnoreOpenMPCapture(S,OMPD_target, DE))
+          continue;
 
         QualType QTy = (*fb)->getType();
         LValue LV = MakeNaturalAlignAddrLValue(CreateMemTemp(QTy, ".tgt_arg"),
@@ -2745,7 +2814,7 @@ void CodeGenFunction::EmitOMPTaskDirective(const OMPTaskDirective &S) {
 
   // CodeGen for clauses (call start).
   {
-    OpenMPRegionRAII OMPRegion(CGF, *CS, RecArg);
+    OpenMPRegionRAII OMPRegion(CGF, S, *CS, RecArg);
     for (ArrayRef<OMPClause *>::iterator I = S.clauses().begin(), E =
         S.clauses().end(); I != E; ++I)
       if (*I)
@@ -3578,7 +3647,7 @@ void CodeGenFunction::AppendOpenMPStackWithMapInfo(const OMPClause &C){
     assert(VarDecl && "Unexpected expression in the map clause");
 
     //     - If it is a pointer with a range and this pointer was not mapped in previous clauses:
-    //       Add one entry for the pointer and one (extra) entry for the range
+    //       Use pointer as base pointer and the range has buffer address.
     //
     //     - If it is a pointer with a range that was mapped before:
     //       Add one entry for the range
@@ -3592,12 +3661,8 @@ void CodeGenFunction::AppendOpenMPStackWithMapInfo(const OMPClause &C){
     if (VarDecl->getType()->isPointerType() && hasRange){
       llvm::Value *P = EmitDeclRefLValue(VarDecl).getAddress();
 
-      CGM.OpenMPSupport.addOffloadingMap(VarDecl, P, P,
-          Builder.getInt64(CGM.getDataLayout().getTypeSizeInBits(P->getType())/8),
-          OMP_TGT_MAPTYPE_ALLOC | OMP_TGT_MAPTYPE_POINTER);
-
-      CGM.OpenMPSupport.addOffloadingMap(VarDecl, VB, VP, VS,
-          MapType | OMP_TGT_MAPTYPE_EXTRA);
+      CGM.OpenMPSupport.addOffloadingMap(VarDecl, P, VP, VS,
+          MapType | OMP_TGT_MAPTYPE_POINTER);
 
       continue;
     }
@@ -4585,9 +4650,9 @@ void CodeGenFunction::EmitInitOMPReductionClause(const OMPReductionClause &C,
     std::string reductionOpName;
     if (CGM.getTarget().getTriple().getArch() == llvm::Triple::nvptx
        || CGM.getTarget().getTriple().getArch() == llvm::Triple::nvptx64)
- 	    reductionOpName = "omp_reduction_op";
+ 	  reductionOpName = "omp_reduction_op";
     else
- 	    reductionOpName = ".omp_reduction_op.";
+ 	  reductionOpName = ".omp_reduction_op.";
 
 	llvm::Function *Fn = llvm::Function::Create(FTy,
 		 llvm::GlobalValue::InternalLinkage, reductionOpName,
@@ -6328,8 +6393,8 @@ void CodeGenFunction::EmitOMPTargetUpdateDirective(
       MapClauseBasePointersArray, MapClausePointersArray, MapClauseSizesArray,
       MapClauseTypesArray);
 
-  // remove pointers and extra flag of items associated to them
-  // (no pointer to target update call)
+  // for pointers we use the pointee address as base address and the pointee
+  // start section as buffer address
 
 
   assert(
@@ -6342,15 +6407,8 @@ void CodeGenFunction::EmitOMPTargetUpdateDirective(
   if (MapClauseBasePointersArray.empty())
     return;
 
-  // exclude pointers from number of elements in map
-  // (no pointer to target update call)
-  int NumMapClausesAfterPeeling = MapClauseBasePointersArray.size();
-  for (unsigned i = 0; i < MapClauseBasePointersArray.size(); ++i)
-    if(MapClauseTypesArray[i] & OMP_TGT_MAPTYPE_POINTER)
-      NumMapClausesAfterPeeling--;
-
-  llvm::Value *MapClauseNumElems = Builder.getInt32(
-      NumMapClausesAfterPeeling);
+  llvm::Value *MapClauseNumElems =
+                            Builder.getInt32(MapClauseBasePointersArray.size());
 
   // If we have pointers, lets create an array in the stack
   llvm::Value *MapClauseBasePointers = Builder.CreateAlloca(CGM.VoidPtrTy,
@@ -6360,24 +6418,24 @@ void CodeGenFunction::EmitOMPTargetUpdateDirective(
   llvm::Value *MapClauseSizes = Builder.CreateAlloca(CGM.Int64Ty,
       MapClauseNumElems, ".update_sizes");
 
-  // target update does not accept pointers. Exclude map types pointers
-  // and zero the flag bits for extra which refers to them
-  int StoreIndex = 0;
-  bool PrevIsPtr = false;
-  llvm::SmallVector<unsigned,16> MapClauseTypesArrayNoPtrsNoExtraVec;
-  for (unsigned i = 0; i < MapClauseBasePointersArray.size(); ++i) {
-    // exclude pointer types
-    if(MapClauseTypesArray[i] & OMP_TGT_MAPTYPE_POINTER) {
-      PrevIsPtr = true;
-      continue;
-    }
+  // Target update does not accept pointers. Only the pointee has to be updated.
+  // Replace the base pointer by the actual load address
+  // and perform a regular map of the pointee.
 
-    if(PrevIsPtr) {
-      MapClauseTypesArrayNoPtrsNoExtraVec.push_back(MapClauseTypesArray[i] &
-          ~OMP_TGT_MAPTYPE_EXTRA);
-      PrevIsPtr = false;
-    } else
-    	MapClauseTypesArrayNoPtrsNoExtraVec.push_back(MapClauseTypesArray[i]);
+  int StoreIndex = 0;
+  llvm::SmallVector<unsigned,16> MapClauseTypesArrayNoPointers;
+  for (unsigned i = 0; i < MapClauseBasePointersArray.size(); ++i) {
+
+    llvm::Value *NewBasePointer = MapClauseBasePointersArray[i];
+
+    // transform pointer types
+    if(MapClauseTypesArray[i] & OMP_TGT_MAPTYPE_POINTER) {
+      NewBasePointer = Builder.CreateLoad(NewBasePointer,"modified_base_ptr");
+      MapClauseTypesArrayNoPointers.push_back(MapClauseTypesArray[i] &
+                ~OMP_TGT_MAPTYPE_POINTER);
+    } else {
+      MapClauseTypesArrayNoPointers.push_back(MapClauseTypesArray[i]);
+    }
 
 
     llvm::Value *BP = Builder.CreateConstInBoundsGEP1_32(MapClauseBasePointers,
@@ -6387,7 +6445,7 @@ void CodeGenFunction::EmitOMPTargetUpdateDirective(
     llvm::Value *S = Builder.CreateConstInBoundsGEP1_32(MapClauseSizes,
         StoreIndex);
 
-    Builder.CreateStore(Builder.CreateBitCast(MapClauseBasePointersArray[i],
+    Builder.CreateStore(Builder.CreateBitCast(NewBasePointer,
                                               CGM.VoidPtrTy),
                         BP);
     Builder.CreateStore(Builder.CreateBitCast(MapClausePointersArray[i],
@@ -6401,7 +6459,7 @@ void CodeGenFunction::EmitOMPTargetUpdateDirective(
   }
 
   llvm::Constant *MapClauseTypesInit = llvm::ConstantDataArray::get(
-      Builder.getContext(), MapClauseTypesArrayNoPtrsNoExtraVec);
+      Builder.getContext(), MapClauseTypesArrayNoPointers);
   llvm::GlobalVariable *MapClauseTypesTmp = new llvm::GlobalVariable(
       CGM.getModule(), MapClauseTypesInit->getType(), true,
       llvm::GlobalValue::PrivateLinkage, MapClauseTypesInit, ".update_types");

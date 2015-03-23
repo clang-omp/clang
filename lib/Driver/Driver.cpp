@@ -1306,30 +1306,42 @@ void Driver::BuildActions(const ToolChain &TC, DerivedArgList &Args,
         const Arg &HostArg = IA->getInputArg();
         StringRef HostFileName(HostArg.getValue(0));
 
-        for (unsigned tgt=0; tgt<OpenMPToolChainNum; ++tgt){
-          // Create the new target file name
-          SmallString<128> TargetFileName;
+        // Lets find out if we have an input for each target
+        bool HaveDifferentInputsForEachTarget = true;
+        llvm::SmallVector<SmallString<128>,4>
+                                            TargetFileNames(OpenMPToolChainNum);
 
+        for (unsigned tgt=0; tgt<OpenMPToolChainNum; ++tgt){
           // Name of the file
-          TargetFileName += HostFileName;
+          TargetFileNames[tgt] += HostFileName;
 
           // Target suffix
-          TargetFileName += ".tgt-";
-          TargetFileName += OpenMPTargetToolChains[tgt];
+          TargetFileNames[tgt] += ".tgt-";
+          TargetFileNames[tgt] += OpenMPTargetToolChains[tgt];
 
-          // Check if the file exists. If not add null to the corresponding
-          // entry of the Actions array
-          if (!llvm::sys::fs::exists(TargetFileName.c_str())){
+          // Check if the file exists. If not, don't bother trying to find other
+          // files as will not be able to use them.
+          if (!llvm::sys::fs::exists(TargetFileNames[tgt].c_str())){
+            HaveDifferentInputsForEachTarget = false;
+            break;
+          }
+        }
+
+        for (unsigned tgt=0; tgt<OpenMPToolChainNum; ++tgt){
+
+          // If we do not have an input file for each target, we use null to
+          // indicate it and potential
+          if (!HaveDifferentInputsForEachTarget){
             ActionsForTarget[1+tgt].reset(nullptr);
             continue;
           }
 
           // Notify the user we found a target file that we will be using
           Diag(clang::diag::remark_drv_target_file_found)
-          << TargetFileName.c_str() << OpenMPTargetToolChains[tgt];
+          << TargetFileNames[tgt].c_str() << OpenMPTargetToolChains[tgt];
 
           Arg *TargetArg = Args.MakePositionalArg(&HostArg, HostArg.getOption(),
-              Args.MakeArgString(TargetFileName.c_str()));
+              Args.MakeArgString(TargetFileNames[tgt].c_str()));
 
           InputAction *TgtIA = new InputAction(*TargetArg,IA->getType());
           TgtIA->setOffloadingDevice(OpenMPTargetToolChains[tgt]);
@@ -1340,9 +1352,13 @@ void Driver::BuildActions(const ToolChain &TC, DerivedArgList &Args,
           ActionsForTarget[1+tgt].reset(BindedTgtIA);
         }
 
-        // Notwithstanding a single input file is provided by the user, we may
-        // have as many as TotalTargets
-        PreviousTotalTargets = TotalTargets;
+        // If we have an input for each target, this is like supporting multiple
+        // targets in a previous phase. If we are ahead of the compiling phase
+        // we cannot use the host files anymore, so we need to have targets
+        // files already. If the input is set to null this will result in the
+        // target actions not to be generated at all in the code below.
+        if (HaveDifferentInputsForEachTarget || Phase > phases::Compile)
+          PreviousTotalTargets = TotalTargets;
       }
 
       for (unsigned tgt=TotalTargets; tgt>0; --tgt){
